@@ -236,7 +236,7 @@ export const AppControlToolkitRegistrationLive = McpServer.toolkit(AppControlToo
 );
 
 const McpTransportLive = McpServer.layerHttp({
-  name: "T3 Code",
+  name: "T4 Code",
   version: packageJson.version,
   path: "/mcp",
 }).pipe(Layer.provide(McpAuthMiddlewareLive));

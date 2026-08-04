@@ -25,7 +25,7 @@ import * as CliError from "effect/unstable/cli/CliError";
 import * as TestConsole from "effect/testing/TestConsole";
 import { Command } from "effect/unstable/cli";
 
-import { cli, makeCli } from "./bin.ts";
+import { cli, makeCli, resolveCliName } from "./bin.ts";
 import * as ServerConfig from "./config.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
@@ -47,6 +47,7 @@ class ProjectCliHttpApi extends HttpApi.make("environment").add(EnvironmentOrche
 
 const connectCli = makeCli({ cloudEnabled: true });
 const noConnectCli = makeCli({ cloudEnabled: false });
+const legacyCli = makeCli({ cloudEnabled: false, commandName: "t3" });
 const runCli = (args: ReadonlyArray<string>, command = cli) =>
   Command.runWith(command, { version: "0.0.0" })(args);
 const runConnectCli = (args: ReadonlyArray<string>) => runCli(args, connectCli);
@@ -161,6 +162,21 @@ const withLiveProjectCliServer = <A, E, R>(baseDir: string, run: () => Effect.Ef
   });
 
 it.layer(NodeServices.layer)("bin cli parsing", (it) => {
+  it("resolves t4 as canonical and t3 as the legacy alias", () => {
+    assert.equal(resolveCliName("/usr/local/bin/t4"), "t4");
+    assert.equal(resolveCliName("/usr/local/bin/t3"), "t3");
+    assert.equal(resolveCliName("C:\\tools\\t3.exe"), "t3");
+    assert.equal(resolveCliName(undefined), "t4");
+  });
+
+  it.effect("keeps legacy t3 help usable", () =>
+    Effect.gen(function* () {
+      const { output } = yield* captureStdout(runCli(["--help"], legacyCli));
+      assert.include(output, "t3");
+      assert.include(output, "Run the T4 Code server.");
+    }),
+  );
+
   it.effect("accepts the built-in lowercase log-level flag values", () =>
     runCliWithRuntime(["--log-level", "debug", "--version"]),
   );
@@ -194,20 +210,20 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (error._tag !== "ShowHelp") {
         assert.fail(`Expected ShowHelp, got ${error._tag}`);
       }
-      assert.deepEqual(error.commandPath, ["t3", "connect"]);
-      assert.include(error.errors[0]?.message ?? "", "missing T3 Connect public configuration");
+      assert.deepEqual(error.commandPath, ["t4", "connect"]);
+      assert.include(error.errors[0]?.message ?? "", "missing T4 Connect public configuration");
 
       const output = (yield* TestConsole.errorLines).join("\n");
       assert.include(output, "ERROR");
-      assert.include(output, "missing T3 Connect public configuration");
+      assert.include(output, "missing T4 Connect public configuration");
     }).pipe(Effect.provide(Layer.mergeAll(CliRuntimeLayer, TestConsole.layer))),
   );
 
-  it.effect("exposes service lifecycle commands without T3 Connect configuration", () =>
+  it.effect("exposes service lifecycle commands without T4 Connect configuration", () =>
     Effect.gen(function* () {
       const { output } = yield* captureStdout(runCli(["service", "--help"], noConnectCli));
 
-      assert.include(output, "Manage the T3 Code background service.");
+      assert.include(output, "Manage the T4 Code background service.");
       assert.include(output, "install");
       assert.include(output, "uninstall");
       assert.include(output, "update");
@@ -249,10 +265,10 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
         runConnectCli(["connect", "status", "--base-dir", baseDir]),
       );
 
-      assert.include(output, "T3 Connect\n  Exposure: disabled");
+      assert.include(output, "T4 Connect\n  Exposure: disabled");
       assert.include(output, "  Authorization: missing");
       assert.include(output, "  Environment link: not provisioned");
-      assert.include(output, "Next: Run `t3 connect link` to authorize and enable T3 Connect.");
+      assert.include(output, "Next: Run `t4 connect link` to authorize and enable T4 Connect.");
     }),
   );
 
@@ -300,7 +316,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
         runConnectCli(["connect", "unlink", "--base-dir", baseDir]),
       );
 
-      assert.equal(output, "T3 Connect is disabled locally.");
+      assert.equal(output, "T4 Connect is disabled locally.");
     }),
   );
 
@@ -320,7 +336,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
 
       assert.equal(
         output,
-        "Signed out of T3 Connect locally.\nThe background service is managed separately with `t3 service`.",
+        "Signed out of T4 Connect locally.\nThe background service is managed separately with `t4 service`.",
       );
       assert.isFalse(NodeFS.existsSync(tokenPath));
     }),
@@ -423,7 +439,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (error._tag !== "ShowHelp") {
         assert.fail(`Expected ShowHelp, got ${error._tag}`);
       }
-      assert.deepEqual(error.commandPath, ["t3", "auth", "pairing", "create"]);
+      assert.deepEqual(error.commandPath, ["t4", "auth", "pairing", "create"]);
       const ttlError = error.errors[0] as CliError.CliError | undefined;
       if (!ttlError || ttlError._tag !== "InvalidValue") {
         assert.fail(`Expected InvalidValue, got ${String(ttlError?._tag)}`);
@@ -591,7 +607,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (error._tag !== "ShowHelp") {
         assert.fail(`Expected ShowHelp, got ${error._tag}`);
       }
-      assert.deepEqual(error.commandPath, ["t3", "project", "add"]);
+      assert.deepEqual(error.commandPath, ["t4", "project", "add"]);
       const optionError = error.errors[0] as CliError.CliError | undefined;
       if (!optionError || optionError._tag !== "UnrecognizedOption") {
         assert.fail(`Expected UnrecognizedOption, got ${String(optionError?._tag)}`);

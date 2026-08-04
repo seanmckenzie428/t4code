@@ -9,6 +9,7 @@ import * as Logger from "effect/Logger";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { Command, Flag } from "effect/unstable/cli";
+import { CONNECT_PRODUCT_NAME } from "@t3tools/shared/branding";
 import {
   FetchHttpClient,
   HttpClient,
@@ -208,7 +209,7 @@ export const announceConnectGaCommand = Command.make(
     }),
 ).pipe(
   Command.withDescription(
-    "Invite pending Clerk waitlist members now that T3 Connect is generally available.",
+    `Invite pending Clerk waitlist members now that ${CONNECT_PRODUCT_NAME} is generally available.`,
   ),
 );
 

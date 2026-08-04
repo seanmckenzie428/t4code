@@ -1,7 +1,11 @@
-# Keeping T3 Code in Sync
+# Keeping T4 Code in Sync
 
-The T3 Code web or desktop app and the server it connects to work best when they use the same
-version. If they do not match, T3 Code shows a warning with the right update option for that server.
+The T4 Code web or desktop app and the server it connects to work best when they use the same
+version. If they do not match, T4 Code shows a warning with the right update option for that server.
+
+> Automatic T4 updates are unavailable until T4 has independent signed releases and update feeds.
+> Legacy `npx t3` commands below describe the retained release-compatibility path; they install or
+> update the upstream package, not a published T4 package.
 
 ## Where to Find the Update
 
@@ -24,11 +28,11 @@ The update does not remove saved threads, settings, or project files.
 
 | Action                     | What to do                                                                                                                                                                  |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Update server**          | Select the button and leave T3 Code open. It prepares the matching version, restarts the server, and reconnects automatically. This can take several minutes.               |
-| **Update the desktop app** | Open the T3 Code desktop app on the machine that runs the server and install the app update there. Reopen it if needed.                                                     |
-| **Copy update command**    | Copy the command, open a terminal on the server machine, stop the current T3 Code server, and relaunch it with the copied command and any startup options you normally use. |
+| **Update server**          | Select the button and leave T4 Code open. It prepares the matching version, restarts the server, and reconnects automatically. This can take several minutes.               |
+| **Update the desktop app** | Open the T4 Code desktop app on the machine that runs the server and install the app update there. Reopen it if needed.                                                     |
+| **Copy update command**    | Copy the command, open a terminal on the server machine, stop the current T4 Code server, and relaunch it with the copied command and any startup options you normally use. |
 
-The available action depends on how that server was started. T3 Code does not update connected
+The available action depends on how that server was started. T4 Code does not update connected
 servers silently in the background.
 
 After selecting **Update server**, the warning becomes a three-step progress rail:
@@ -39,7 +43,7 @@ with its error and an option to retry.
 **Copy update command** gives you `npx t3@<client-version>`, which relaunches the server directly
 at the matching version. Add whatever startup options you normally use.
 
-If the server instead runs as the T3 Code background service, update the service on the host and
+If the server instead runs as the T4 Code background service, update the service on the host and
 pin the same version:
 
 ```sh

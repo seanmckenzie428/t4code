@@ -137,8 +137,8 @@ export const buildDiscordReleaseAnnouncement = (
       url: options.releaseUrl.href,
       description:
         options.target === "prerelease"
-          ? "A new T3 Code prerelease is available for nightly testers."
-          : "A new T3 Code latest release is available.",
+          ? "A new T4 Code prerelease is available for nightly testers."
+          : "A new T4 Code latest release is available.",
       color: targetColors[options.target],
       fields: [
         {
