@@ -27,6 +27,8 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
 
       yield* projects.upsert({
         projectId: ProjectId.make("project-null-options"),
+        kind: "workspace",
+        systemRole: null,
         title: "Null options project",
         workspaceRoot: "/tmp/project-null-options",
         defaultModelSelection: {
@@ -34,6 +36,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
           model: "gpt-5.4",
         },
         scripts: [],
+        customActions: [],
         createdAt: "2026-03-24T00:00:00.000Z",
         updatedAt: "2026-03-24T00:00:00.000Z",
         deletedAt: null,
@@ -78,6 +81,8 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       yield* threads.upsert({
         threadId: ThreadId.make("thread-null-options"),
         projectId: ProjectId.make("project-null-options"),
+        kind: "project",
+        workspaceBinding: null,
         title: "Null options thread",
         modelSelection: {
           instanceId: ProviderInstanceId.make("claudeAgent"),
@@ -140,6 +145,8 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       yield* threads.upsert({
         threadId: ThreadId.make("thread-settled"),
         projectId: ProjectId.make("project-1"),
+        kind: "project",
+        workspaceBinding: null,
         title: "Settled thread",
         modelSelection: {
           instanceId: ProviderInstanceId.make("codex"),

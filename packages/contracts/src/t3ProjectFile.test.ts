@@ -1,6 +1,8 @@
 import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
+import { AppViewId, AppViewRevision } from "./appViews.ts";
+import { ProjectId } from "./baseSchemas.ts";
 import { T3ProjectFile } from "./t3ProjectFile.ts";
 
 const decode = Schema.decodeUnknownSync(T3ProjectFile);
@@ -51,5 +53,33 @@ describe("T3ProjectFile", () => {
     expect(() =>
       decode({ scripts: [{ name: "Dev", command: "pnpm dev", icon: "rocket" }] }),
     ).toThrow();
+  });
+
+  it("allows project extension requests without executable declarations", () => {
+    const decoded = decode({
+      extensions: [{ id: "lotus-runtime", config: { project: "lotus" } }],
+    });
+    expect(decoded.extensions).toEqual([{ id: "lotus-runtime", config: { project: "lotus" } }]);
+    const stripped = decode({
+      extensions: [{ id: "lotus-runtime", executable: "lotus", args: ["mcp"] }],
+    });
+    expect(stripped.extensions?.[0]).toEqual({ id: "lotus-runtime" });
+  });
+
+  it("validates project-saved generated views", () => {
+    const projectId = ProjectId.make("project-1");
+    const decoded = decode({
+      appViews: [
+        {
+          id: AppViewId.make("cockpit"),
+          revision: AppViewRevision.make(1),
+          title: "Cockpit",
+          kind: "native",
+          scope: { kind: "project", projectId },
+          root: { id: "root", type: "text", value: "Ready" },
+        },
+      ],
+    });
+    expect(decoded.appViews?.[0]?.id).toBe("cockpit");
   });
 });

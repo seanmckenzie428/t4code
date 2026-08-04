@@ -318,6 +318,29 @@ describe("hasConfiguredMcpServer", () => {
   });
 });
 
+describe("control-only Codex launch", () => {
+  it("places profile selection before the app-server subcommand", () => {
+    NodeAssert.deepStrictEqual(
+      codexSessionAppServerArgs(["--strict-config"], undefined, ["--profile", "t3-control-only"]),
+      ["--profile", "t3-control-only", "app-server", "--strict-config"],
+    );
+  });
+
+  it.effect("omits legacy approval and sandbox overrides from assistant turns", () =>
+    Effect.gen(function* () {
+      const params = yield* buildTurnStartParams({
+        threadId: "assistant-thread",
+        runtimeMode: "approval-required",
+        prompt: "status",
+        useConfiguredPermissionProfile: true,
+      });
+      NodeAssert.equal("approvalPolicy" in params, false);
+      NodeAssert.equal("approvalsReviewer" in params, false);
+      NodeAssert.equal("sandboxPolicy" in params, false);
+    }),
+  );
+});
+
 describe("codexSessionAppServerArgs", () => {
   it("keeps the app-server subcommand when explicit args are provided", () => {
     NodeAssert.deepStrictEqual(codexSessionAppServerArgs(["-c", "model=gpt-5"], undefined), [

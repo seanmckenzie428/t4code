@@ -1,0 +1,12 @@
+{
+  "id": "lotus-runtime",
+  "title": "Lotus Runtime",
+  "transport": {
+    "kind": "stdio",
+    "executable": "t3-lotus-runtime-extension",
+    "args": []
+  },
+  "requestedCapabilities": ["tools", "workspace-provider"],
+  "enabled": false,
+  "approval": null
+}

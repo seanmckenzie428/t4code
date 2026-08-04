@@ -62,6 +62,10 @@ export function applyThreadDetailEvent(
         thread: {
           id: event.payload.threadId,
           projectId: event.payload.projectId,
+          kind: event.payload.kind ?? "project",
+          ...(event.payload.workspaceBinding === undefined
+            ? {}
+            : { workspaceBinding: event.payload.workspaceBinding }),
           title: event.payload.title,
           modelSelection: event.payload.modelSelection,
           runtimeMode: event.payload.runtimeMode,
@@ -237,6 +241,7 @@ export function applyThreadDetailEvent(
         ...(event.payload.attachments !== undefined
           ? { attachments: event.payload.attachments }
           : {}),
+        ...(event.payload.delegation !== undefined ? { delegation: event.payload.delegation } : {}),
         turnId: event.payload.turnId,
         streaming: event.payload.streaming,
         createdAt: event.payload.createdAt,
@@ -261,6 +266,7 @@ export function applyThreadDetailEvent(
                   ...(message.attachments !== undefined
                     ? { attachments: message.attachments }
                     : {}),
+                  ...(message.delegation !== undefined ? { delegation: message.delegation } : {}),
                 },
           )
         : Arr.append(thread.messages, message);

@@ -2,6 +2,7 @@ import {
   type EnvironmentId,
   type EditorId,
   type ProjectScript,
+  type ProjectCustomAction,
   type ResolvedKeybindingsConfig,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -14,6 +15,9 @@ import ProjectScriptsControl, {
   type NewProjectScriptInput,
   type ProjectScriptActionResult,
 } from "../ProjectScriptsControl";
+import ProjectCustomActionsControl, {
+  type ProjectCustomActionResult,
+} from "../ProjectCustomActionsControl";
 import { OpenInPicker } from "./OpenInPicker";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
@@ -29,6 +33,7 @@ interface ChatHeaderProps {
   activeProjectCwd: string | null;
   openInCwd: string | null;
   activeProjectScripts: ReadonlyArray<ProjectScript> | undefined;
+  activeProjectCustomActions: ReadonlyArray<ProjectCustomAction> | undefined;
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
@@ -42,6 +47,12 @@ interface ChatHeaderProps {
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
+  onRunProjectCustomAction: (action: ProjectCustomAction) => void;
+  onSetProjectCustomActionPlacement: (
+    actionId: string,
+    placement: "menu" | "toolbar",
+  ) => Promise<ProjectCustomActionResult>;
+  onDeleteProjectCustomAction: (actionId: string) => Promise<ProjectCustomActionResult>;
 }
 
 export function shouldShowOpenInPicker(input: {
@@ -65,6 +76,7 @@ export const ChatHeader = memo(function ChatHeader({
   activeProjectCwd,
   openInCwd,
   activeProjectScripts,
+  activeProjectCustomActions,
   preferredScriptId,
   keybindings,
   availableEditors,
@@ -75,6 +87,9 @@ export const ChatHeader = memo(function ChatHeader({
   onAddProjectScript,
   onUpdateProjectScript,
   onDeleteProjectScript,
+  onRunProjectCustomAction,
+  onSetProjectCustomActionPlacement,
+  onDeleteProjectCustomAction,
 }: ChatHeaderProps) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const fileScripts = useT3ProjectFileScripts(
@@ -140,6 +155,14 @@ export const ChatHeader = memo(function ChatHeader({
           rightPanelOpen ? "pr-0" : "pr-16",
         )}
       >
+        {activeProjectCustomActions ? (
+          <ProjectCustomActionsControl
+            actions={activeProjectCustomActions}
+            onRun={onRunProjectCustomAction}
+            onSetPlacement={onSetProjectCustomActionPlacement}
+            onDelete={onDeleteProjectCustomAction}
+          />
+        ) : null}
         {activeProjectScripts && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}

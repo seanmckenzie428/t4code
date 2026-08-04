@@ -1,4 +1,4 @@
-import { ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { type AppControlPrincipal, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -10,10 +10,13 @@ import { HttpServer } from "effect/unstable/http";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpProviderSession from "./McpProviderSession.ts";
+import * as AppControlBroker from "./AppControlBroker.ts";
 
 export interface McpCredentialRequest {
   readonly threadId: ThreadId;
   readonly providerInstanceId: ProviderInstanceId;
+  readonly principal?: AppControlPrincipal;
+  readonly grants?: ReadonlySet<string>;
 }
 
 export interface McpIssuedCredential {
@@ -123,12 +126,23 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
       const providerSessionId = yield* crypto.randomUUIDv4.pipe(Effect.orDie);
       const rawToken = yield* crypto.randomBytes(32).pipe(Effect.map(tokenFromBytes), Effect.orDie);
       const tokenHash = yield* hashToken(rawToken);
+      const principal =
+        request.principal !== undefined &&
+        (request.principal.kind === "thread-agent"
+          ? request.principal.threadId === request.threadId
+          : request.principal.assistantThreadId === request.threadId)
+          ? request.principal
+          : undefined;
       const scope: McpInvocationContext.McpInvocationScope = {
         environmentId,
         threadId: ThreadId.make(request.threadId),
         providerSessionId,
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
-        capabilities: new Set(["preview"]),
+        ...(principal === undefined ? {} : { principal }),
+        capabilities: new Set(
+          principal === undefined ? (["preview"] as const) : (["preview", "app-control"] as const),
+        ),
+        grants: new Set(request.grants ?? []),
         issuedAt,
       };
       yield* SynchronizedRef.update(state, ({ records }) => {
@@ -193,12 +207,16 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
     revokeProviderSession: Effect.fn("McpSessionRegistry.revokeProviderSession")(
       function* (providerSessionId) {
         yield* revokeWhere((record) => record.scope.providerSessionId === providerSessionId);
+        yield* AppControlBroker.cancelActiveAppControlProviderSession(providerSessionId);
       },
     ),
     revokeThread: Effect.fn("McpSessionRegistry.revokeThread")(function* (threadId) {
       yield* revokeWhere((record) => record.scope.threadId === threadId);
+      yield* AppControlBroker.cancelActiveAppControlThread(threadId);
     }),
-    revokeAll: SynchronizedRef.set(state, { records: new Map() }),
+    revokeAll: SynchronizedRef.set(state, { records: new Map() }).pipe(
+      Effect.andThen(AppControlBroker.cancelAllActiveAppControlRequests()),
+    ),
   });
 });
 

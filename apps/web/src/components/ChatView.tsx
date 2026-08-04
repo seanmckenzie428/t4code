@@ -6,6 +6,7 @@ import {
   type MessageId,
   type ModelSelection,
   type ProjectScript,
+  type ProjectCustomAction,
   type ProjectId,
   type ProviderApprovalDecision,
   ProviderInstanceId,
@@ -139,6 +140,15 @@ import {
   usePreviewMiniPlayerStore,
 } from "../previewMiniPlayerStore";
 import { RightPanelTabs } from "./RightPanelTabs";
+import { AppViewRenderer } from "./app-views/AppViewRenderer";
+import { GeneratedViewLibrary, GeneratedViewToolbar } from "./app-views/GeneratedViewLibrary";
+import { selectThreadAppViews, useAppViewStore } from "../appViewStore";
+import {
+  invokeKeybindingAppCommand,
+  invokeWebAppCommand,
+  registerWebAppCommandHandler,
+} from "../appCommandRegistry";
+import { invokeGeneratedViewAction, registerAppViewCommandHost } from "../appViewCommandHost";
 import { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
@@ -157,6 +167,10 @@ import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { decodeProjectScriptKeybindingRule } from "~/lib/projectScriptKeybindings";
 import { type NewProjectScriptInput } from "./ProjectScriptsControl";
+import {
+  deleteProjectCustomAction as removeProjectCustomAction,
+  setProjectCustomActionPlacement,
+} from "./ProjectCustomActionsControl.logic";
 import {
   buildProjectScript,
   commandForProjectScript,
@@ -209,6 +223,7 @@ import {
 } from "../state/server";
 import { terminalEnvironment } from "../state/terminal";
 import { threadEnvironment } from "../state/threads";
+import { appControlEnvironment } from "../state/appControl";
 import { vcsEnvironment } from "../state/vcs";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
 import {
@@ -313,6 +328,23 @@ const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PROVIDER_SKILLS: ServerProvider["skills"] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
+let appViewCommandHostMounts = 0;
+let unregisterAppViewCommandHost: (() => void) | null = null;
+
+function useAppViewCommandHost() {
+  useEffect(() => {
+    appViewCommandHostMounts += 1;
+    unregisterAppViewCommandHost ??= registerAppViewCommandHost();
+    return () => {
+      appViewCommandHostMounts -= 1;
+      if (appViewCommandHostMounts === 0) {
+        unregisterAppViewCommandHost?.();
+        unregisterAppViewCommandHost = null;
+      }
+    };
+  }, []);
+}
+
 function useDraftHeroLayoutTransition(isDraftHeroState: boolean) {
   const transitionGroupRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -1167,6 +1199,9 @@ function ChatViewContent(props: ChatViewProps) {
   const writeTerminal = useAtomCommand(terminalEnvironment.write, "terminal write");
   const closeTerminalMutation = useAtomCommand(terminalEnvironment.close, "terminal close");
   const createThread = useAtomCommand(threadEnvironment.create, { reportFailure: false });
+  const invokeServerAppCommand = useAtomCommand(appControlEnvironment.invokeServer, {
+    reportFailure: false,
+  });
   const deleteThread = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
@@ -1180,6 +1215,9 @@ function ChatViewContent(props: ChatViewProps) {
   });
   const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, {
+    reportFailure: false,
+  });
+  const stopThreadSession = useAtomCommand(threadEnvironment.stopSession, {
     reportFailure: false,
   });
   const respondToThreadApproval = useAtomCommand(threadEnvironment.respondToApproval, {
@@ -1519,6 +1557,23 @@ function ChatViewContent(props: ChatViewProps) {
   const activeRightPanelSurface = useRightPanelStore((state) =>
     selectActiveRightPanelSurface(state.byThreadKey, activeThreadRef),
   );
+  const activeThreadAppViews = useAppViewStore((state) =>
+    selectThreadAppViews(state.byThreadKey, activeThreadRef),
+  );
+  const appViewTitles = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(activeThreadAppViews.manifests).map(([viewId, manifest]) => [
+          viewId,
+          manifest.title,
+        ]),
+      ),
+    [activeThreadAppViews.manifests],
+  );
+  const activeAppViewManifest =
+    activeRightPanelSurface?.kind === "app-view"
+      ? (activeThreadAppViews.manifests[activeRightPanelSurface.viewId] ?? null)
+      : null;
   const activeFileSurface =
     activeRightPanelSurface?.kind === "file" ? activeRightPanelSurface : null;
   const activePreviewState = useThreadPreviewState(activeThreadRef);
@@ -1619,6 +1674,7 @@ function ChatViewContent(props: ChatViewProps) {
   const activeProjectRef = activeThread
     ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
     : null;
+  const [generatedViewLibraryOpen, setGeneratedViewLibraryOpen] = useState(false);
   const activeProject = useProject(activeProjectRef);
   const handleNewThreadInActiveProject = useCallback(() => {
     startNewThreadForProject(activeProjectRef, handleNewThread);
@@ -3049,8 +3105,72 @@ function ChatViewContent(props: ChatViewProps) {
     },
     [activeProject, persistProjectScripts],
   );
+  const runProjectCustomAction = useCallback(
+    (action: ProjectCustomAction) => {
+      if (!activeThread) return;
+      void invokeWebAppCommand(
+        action.commandId,
+        {
+          environmentId,
+          ...(activeProject ? { projectId: activeProject.id } : {}),
+          threadId: activeThread.id,
+          source: "button",
+        },
+        action.args,
+      ).catch((error: unknown) => {
+        toastManager.add({
+          type: "error",
+          title: `Could not open ${action.name}`,
+          description: error instanceof Error ? error.message : "The URL could not be opened.",
+        });
+      });
+    },
+    [activeProject, activeThread, environmentId],
+  );
+  const persistProjectCustomActions = useCallback(
+    async (
+      customActions: ReadonlyArray<ProjectCustomAction>,
+    ): Promise<AtomCommandResult<void, unknown>> => {
+      if (!activeProject) return AsyncResult.success(undefined);
+      return mapAtomCommandResult(
+        await updateProject({
+          environmentId,
+          input: {
+            projectId: activeProject.id,
+            customActions,
+          },
+        }),
+        () => undefined,
+      );
+    },
+    [activeProject, environmentId, updateProject],
+  );
+  const updateProjectCustomActionPlacement = useCallback(
+    async (
+      actionId: string,
+      placement: "menu" | "toolbar",
+    ): Promise<AtomCommandResult<void, unknown>> => {
+      if (!activeProject) return AsyncResult.success(undefined);
+      const current = activeProject.customActions ?? [];
+      const updated = setProjectCustomActionPlacement(current, actionId, placement);
+      if (!updated) {
+        return AsyncResult.failure<void, unknown>(Cause.fail(new Error("URL action not found.")));
+      }
+      return persistProjectCustomActions(updated);
+    },
+    [activeProject, persistProjectCustomActions],
+  );
+  const deleteProjectCustomAction = useCallback(
+    async (actionId: string) => {
+      if (!activeProject) return AsyncResult.success(undefined);
+      return persistProjectCustomActions(
+        removeProjectCustomAction(activeProject.customActions ?? [], actionId),
+      );
+    },
+    [activeProject, persistProjectCustomActions],
+  );
 
-  const handleRuntimeModeChange = useCallback(
+  const applyRuntimeModeChange = useCallback(
     (mode: RuntimeMode) => {
       if (mode === runtimeMode) return;
       setComposerDraftRuntimeMode(composerDraftTarget, mode);
@@ -3069,7 +3189,7 @@ function ChatViewContent(props: ChatViewProps) {
     ],
   );
 
-  const handleInteractionModeChange = useCallback(
+  const applyInteractionModeChange = useCallback(
     (mode: ProviderInteractionMode) => {
       if (mode === interactionMode) return;
       setComposerDraftInteractionMode(composerDraftTarget, mode);
@@ -3086,6 +3206,38 @@ function ChatViewContent(props: ChatViewProps) {
       setComposerDraftInteractionMode,
       setDraftThreadContext,
     ],
+  );
+  const handleRuntimeModeChange = useCallback(
+    (mode: RuntimeMode) => {
+      if (!activeThread) return;
+      void invokeWebAppCommand(
+        "thread.mode.change",
+        {
+          environmentId,
+          ...(activeProject ? { projectId: activeProject.id } : {}),
+          threadId: activeThread.id,
+          source: "button",
+        },
+        { threadId: activeThread.id, mode },
+      );
+    },
+    [activeProject, activeThread, environmentId],
+  );
+  const handleInteractionModeChange = useCallback(
+    (mode: ProviderInteractionMode) => {
+      if (!activeThread) return;
+      void invokeWebAppCommand(
+        "thread.mode.change",
+        {
+          environmentId,
+          ...(activeProject ? { projectId: activeProject.id } : {}),
+          threadId: activeThread.id,
+          source: "button",
+        },
+        { threadId: activeThread.id, mode },
+      );
+    },
+    [activeProject, activeThread, environmentId],
   );
   const toggleInteractionMode = useCallback(() => {
     handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
@@ -3289,6 +3441,137 @@ function ChatViewContent(props: ChatViewProps) {
     }
     useRightPanelStore.getState().toggleVisibility(activeThreadRef);
   }, [activeThreadRef, closePlanSidebar, closePreviewPanel, planSidebarOpen, rightPanelOpen]);
+  useEffect(() => {
+    if (!activeThreadRef) return;
+    const matchesActiveThread = (context: { environmentId: string; threadId?: string }) => ({
+      available:
+        context.environmentId === activeThreadRef.environmentId &&
+        (context.threadId === undefined || context.threadId === activeThreadRef.threadId),
+      reason: "The command is hosted by another active thread.",
+    });
+    const closeFocusedTerminal = () => {
+      const terminalFocusOwner = getTerminalFocusOwner();
+      if (terminalFocusOwner === "right-panel" && activeRightPanelSurface?.kind === "terminal") {
+        closePanelTerminal(activeRightPanelSurface.activeTerminalId);
+      } else if (terminalUiState.terminalOpen) {
+        closeTerminal(terminalUiState.activeTerminalId);
+      }
+    };
+    const splitFocusedTerminal = (direction: "horizontal" | "vertical") => {
+      if (getTerminalFocusOwner() === "right-panel") {
+        splitPanelTerminal(direction);
+      } else {
+        if (!terminalUiState.terminalOpen) setTerminalOpen(true);
+        splitTerminal(direction);
+      }
+    };
+    const newFocusedTerminal = () => {
+      if (getTerminalFocusOwner() === "right-panel") {
+        addTerminalSurface();
+      } else {
+        if (!terminalUiState.terminalOpen) setTerminalOpen(true);
+        createNewTerminal();
+      }
+    };
+    const disposers = [
+      registerWebAppCommandHandler("ui.composer.focus", focusComposer, matchesActiveThread),
+      registerWebAppCommandHandler("ui.diff.open", addDiffSurface, matchesActiveThread),
+      registerWebAppCommandHandler("ui.diff.toggle", onToggleDiff, matchesActiveThread),
+      registerWebAppCommandHandler("ui.files.open", addFilesSurface, matchesActiveThread),
+      registerWebAppCommandHandler("ui.preview.open", createBrowserSurface, matchesActiveThread),
+      registerWebAppCommandHandler("ui.preview.toggle", togglePreviewPanel, matchesActiveThread),
+      registerWebAppCommandHandler(
+        "ui.terminal.open",
+        () => setTerminalOpen(true),
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "ui.terminal.toggle",
+        toggleTerminalVisibility,
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "ui.right-panel.open",
+        () => useRightPanelStore.getState().open(activeThreadRef, "diff"),
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler("ui.right-panel.close", closePreviewPanel, matchesActiveThread),
+      registerWebAppCommandHandler(
+        "ui.right-panel.focus",
+        () => setTerminalFocusRequestId((value) => value + 1),
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler("ui.right-panel.toggle", toggleRightPanel, matchesActiveThread),
+      registerWebAppCommandHandler(
+        "ui.model-picker.toggle",
+        () => composerRef.current?.toggleModelPicker(),
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "terminal.focus",
+        () => setTerminalFocusRequestId((value) => value + 1),
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "terminal.split",
+        () => splitFocusedTerminal("horizontal"),
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "terminal.split-vertical",
+        () => splitFocusedTerminal("vertical"),
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler("terminal.new", newFocusedTerminal, matchesActiveThread),
+      registerWebAppCommandHandler("terminal.close", closeFocusedTerminal, matchesActiveThread),
+      registerWebAppCommandHandler(
+        "delegation.turn.stop",
+        (invocation) => {
+          const { threadId: delegatedThreadId } = invocation.args as { threadId: ThreadId };
+          return stopThreadSession({
+            environmentId,
+            input: { threadId: delegatedThreadId },
+          });
+        },
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "script.run",
+        (invocation) => {
+          const { scriptId } = invocation.args as { scriptId: string };
+          const script = activeProject?.scripts.find((entry) => entry.id === scriptId);
+          if (!script) throw new Error(`Project script ${scriptId} is not available.`);
+          return runProjectScript(script);
+        },
+        matchesActiveThread,
+      ),
+    ];
+    return () => disposers.forEach((dispose) => dispose());
+  }, [
+    activeProject,
+    activeRightPanelSurface,
+    activeThreadRef,
+    addDiffSurface,
+    addFilesSurface,
+    addTerminalSurface,
+    closePanelTerminal,
+    closePreviewPanel,
+    closeTerminal,
+    composerRef,
+    createBrowserSurface,
+    createNewTerminal,
+    focusComposer,
+    onToggleDiff,
+    runProjectScript,
+    setTerminalOpen,
+    splitPanelTerminal,
+    splitTerminal,
+    terminalUiState.activeTerminalId,
+    terminalUiState.terminalOpen,
+    togglePreviewPanel,
+    toggleRightPanel,
+    toggleTerminalVisibility,
+  ]);
   const toggleRightPanelMaximized = useCallback(() => {
     if (!canMaximizeRightPanel) return;
     setMaximizedRightPanelThreadKey((threadKey) =>
@@ -4099,7 +4382,7 @@ function ChatViewContent(props: ChatViewProps) {
       return revealed !== null && revealed !== activeBranchMismatchKey ? null : revealed;
     });
   }, [activeBranchMismatchKey, showBranchMismatchBanner]);
-  const handleSwitchCheckoutToThread = useCallback(async () => {
+  const executeSwitchCheckoutToThread = useCallback(async () => {
     if (
       !activeProjectCwd ||
       !activeThread ||
@@ -4209,13 +4492,26 @@ function ChatViewContent(props: ChatViewProps) {
     isUnsnoozing,
     isUnsettling,
   ]);
+  const invokeRestoreThreadBranchCommand = useCallback(() => {
+    if (!activeThread || !localCheckoutBranchMismatch) return;
+    void invokeWebAppCommand(
+      "source-control.checkout",
+      {
+        environmentId,
+        ...(activeProject ? { projectId: activeProject.id } : {}),
+        threadId: activeThread.id,
+        source: "button",
+      },
+      { branch: localCheckoutBranchMismatch.threadBranch },
+    );
+  }, [activeProject, activeThread, environmentId, localCheckoutBranchMismatch]);
   const handleRestoreThreadBranch = useCallback(() => {
     if (gitStatusQuery.data?.hasWorkingTreeChanges) {
       setBranchRestoreConfirmOpen(true);
       return;
     }
-    void handleSwitchCheckoutToThread();
-  }, [gitStatusQuery.data?.hasWorkingTreeChanges, handleSwitchCheckoutToThread]);
+    invokeRestoreThreadBranchCommand();
+  }, [gitStatusQuery.data?.hasWorkingTreeChanges, invokeRestoreThreadBranchCommand]);
   const composerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const parkedThreadItems = parkedThreadBannerItem === null ? [] : [parkedThreadBannerItem];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {
@@ -4384,116 +4680,40 @@ function ChatViewContent(props: ChatViewProps) {
       });
       if (!command) return;
 
-      if (command === "terminal.toggle") {
+      const isHostedCommand =
+        command === "terminal.toggle" ||
+        command === "rightPanel.toggle" ||
+        command === "terminal.split" ||
+        command === "terminal.splitVertical" ||
+        command === "terminal.close" ||
+        command === "terminal.new" ||
+        command === "diff.toggle" ||
+        command === "modelPicker.toggle" ||
+        projectScriptIdFromCommand(command) !== null;
+      if (isHostedCommand) {
         event.preventDefault();
         event.stopPropagation();
-        toggleTerminalVisibility();
+        const scriptId = projectScriptIdFromCommand(command);
+        void invokeKeybindingAppCommand(
+          command,
+          {
+            environmentId,
+            ...(activeProject ? { projectId: activeProject.id } : {}),
+            threadId: activeThreadId,
+          },
+          scriptId ? { scriptId } : {},
+        );
         return;
       }
-
-      if (command === "rightPanel.toggle") {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleRightPanel();
-        return;
-      }
-
-      if (command === "terminal.split") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (terminalFocusOwner === "right-panel") {
-          splitPanelTerminal();
-          return;
-        }
-        if (!terminalUiState.terminalOpen) {
-          setTerminalOpen(true);
-        }
-        splitTerminal();
-        return;
-      }
-
-      if (command === "terminal.splitVertical") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (terminalFocusOwner === "right-panel") {
-          splitPanelTerminal("vertical");
-          return;
-        }
-        if (!terminalUiState.terminalOpen) {
-          setTerminalOpen(true);
-        }
-        splitTerminal("vertical");
-        return;
-      }
-
-      if (command === "terminal.close") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (terminalFocusOwner === "right-panel" && activeRightPanelSurface?.kind === "terminal") {
-          closePanelTerminal(activeRightPanelSurface.activeTerminalId);
-          return;
-        }
-        if (!terminalUiState.terminalOpen) return;
-        closeTerminal(terminalUiState.activeTerminalId);
-        return;
-      }
-
-      if (command === "terminal.new") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (terminalFocusOwner === "right-panel") {
-          addTerminalSurface();
-          return;
-        }
-        if (!terminalUiState.terminalOpen) {
-          setTerminalOpen(true);
-        }
-        createNewTerminal();
-        return;
-      }
-
-      if (command === "diff.toggle") {
-        event.preventDefault();
-        event.stopPropagation();
-        onToggleDiff();
-        return;
-      }
-
-      if (command === "modelPicker.toggle") {
-        event.preventDefault();
-        event.stopPropagation();
-        composerRef.current?.toggleModelPicker();
-        return;
-      }
-
-      const scriptId = projectScriptIdFromCommand(command);
-      if (!scriptId || !activeProject) return;
-      const script = activeProject.scripts.find((entry) => entry.id === scriptId);
-      if (!script) return;
-      event.preventDefault();
-      event.stopPropagation();
-      void runProjectScript(script);
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
   }, [
     activeProject,
-    activeRightPanelSurface,
-    addTerminalSurface,
     terminalUiState.terminalOpen,
-    terminalUiState.activeTerminalId,
     activeThreadId,
-    closeTerminal,
-    closePanelTerminal,
-    createNewTerminal,
-    setTerminalOpen,
-    runProjectScript,
-    splitTerminal,
-    splitPanelTerminal,
+    environmentId,
     keybindings,
-    onToggleDiff,
-    toggleRightPanel,
-    toggleTerminalVisibility,
     composerRef,
   ]);
 
@@ -4556,7 +4776,7 @@ function ChatViewContent(props: ChatViewProps) {
     ],
   );
 
-  const onSend = async (e?: { preventDefault: () => void }) => {
+  const executeSend = async (e?: { preventDefault: () => void }) => {
     e?.preventDefault();
     if (
       !activeThread ||
@@ -4848,6 +5068,7 @@ function ChatViewContent(props: ChatViewProps) {
                 ? {
                     createThread: {
                       projectId: activeProject.id,
+                      kind: "project" as const,
                       title,
                       modelSelection: threadCreateModelSelection,
                       runtimeMode,
@@ -4950,7 +5171,7 @@ function ChatViewContent(props: ChatViewProps) {
     }
   };
 
-  const onInterrupt = async () => {
+  const executeInterrupt = async () => {
     if (!activeThread) return;
     const result = await interruptThreadTurn({
       environmentId,
@@ -5351,6 +5572,7 @@ function ChatViewContent(props: ChatViewProps) {
       input: {
         threadId: nextThreadId,
         projectId: activeProject.id,
+        kind: "project",
         title: nextThreadTitle,
         modelSelection: nextThreadModelSelection,
         runtimeMode,
@@ -5476,7 +5698,7 @@ function ChatViewContent(props: ChatViewProps) {
     [activeThread, providerStatuses],
   );
 
-  const onProviderModelSelect = useCallback(
+  const applyProviderModelSelect = useCallback(
     (instanceId: ProviderInstanceId, model: string) => {
       if (!activeThread) return;
       // Look up the configured instance so model normalization and custom
@@ -5552,6 +5774,166 @@ function ChatViewContent(props: ChatViewProps) {
       settings,
     ],
   );
+  const onProviderModelSelect = useCallback(
+    (instanceId: ProviderInstanceId, model: string) => {
+      if (!activeThread) return;
+      void invokeWebAppCommand(
+        "thread.model.change",
+        {
+          environmentId,
+          ...(activeProject ? { projectId: activeProject.id } : {}),
+          threadId: activeThread.id,
+          source: "button",
+        },
+        {
+          threadId: activeThread.id,
+          modelSelection: { instanceId, model },
+        },
+      );
+    },
+    [activeProject, activeThread, environmentId],
+  );
+  const executeSendRef = useRef(executeSend);
+  executeSendRef.current = executeSend;
+  const executeInterruptRef = useRef(executeInterrupt);
+  executeInterruptRef.current = executeInterrupt;
+  const applyProviderModelSelectRef = useRef(applyProviderModelSelect);
+  applyProviderModelSelectRef.current = applyProviderModelSelect;
+  const applyRuntimeModeChangeRef = useRef(applyRuntimeModeChange);
+  applyRuntimeModeChangeRef.current = applyRuntimeModeChange;
+  const applyInteractionModeChangeRef = useRef(applyInteractionModeChange);
+  applyInteractionModeChangeRef.current = applyInteractionModeChange;
+  const executeSwitchCheckoutToThreadRef = useRef(executeSwitchCheckoutToThread);
+  executeSwitchCheckoutToThreadRef.current = executeSwitchCheckoutToThread;
+  const onRevertToTurnCountRef = useRef(onRevertToTurnCount);
+  onRevertToTurnCountRef.current = onRevertToTurnCount;
+  const onSend = useCallback(
+    async (event?: { preventDefault: () => void }) => {
+      event?.preventDefault();
+      if (!activeThread) return;
+      await invokeWebAppCommand(
+        "thread.send",
+        {
+          environmentId,
+          ...(activeProject ? { projectId: activeProject.id } : {}),
+          threadId: activeThread.id,
+          source: "button",
+        },
+        { threadId: activeThread.id, text: promptRef.current },
+      );
+    },
+    [activeProject, activeThread, environmentId],
+  );
+  const onInterrupt = useCallback(async () => {
+    if (!activeThread) return;
+    await invokeWebAppCommand(
+      "thread.interrupt",
+      {
+        environmentId,
+        ...(activeProject ? { projectId: activeProject.id } : {}),
+        threadId: activeThread.id,
+        source: "button",
+      },
+      { threadId: activeThread.id },
+    );
+  }, [activeProject, activeThread, environmentId]);
+
+  useEffect(() => {
+    if (!activeThread) return;
+    const matchesActiveThread = (context: { environmentId: string; threadId?: string }) => ({
+      available:
+        context.environmentId === activeThread.environmentId &&
+        (context.threadId === undefined || context.threadId === activeThread.id),
+      reason: "The command is hosted by another active thread.",
+    });
+    const assertTargetThread = (args: unknown) => {
+      const threadId = (args as { threadId?: unknown }).threadId;
+      if (threadId !== activeThread.id) {
+        throw new Error(`Thread ${String(threadId)} is not the active thread.`);
+      }
+    };
+    const disposers = [
+      registerWebAppCommandHandler(
+        "thread.send",
+        (invocation) => {
+          assertTargetThread(invocation.args);
+          const { text } = invocation.args as { text: string };
+          if (text !== promptRef.current) {
+            throw new Error("The composer changed before the send command executed.");
+          }
+          return executeSendRef.current();
+        },
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "thread.interrupt",
+        (invocation) => {
+          assertTargetThread(invocation.args);
+          return executeInterruptRef.current();
+        },
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "thread.checkpoint.revert",
+        (invocation) => {
+          assertTargetThread(invocation.args);
+          return onRevertToTurnCountRef.current(
+            (invocation.args as { turnCount: number }).turnCount,
+          );
+        },
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "thread.model.change",
+        (invocation) => {
+          assertTargetThread(invocation.args);
+          const { modelSelection } = invocation.args as {
+            modelSelection: { instanceId: ProviderInstanceId; model: string };
+          };
+          return applyProviderModelSelectRef.current(
+            modelSelection.instanceId,
+            modelSelection.model,
+          );
+        },
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "thread.mode.change",
+        (invocation) => {
+          assertTargetThread(invocation.args);
+          const { mode } = invocation.args as { mode: string };
+          if (mode === "default" || mode === "plan") {
+            return applyInteractionModeChangeRef.current(mode);
+          }
+          if (
+            mode === "approval-required" ||
+            mode === "auto-accept-edits" ||
+            mode === "auto" ||
+            mode === "full-access"
+          ) {
+            return applyRuntimeModeChangeRef.current(mode);
+          }
+          throw new Error(`Unsupported thread mode ${mode}.`);
+        },
+        matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "source-control.checkout",
+        (invocation) => {
+          const { branch } = invocation.args as { branch: string };
+          if (branch !== localCheckoutBranchMismatch?.threadBranch) {
+            throw new Error("Only restoring the active thread branch is available here.");
+          }
+          return executeSwitchCheckoutToThreadRef.current();
+        },
+        (context) => ({
+          available: matchesActiveThread(context).available && localCheckoutBranchMismatch !== null,
+          reason: "The active thread has no branch mismatch to restore.",
+        }),
+      ),
+    ];
+    return () => disposers.forEach((dispose) => dispose());
+  }, [activeThread, localCheckoutBranchMismatch]);
   const onEnvModeChange = useCallback(
     (mode: DraftThreadEnvMode) => {
       if (canOverrideServerThreadEnvMode) {
@@ -5615,15 +5997,23 @@ function ChatViewContent(props: ChatViewProps) {
   // the callback reference is fully stable and never busts context identity.
   const revertTurnCountRef = useRef(revertTurnCountByUserMessageId);
   revertTurnCountRef.current = revertTurnCountByUserMessageId;
-  const onRevertToTurnCountRef = useRef(onRevertToTurnCount);
-  onRevertToTurnCountRef.current = onRevertToTurnCount;
-  const onRevertUserMessage = useCallback((messageId: MessageId) => {
-    const targetTurnCount = revertTurnCountRef.current.get(messageId);
-    if (typeof targetTurnCount !== "number") {
-      return;
-    }
-    void onRevertToTurnCountRef.current(targetTurnCount);
-  }, []);
+  const onRevertUserMessage = useCallback(
+    (messageId: MessageId) => {
+      const targetTurnCount = revertTurnCountRef.current.get(messageId);
+      if (typeof targetTurnCount !== "number" || !activeThread) return;
+      void invokeWebAppCommand(
+        "thread.checkpoint.revert",
+        {
+          environmentId,
+          ...(activeProject ? { projectId: activeProject.id } : {}),
+          threadId: activeThread.id,
+          source: "button",
+        },
+        { threadId: activeThread.id, turnCount: targetTurnCount },
+      );
+    },
+    [activeProject, activeThread, environmentId],
+  );
 
   // Empty state: no active thread
   if (!activeThread) {
@@ -5638,8 +6028,22 @@ function ChatViewContent(props: ChatViewProps) {
       rightPanelAvailable={activeProject !== null}
       rightPanelOpen={rightPanelOpen}
       rightPanelShortcutLabel={shortcutLabelForCommand(keybindings, "rightPanel.toggle")}
-      onToggleTerminal={toggleTerminalVisibility}
-      onToggleRightPanel={toggleRightPanel}
+      onToggleTerminal={() => {
+        void invokeWebAppCommand("ui.terminal.toggle", {
+          environmentId,
+          ...(activeProject ? { projectId: activeProject.id } : {}),
+          threadId: activeThread.id,
+          source: "button",
+        });
+      }}
+      onToggleRightPanel={() => {
+        void invokeWebAppCommand("ui.right-panel.toggle", {
+          environmentId,
+          ...(activeProject ? { projectId: activeProject.id } : {}),
+          threadId: activeThread.id,
+          source: "button",
+        });
+      }}
     />
   );
   const panelLayoutControls = (
@@ -5652,6 +6056,46 @@ function ChatViewContent(props: ChatViewProps) {
       ) : null}
       {panelToggleControls}
     </div>
+  );
+  const invokeAppViewAction = useCallback(
+    async (request: { commandId: Parameters<typeof invokeWebAppCommand>[0]; args: unknown }) => {
+      if (!activeThreadRef) return;
+      try {
+        await invokeGeneratedViewAction({
+          request,
+          context: {
+            environmentId: activeThreadRef.environmentId,
+            ...(activeProject ? { projectId: activeProject.id } : {}),
+            threadId: activeThreadRef.threadId,
+            source: "view",
+          },
+          principal:
+            activeThread.kind === "assistant"
+              ? { kind: "global-assistant", assistantThreadId: activeThread.id }
+              : {
+                  kind: "thread-agent",
+                  threadId: activeThread.id,
+                  projectId: activeThread.projectId,
+                },
+          actionId: `view-${randomHex(16)}`,
+          invokeServer: async (input) => {
+            const result = await invokeServerAppCommand({
+              environmentId: activeThreadRef.environmentId,
+              input,
+            });
+            if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+            return result.value;
+          },
+        });
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Generated view action failed",
+          description: error instanceof Error ? error.message : "The command could not be run.",
+        });
+      }
+    },
+    [activeProject?.id, activeThread, activeThreadRef, invokeServerAppCommand],
   );
   const rightPanelContent = activeThreadRef ? (
     activeRightPanelSurface?.kind === "preview" ? (
@@ -5682,6 +6126,16 @@ function ChatViewContent(props: ChatViewProps) {
         newShortcutLabel={newTerminalShortcutLabel ?? undefined}
         closeShortcutLabel={closeTerminalShortcutLabel ?? undefined}
       />
+    ) : activeRightPanelSurface?.kind === "app-view" && activeAppViewManifest ? (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <GeneratedViewToolbar
+          ref={activeThreadRef}
+          manifest={activeAppViewManifest}
+          projectId={activeProject?.id ?? null}
+          onManage={() => setGeneratedViewLibraryOpen(true)}
+        />
+        <AppViewRenderer manifest={activeAppViewManifest} onAction={invokeAppViewAction} />
+      </div>
     ) : activeRightPanelSurface?.kind === "diff" ? (
       <Suspense fallback={null}>
         <DiffPanel
@@ -5764,6 +6218,7 @@ function ChatViewContent(props: ChatViewProps) {
             activeProjectCwd={activeProject?.workspaceRoot ?? null}
             openInCwd={gitCwd}
             activeProjectScripts={activeProject?.scripts}
+            activeProjectCustomActions={activeProject?.customActions ?? []}
             preferredScriptId={
               activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
             }
@@ -5776,6 +6231,9 @@ function ChatViewContent(props: ChatViewProps) {
             onAddProjectScript={saveProjectScript}
             onUpdateProjectScript={updateProjectScript}
             onDeleteProjectScript={deleteProjectScript}
+            onRunProjectCustomAction={runProjectCustomAction}
+            onSetProjectCustomActionPlacement={updateProjectCustomActionPlacement}
+            onDeleteProjectCustomAction={deleteProjectCustomAction}
           />
         </header>
 
@@ -5831,6 +6289,25 @@ function ChatViewContent(props: ChatViewProps) {
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
                 hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}
                 topFadeEnabled={!hasTimelineTopBanner}
+                activeDelegatedActionId={
+                  isWorking
+                    ? (activeThread.messages.findLast(
+                        (message) => message.role === "user" && message.delegation !== undefined,
+                      )?.delegation?.actionId ?? null)
+                    : null
+                }
+                onStopDelegatedTurn={() =>
+                  void invokeWebAppCommand(
+                    "delegation.turn.stop",
+                    {
+                      source: "button",
+                      environmentId,
+                      projectId: activeThread.projectId,
+                      threadId: activeThread.id,
+                    },
+                    { threadId: activeThread.id },
+                  )
+                }
               />
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
@@ -6065,7 +6542,7 @@ function ChatViewContent(props: ChatViewProps) {
                     variant="default"
                     onClick={() => {
                       setBranchRestoreConfirmOpen(false);
-                      void handleSwitchCheckoutToThread();
+                      invokeRestoreThreadBranchCommand();
                     }}
                   >
                     Switch branch
@@ -6124,6 +6601,7 @@ function ChatViewContent(props: ChatViewProps) {
           pendingSurfaceIds={pendingFileSurfaceIds}
           previewSessions={activePreviewState.sessions}
           terminalLabelsById={activeTerminalLabelsById}
+          appViewTitles={appViewTitles}
           onActivate={activateRightPanelSurface}
           onCloseSurface={closeRightPanelSurface}
           onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
@@ -6134,6 +6612,7 @@ function ChatViewContent(props: ChatViewProps) {
           onAddTerminal={addTerminalSurface}
           onAddDiff={addDiffSurface}
           onAddFiles={addFilesSurface}
+          onManageAppViews={() => setGeneratedViewLibraryOpen(true)}
           browserAvailable={isPreviewSupportedInRuntime()}
           diffAvailable={isServerThread && isGitRepo}
           filesAvailable={activeProject !== null}
@@ -6151,6 +6630,7 @@ function ChatViewContent(props: ChatViewProps) {
             pendingSurfaceIds={pendingFileSurfaceIds}
             previewSessions={activePreviewState.sessions}
             terminalLabelsById={activeTerminalLabelsById}
+            appViewTitles={appViewTitles}
             onActivate={activateRightPanelSurface}
             onCloseSurface={closeRightPanelSurface}
             onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
@@ -6161,6 +6641,7 @@ function ChatViewContent(props: ChatViewProps) {
             onAddTerminal={addTerminalSurface}
             onAddDiff={addDiffSurface}
             onAddFiles={addFilesSurface}
+            onManageAppViews={() => setGeneratedViewLibraryOpen(true)}
             browserAvailable={isPreviewSupportedInRuntime()}
             diffAvailable={isServerThread && isGitRepo}
             filesAvailable={activeProject !== null}
@@ -6168,6 +6649,14 @@ function ChatViewContent(props: ChatViewProps) {
             {rightPanelContent}
           </RightPanelTabs>
         </RightPanelSheet>
+      ) : null}
+      {activeThreadRef ? (
+        <GeneratedViewLibrary
+          open={generatedViewLibraryOpen}
+          onOpenChange={setGeneratedViewLibraryOpen}
+          ref={activeThreadRef}
+          projectId={activeProject?.id ?? null}
+        />
       ) : null}
 
       {expandedImage && (
@@ -6182,6 +6671,7 @@ function ChatViewContent(props: ChatViewProps) {
 }
 
 export default function ChatView(props: ChatViewProps) {
+  useAppViewCommandHost();
   return (
     <DiffWorkerPoolProvider>
       <ChatViewContent {...props} />

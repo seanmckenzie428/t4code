@@ -39,6 +39,10 @@ import { buildCodexInitializeParams } from "./CodexProvider.ts";
 import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
 import { buildCodexDeveloperInstructions } from "../CodexDeveloperInstructions.ts";
+import {
+  type CodexControlOnlyProfile,
+  verifyCodexControlOnlyConfig,
+} from "../../globalAssistant/CodexControlOnlyProfile.ts";
 const decodeV2TurnStartResponse = Schema.decodeUnknownEffect(EffectCodexSchema.V2TurnStartResponse);
 
 const PROVIDER = ProviderDriverKind.make("codex");
@@ -106,6 +110,8 @@ export interface CodexSessionRuntimeOptions {
   readonly serviceTier?: CodexServiceTier | undefined;
   readonly resumeCursor?: CodexResumeCursor;
   readonly appServerArgs?: ReadonlyArray<string>;
+  readonly appServerRootArgs?: ReadonlyArray<string>;
+  readonly controlOnlyProfile?: CodexControlOnlyProfile;
 }
 
 export interface CodexSessionRuntimeSendTurnInput {
@@ -302,13 +308,18 @@ function buildThreadStartParams(input: {
   readonly runtimeMode: RuntimeMode;
   readonly model: string | undefined;
   readonly serviceTier: CodexServiceTier | undefined;
+  readonly useConfiguredPermissionProfile?: boolean;
 }): EffectCodexSchema.V2ThreadStartParams {
   const config = runtimeModeToThreadConfig(input.runtimeMode);
   return {
     cwd: input.cwd,
-    approvalPolicy: config.approvalPolicy,
-    sandbox: config.sandbox,
-    approvalsReviewer: config.approvalsReviewer,
+    ...(input.useConfiguredPermissionProfile
+      ? {}
+      : {
+          approvalPolicy: config.approvalPolicy,
+          sandbox: config.sandbox,
+          approvalsReviewer: config.approvalsReviewer,
+        }),
     ...(input.model ? { model: input.model } : {}),
     ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
   };
@@ -370,6 +381,7 @@ export function buildTurnStartParams(input: {
   readonly serviceTier?: CodexServiceTier;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort;
   readonly interactionMode?: ProviderInteractionMode;
+  readonly useConfiguredPermissionProfile?: boolean;
 }): Effect.Effect<
   CodexTurnStartParamsWithCollaborationMode,
   CodexErrors.CodexAppServerProtocolParseError
@@ -395,9 +407,13 @@ export function buildTurnStartParams(input: {
   return decodeCodexTurnStartParamsWithCollaborationMode({
     threadId: input.threadId,
     input: turnInput,
-    approvalPolicy: config.approvalPolicy,
-    approvalsReviewer: config.approvalsReviewer,
-    sandboxPolicy: runtimeModeToTurnSandboxPolicy(input.runtimeMode),
+    ...(input.useConfiguredPermissionProfile
+      ? {}
+      : {
+          approvalPolicy: config.approvalPolicy,
+          approvalsReviewer: config.approvalsReviewer,
+          sandboxPolicy: runtimeModeToTurnSandboxPolicy(input.runtimeMode),
+        }),
     ...(input.model ? { model: input.model } : {}),
     ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
     ...(input.effort ? { effort: input.effort } : {}),
@@ -462,6 +478,7 @@ export const openCodexThread = (input: {
   readonly requestedModel: string | undefined;
   readonly serviceTier: CodexServiceTier | undefined;
   readonly resumeThreadId: string | undefined;
+  readonly useConfiguredPermissionProfile?: boolean;
 }): Effect.Effect<CodexThreadOpenResponse, CodexErrors.CodexAppServerError> => {
   const resumeThreadId = input.resumeThreadId;
   const startParams = buildThreadStartParams({
@@ -469,6 +486,7 @@ export const openCodexThread = (input: {
     runtimeMode: input.runtimeMode,
     model: input.requestedModel,
     serviceTier: input.serviceTier,
+    ...(input.useConfiguredPermissionProfile ? { useConfiguredPermissionProfile: true } : {}),
   });
 
   if (resumeThreadId === undefined) {
@@ -734,7 +752,11 @@ export const makeCodexSessionRuntime = (
       ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
     };
     const extendEnv = options.environment === undefined;
-    const appServerArgs = codexSessionAppServerArgs(options.appServerArgs, options.launchArgs);
+    const appServerArgs = codexSessionAppServerArgs(
+      options.appServerArgs,
+      options.launchArgs,
+      options.appServerRootArgs,
+    );
     const spawnCommand = yield* resolveSpawnCommand(options.binaryPath, appServerArgs, {
       env,
       extendEnv,
@@ -1214,8 +1236,26 @@ export const makeCodexSessionRuntime = (
 
     const start = Effect.fn("CodexSessionRuntime.start")(function* () {
       yield* emitSessionEvent("session/connecting", "Starting Codex App Server session.");
-      yield* client.request("initialize", buildCodexInitializeParams());
+      const initialize = yield* client.request("initialize", buildCodexInitializeParams());
       yield* client.notify("initialized", undefined);
+
+      if (options.controlOnlyProfile) {
+        const config = yield* client.request("config/read", {
+          cwd: options.cwd,
+          includeLayers: true,
+        });
+        const refusalReason = verifyCodexControlOnlyConfig({
+          initialize,
+          config,
+          expected: options.controlOnlyProfile,
+        });
+        if (refusalReason) {
+          return yield* CodexErrors.CodexAppServerRequestError.invalidParams(
+            `T3 Assistant startup refused: ${refusalReason}`,
+            { profile: options.controlOnlyProfile.profileName },
+          );
+        }
+      }
 
       const requestedModel = normalizeCodexModelSlug(options.model);
 
@@ -1227,6 +1267,7 @@ export const makeCodexSessionRuntime = (
         requestedModel,
         serviceTier: options.serviceTier,
         resumeThreadId: readResumeCursorThreadId(options.resumeCursor),
+        useConfiguredPermissionProfile: options.controlOnlyProfile !== undefined,
       });
 
       const providerThreadId = opened.thread.id;
@@ -1301,6 +1342,7 @@ export const makeCodexSessionRuntime = (
             ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
             ...(input.effort ? { effort: input.effort } : {}),
             ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
+            useConfiguredPermissionProfile: options.controlOnlyProfile !== undefined,
           });
           const rawResponse = yield* client.raw.request("turn/start", params);
           const response = yield* decodeV2TurnStartResponse(rawResponse).pipe(

@@ -61,6 +61,9 @@ export const ProviderSessionStartInput = Schema.Struct({
   approvalPolicy: Schema.optional(ProviderApprovalPolicy),
   sandboxMode: Schema.optional(ProviderSandboxMode),
   runtimeMode: RuntimeMode,
+  // Server-derived. Clients may send the field for forward compatibility,
+  // but ProviderService recomputes it from the persisted thread kind.
+  sessionProfile: Schema.optional(Schema.Literal("global-assistant")),
 });
 export type ProviderSessionStartInput = typeof ProviderSessionStartInput.Type;
 

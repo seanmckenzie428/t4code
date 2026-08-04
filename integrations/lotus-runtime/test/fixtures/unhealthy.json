@@ -1,0 +1,14 @@
+{
+  "workspace": {
+    "slug": "broken-checkout",
+    "worktree_path": "/worktrees/broken-checkout",
+    "branch": "bugfix/broken-checkout",
+    "status": "up",
+    "health": "unhealthy",
+    "checks": [
+      { "code": "backend_unreachable", "status": "fail", "message": "API did not respond" }
+    ],
+    "warnings": ["Backend is unavailable"],
+    "urls": { "admin": "https://broken-checkout.admin.lotus.localhost" }
+  }
+}

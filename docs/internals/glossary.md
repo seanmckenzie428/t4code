@@ -10,6 +10,7 @@ This is a living glossary for T3 Code. It explains what common terms mean in thi
 - [Thread timeline](#thread-timeline)
 - [Orchestration](#orchestration)
 - [Provider runtime](#provider-runtime)
+- [Agent control and extensions](#agent-control-and-extensions)
 - [Checkpointing](#checkpointing)
 
 ## Concepts
@@ -116,6 +117,61 @@ Controls how assistant text reaches the thread timeline. In [the contracts][1], 
 
 A point-in-time view of state. The word is used in multiple layers, including orchestration, provider, and checkpointing. See [ProjectionSnapshotQuery.ts][10], [ProviderAdapter.ts][15], and [CheckpointStore.ts][19].
 
+### Agent control and extensions
+
+#### App control plane
+
+The typed semantic interface through which an agent inspects or controls T3.
+It exposes registered commands instead of DOM selectors, internal RPC, or
+database access. See [app-control-plane.md][25].
+
+#### App command
+
+A versioned semantic operation declaring owner, risk, grant, and schemas.
+Buttons, palette entries, keybindings, and MCP use the same command IDs. A
+server-owned app command may translate into orchestration commands.
+
+#### App-control principal
+
+The scope identity: either a project/thread agent or the environment's global
+assistant, further constrained by provider session, capabilities, and grants.
+
+#### Focused-client lease
+
+The environment/provider-session assignment used to route client-owned commands
+to a live focused web or desktop host.
+
+#### Global assistant
+
+The environment-scoped Codex conversation in the persistent assistant drawer.
+Its system project/thread are immutable and its provider uses an isolated
+control-only permission profile.
+
+#### Generated view
+
+An agent-presented dock surface: either a bounded native manifest or an
+opaque-origin sandboxed iframe with a declared command bridge.
+
+#### Extension
+
+An environment-installed MCP process approved by exact transport identity and
+capabilities. Optional extensions do not add product-specific core branches.
+
+#### Workspace provider
+
+The `t3.workspace-provider/v1` extension capability. The provider remains
+authoritative; T3 caches a timestamped observed projection.
+
+#### Workspace binding
+
+Thread metadata linking to an extension-owned workspace by extension, provider,
+and external workspace IDs.
+
+#### Delegated turn
+
+A project-thread turn started by the global assistant. It records origin,
+cannot delegate again, and uses the target thread's permissions.
+
 ### Checkpointing
 
 Checkpointing captures workspace state over time so the app can diff turns and restore earlier points. The main pieces are [CheckpointStore.ts][19], [CheckpointDiffQuery.ts][20], and [CheckpointReactor.ts][6].
@@ -179,3 +235,4 @@ The file patch and changed-file summary for one turn. It is usually computed in 
 [22]: ../../apps/server/src/checkpointing/Utils.ts
 [23]: ../../apps/server/src/checkpointing/Diffs.ts
 [24]: ./overview.md
+[25]: ./app-control-plane.md

@@ -167,9 +167,9 @@ export function useThread(
   ref: ScopedThreadRef | null,
   options?: {
     /**
-     * Client-reserved draft thread ids do not exist on the server until the
-     * first send. Waiting for the shell index avoids polling the detail
-     * endpoint for an intentionally missing thread during that window.
+     * Reserved thread ids (for example client drafts and an optional system
+     * assistant) may intentionally not exist yet. Waiting for the authoritative
+     * shell index avoids retrying a detail subscription for a missing thread.
      */
     waitForShell?: boolean;
   },

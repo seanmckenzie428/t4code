@@ -1137,6 +1137,22 @@ export function GeneralSettingsPanel() {
   const textGenerationModelInstanceEntries = sortProviderInstanceEntries(
     applyProviderInstanceSettings(deriveProviderInstanceEntries(serverProviders), settings),
   );
+  const assistantCodexOptions = textGenerationModelInstanceEntries
+    .filter((entry) => entry.driverKind === "codex" && entry.enabled && entry.installed)
+    .flatMap((entry) =>
+      entry.models.map((model) => ({
+        value: JSON.stringify([entry.instanceId, model.slug]),
+        instanceId: entry.instanceId,
+        model: model.slug,
+        label: `${entry.displayName} · ${model.name ?? model.slug}`,
+      })),
+    );
+  const assistantModelValue = settings.globalAssistant.modelSelection
+    ? JSON.stringify([
+        settings.globalAssistant.modelSelection.instanceId,
+        settings.globalAssistant.modelSelection.model,
+      ])
+    : "unconfigured";
   const textGenInstanceEntry = textGenerationModelInstanceEntries.find(
     (entry) => entry.instanceId === textGenInstanceId,
   );
@@ -1168,6 +1184,91 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
+      <SettingsSection title="T3 Assistant">
+        <SettingsRow
+          title="Control-only assistant"
+          description="Keep one Codex assistant available across project navigation. Startup is refused unless T3 can prove the isolated filesystem, network, and tool profile."
+          control={
+            <Switch
+              checked={settings.globalAssistant.enabled}
+              disabled={settings.globalAssistant.modelSelection === null}
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  globalAssistant: {
+                    ...settings.globalAssistant,
+                    enabled: Boolean(checked),
+                  },
+                })
+              }
+              aria-label="Enable T3 Assistant"
+            />
+          }
+        />
+        <SettingsRow
+          title="Codex model"
+          description="Only configured Codex instances are eligible. Other providers remain unsupported for V1."
+          control={
+            <Select
+              value={assistantModelValue}
+              onValueChange={(value) => {
+                if (value === "unconfigured") {
+                  updateSettings({
+                    globalAssistant: { enabled: false, modelSelection: null },
+                  });
+                  return;
+                }
+                const option = assistantCodexOptions.find((candidate) => candidate.value === value);
+                if (!option) return;
+                updateSettings({
+                  globalAssistant: {
+                    enabled: settings.globalAssistant.enabled,
+                    modelSelection: createModelSelection(option.instanceId, option.model),
+                  },
+                });
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-64" aria-label="T3 Assistant Codex model">
+                <SelectValue>
+                  {assistantModelValue === "unconfigured"
+                    ? "Not configured"
+                    : (assistantCodexOptions.find((option) => option.value === assistantModelValue)
+                        ?.label ?? "Unavailable Codex model")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                <SelectItem hideIndicator value="unconfigured">
+                  Not configured
+                </SelectItem>
+                {assistantCodexOptions.map((option) => (
+                  <SelectItem key={option.value} hideIndicator value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+        <SettingsRow
+          title="Project delegation"
+          description="Allow T3 Assistant to create project threads and start up to three project turns at once. Revoking this blocks new delegation without taking control away from you."
+          control={
+            <Switch
+              checked={settings.globalAssistant.delegationEnabled}
+              disabled={!settings.globalAssistant.enabled}
+              onCheckedChange={(checked) =>
+                updateSettings({
+                  globalAssistant: {
+                    ...settings.globalAssistant,
+                    delegationEnabled: Boolean(checked),
+                  },
+                })
+              }
+              aria-label="Allow T3 Assistant project delegation"
+            />
+          }
+        />
+      </SettingsSection>
+
       <SettingsSection title="General">
         <SettingsRow
           title="Project Grouping"

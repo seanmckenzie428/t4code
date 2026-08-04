@@ -55,6 +55,7 @@ import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
+import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 const isModelSelection = Schema.is(ModelSelection);
 
 /**
@@ -215,13 +216,61 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
   const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
-    McpSessionRegistry.issueActiveMcpCredential({ threadId, providerInstanceId }).pipe(
+    Effect.gen(function* () {
+      const instance = yield* registry.getInstanceInfo(providerInstanceId);
+      const projectionSnapshotQuery = yield* Effect.serviceOption(
+        ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+      );
+      const thread = Option.isNone(projectionSnapshotQuery)
+        ? Option.none()
+        : yield* projectionSnapshotQuery.value
+            .getThreadShellById(threadId)
+            .pipe(Effect.orElseSucceed(() => Option.none()));
+      const principal =
+        instance.driverKind !== "codex" || Option.isNone(thread)
+          ? undefined
+          : thread.value.kind === "assistant"
+            ? ({ kind: "global-assistant", assistantThreadId: threadId } as const)
+            : ({
+                kind: "thread-agent",
+                threadId,
+                projectId: thread.value.projectId,
+              } as const);
+      return yield* McpSessionRegistry.issueActiveMcpCredential({
+        threadId,
+        providerInstanceId,
+        ...(principal === undefined ? {} : { principal }),
+        ...(principal === undefined
+          ? {}
+          : {
+              grants: new Set(
+                principal.kind === "thread-agent"
+                  ? ["thread:mutate", "view:mutate"]
+                  : ["view:mutate", "assistant:delegate"],
+              ),
+            }),
+      });
+    }).pipe(
       Effect.tap((credential) =>
         credential
           ? Effect.sync(() => McpProviderSession.setMcpProviderSession(credential.config))
           : Effect.void,
       ),
     );
+
+  const resolveSessionProfile = (threadId: ThreadId) =>
+    Effect.gen(function* () {
+      const projectionSnapshotQuery = yield* Effect.serviceOption(
+        ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+      );
+      if (Option.isNone(projectionSnapshotQuery)) return undefined;
+      const thread = yield* projectionSnapshotQuery.value
+        .getThreadShellById(threadId)
+        .pipe(Effect.orElseSucceed(() => Option.none()));
+      return Option.isSome(thread) && thread.value.kind === "assistant"
+        ? ("global-assistant" as const)
+        : undefined;
+    });
   const clearMcpSession = (threadId: ThreadId) =>
     McpSessionRegistry.revokeActiveMcpThread(threadId).pipe(
       Effect.tap(() => Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),
@@ -398,6 +447,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const persistedModelSelection = readPersistedModelSelection(input.binding.runtimePayload);
 
       yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
+      const sessionProfile = yield* resolveSessionProfile(input.binding.threadId);
       const resumed = yield* adapter
         .startSession({
           threadId: input.binding.threadId,
@@ -407,6 +457,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
           ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
           runtimeMode: input.binding.runtimeMode ?? "full-access",
+          ...(sessionProfile ? { sessionProfile } : {}),
         })
         .pipe(Effect.onError(() => clearMcpSession(input.binding.threadId)));
       if (resumed.provider !== adapter.provider) {
@@ -591,9 +642,11 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         });
         const adapter = yield* registry.getByInstance(resolvedInstanceId);
         yield* prepareMcpSession(threadId, resolvedInstanceId);
+        const sessionProfile = yield* resolveSessionProfile(threadId);
         const session = yield* adapter
           .startSession({
             ...input,
+            ...(sessionProfile ? { sessionProfile } : {}),
             providerInstanceId: resolvedInstanceId,
             ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
             ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),

@@ -43,6 +43,7 @@ import * as TerminalManager from "./terminal/Manager.ts";
 import * as McpHttpServer from "./mcp/McpHttpServer.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
+import * as AppControlBroker from "./mcp/AppControlBroker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as ProcessRunner from "./processRunner.ts";
@@ -106,6 +107,7 @@ import {
   persistServerRuntimeState,
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
+import { ensureConfiguredGlobalAssistant } from "./globalAssistant/GlobalAssistant.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -396,9 +398,23 @@ const RuntimeDependenciesLive = RuntimeCoreDependenciesLive.pipe(
   Layer.provide(NetService.layer),
 );
 
-const RuntimeServicesLive = ServerRuntimeStartup.layer.pipe(
-  Layer.provideMerge(RuntimeDependenciesLive),
+const GlobalAssistantStartupLive = Layer.effectDiscard(
+  ensureConfiguredGlobalAssistant.pipe(
+    Effect.tap((result) =>
+      result.status === "unavailable"
+        ? Effect.logWarning("T3 Assistant startup refused", { reason: result.reason })
+        : Effect.void,
+    ),
+    Effect.catchCause((cause) =>
+      Effect.logWarning("T3 Assistant foundation check failed", { cause }),
+    ),
+  ),
 );
+
+const RuntimeServicesLive = Layer.mergeAll(
+  ServerRuntimeStartup.layer,
+  GlobalAssistantStartupLive,
+).pipe(Layer.provideMerge(RuntimeDependenciesLive));
 
 export const makeRoutesLayer = Layer.mergeAll(
   Layer.mergeAll(
@@ -416,6 +432,7 @@ export const makeRoutesLayer = Layer.mergeAll(
   ),
   McpHttpServer.layer.pipe(Layer.provide(McpSessionRegistry.layer)),
 ).pipe(
+  Layer.provide(AppControlBroker.layer),
   Layer.provide(PreviewAutomationBroker.layer),
   Layer.provide(ServerSelfUpdate.layer),
   Layer.provide(browserApiCorsLayer),

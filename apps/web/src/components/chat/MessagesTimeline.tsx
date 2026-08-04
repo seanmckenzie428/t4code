@@ -135,6 +135,8 @@ interface TimelineRowSharedState {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
   onToggleWorkGroup: (groupId: string, anchorElement?: HTMLElement) => void;
+  activeDelegatedActionId: string | null;
+  onStopDelegatedTurn: () => void;
 }
 
 interface TimelineRowActivityState {
@@ -184,6 +186,8 @@ interface MessagesTimelineProps {
   onManualNavigation: () => void;
   hideEmptyPlaceholder?: boolean;
   topFadeEnabled?: boolean;
+  activeDelegatedActionId?: string | null;
+  onStopDelegatedTurn?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +223,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onManualNavigation,
   hideEmptyPlaceholder = false,
   topFadeEnabled = false,
+  activeDelegatedActionId = null,
+  onStopDelegatedTurn = () => {},
 }: MessagesTimelineProps) {
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(new Set());
@@ -430,6 +436,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       onToggleWorkGroup,
+      activeDelegatedActionId,
+      onStopDelegatedTurn,
     }),
     [
       timestampFormat,
@@ -444,6 +452,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onOpenTurnDiff,
       onToggleTurnFold,
       onToggleWorkGroup,
+      activeDelegatedActionId,
+      onStopDelegatedTurn,
     ],
   );
   const activityState = useMemo<TimelineRowActivityState>(
@@ -887,10 +897,30 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
   const previewImages = userImages.filter((image) => image.name.startsWith("preview-annotation-"));
   const regularImages = userImages.filter((image) => !image.name.startsWith("preview-annotation-"));
   const canRevertAgentWork = typeof row.revertTurnCount === "number";
+  const delegation = row.message.delegation;
+  const canStopDelegatedTurn =
+    delegation !== undefined && delegation.actionId === ctx.activeDelegatedActionId;
 
   return (
     <div className="group flex flex-col items-end gap-1">
       <div className="relative max-w-[80%] rounded-2xl bg-accent p-3">
+        {delegation !== undefined ? (
+          <div className="mb-2 flex items-center justify-between gap-3 border-border/60 border-b pb-2 text-[11px] text-muted-foreground">
+            <span>Delegated by T3 Assistant</span>
+            {canStopDelegatedTurn ? (
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                onClick={ctx.onStopDelegatedTurn}
+                aria-label="Stop delegated turn"
+              >
+                <XIcon className="size-3" />
+                Stop
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
         {regularImages.length > 0 && (
           <div className="mb-2 grid max-w-[420px] grid-cols-2 gap-2">
             {regularImages.map((image: NonNullable<TimelineMessage["attachments"]>[number]) => (

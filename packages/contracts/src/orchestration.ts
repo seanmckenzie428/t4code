@@ -190,6 +190,27 @@ export const ProjectScriptIcon = Schema.Literals([
 ]);
 export type ProjectScriptIcon = typeof ProjectScriptIcon.Type;
 
+export const PROJECT_CUSTOM_ACTION_ICON_IDS = [
+  "play",
+  "link",
+  "external-link",
+  "terminal",
+  "database",
+  "server",
+  "globe",
+  "dashboard",
+  "mail",
+  "settings",
+  "git-branch",
+  "test",
+  "lint",
+  "configure",
+  "build",
+  "debug",
+] as const;
+export const ProjectCustomActionIcon = Schema.Literals(PROJECT_CUSTOM_ACTION_ICON_IDS);
+export type ProjectCustomActionIcon = typeof ProjectCustomActionIcon.Type;
+
 export const ProjectScript = Schema.Struct({
   id: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
@@ -207,16 +228,63 @@ export const ProjectScript = Schema.Struct({
    * the moment this script starts. Ignored without `previewUrl` or on web.
    */
   autoOpenPreview: Schema.optional(Schema.Boolean),
+  /** Agent-imported scripts stay in the Actions menu until the user pins a custom action. */
+  showInToolbar: Schema.optional(Schema.Boolean),
 });
 export type ProjectScript = typeof ProjectScript.Type;
 
+const ProjectCustomActionBase = {
+  id: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+  // Older projected actions did not persist an icon. Decode those as play so
+  // clients can render one stable, validated icon without migration coupling.
+  icon: ProjectCustomActionIcon.pipe(Schema.withDecodingDefault(Effect.succeed("play" as const))),
+  placement: Schema.Literals(["menu", "toolbar"]),
+} as const;
+export const ProjectCustomAction = Schema.Union([
+  Schema.Struct({
+    ...ProjectCustomActionBase,
+    commandId: Schema.Literal("ui.external-url.open"),
+    args: Schema.Struct({ url: TrimmedNonEmptyString }),
+  }),
+  Schema.Struct({
+    ...ProjectCustomActionBase,
+    commandId: Schema.Literal("script.run"),
+    args: Schema.Struct({ scriptId: TrimmedNonEmptyString }),
+  }),
+]);
+export type ProjectCustomAction = typeof ProjectCustomAction.Type;
+
+export const OrchestrationProjectKind = Schema.Literals(["workspace", "system"]);
+export type OrchestrationProjectKind = typeof OrchestrationProjectKind.Type;
+export const OrchestrationProjectSystemRole = Schema.Literal("global-assistant");
+export type OrchestrationProjectSystemRole = typeof OrchestrationProjectSystemRole.Type;
+export const OrchestrationThreadKind = Schema.Literals(["project", "assistant"]);
+export type OrchestrationThreadKind = typeof OrchestrationThreadKind.Type;
+
+export const OrchestrationWorkspaceBinding = Schema.Struct({
+  extensionId: TrimmedNonEmptyString,
+  providerId: TrimmedNonEmptyString,
+  workspaceId: TrimmedNonEmptyString,
+});
+export type OrchestrationWorkspaceBinding = typeof OrchestrationWorkspaceBinding.Type;
+
+// Kept optional on the wire so pre-control-plane events, snapshots, and
+// commands remain source-compatible. Deciders/projectors normalize absence to
+// workspace/project before persisting the current projection.
+const DefaultProjectKind = Schema.optional(OrchestrationProjectKind);
+const DefaultThreadKind = Schema.optional(OrchestrationThreadKind);
+
 export const OrchestrationProject = Schema.Struct({
   id: ProjectId,
+  kind: DefaultProjectKind,
+  systemRole: Schema.optional(OrchestrationProjectSystemRole),
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
   scripts: Schema.Array(ProjectScript),
+  customActions: Schema.optional(Schema.Array(ProjectCustomAction)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),
@@ -226,11 +294,19 @@ export type OrchestrationProject = typeof OrchestrationProject.Type;
 export const OrchestrationMessageRole = Schema.Literals(["user", "assistant", "system"]);
 export type OrchestrationMessageRole = typeof OrchestrationMessageRole.Type;
 
+export const DelegationOrigin = Schema.Struct({
+  assistantThreadId: ThreadId,
+  actionId: TrimmedNonEmptyString,
+  depth: Schema.Literal(1),
+});
+export type DelegationOrigin = typeof DelegationOrigin.Type;
+
 export const OrchestrationMessage = Schema.Struct({
   id: MessageId,
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
+  delegation: Schema.optional(DelegationOrigin),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
@@ -352,6 +428,8 @@ export type ThreadTitleRegeneration = typeof ThreadTitleRegeneration.Type;
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
+  kind: DefaultThreadKind,
+  workspaceBinding: Schema.optional(OrchestrationWorkspaceBinding),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -397,11 +475,14 @@ export type OrchestrationReadModel = typeof OrchestrationReadModel.Type;
 
 export const OrchestrationProjectShell = Schema.Struct({
   id: ProjectId,
+  kind: DefaultProjectKind,
+  systemRole: Schema.optional(OrchestrationProjectSystemRole),
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
   scripts: Schema.Array(ProjectScript),
+  customActions: Schema.optional(Schema.Array(ProjectCustomAction)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -410,6 +491,8 @@ export type OrchestrationProjectShell = typeof OrchestrationProjectShell.Type;
 export const OrchestrationThreadShell = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
+  kind: DefaultThreadKind,
+  workspaceBinding: Schema.optional(OrchestrationWorkspaceBinding),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -527,6 +610,8 @@ export const ProjectCreateCommand = Schema.Struct({
   type: Schema.Literal("project.create"),
   commandId: CommandId,
   projectId: ProjectId,
+  kind: DefaultProjectKind,
+  systemRole: Schema.optional(OrchestrationProjectSystemRole),
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,
   createWorkspaceRootIfMissing: Schema.optional(Schema.Boolean),
@@ -542,6 +627,7 @@ const ProjectMetaUpdateCommand = Schema.Struct({
   workspaceRoot: Schema.optional(TrimmedNonEmptyString),
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
+  customActions: Schema.optional(Schema.Array(ProjectCustomAction)),
 });
 
 const ProjectDeleteCommand = Schema.Struct({
@@ -556,6 +642,8 @@ const ThreadCreateCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   projectId: ProjectId,
+  kind: DefaultThreadKind,
+  workspaceBinding: Schema.optional(OrchestrationWorkspaceBinding),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -658,6 +746,8 @@ const ThreadInteractionModeSetCommand = Schema.Struct({
 
 const ThreadTurnStartBootstrapCreateThread = Schema.Struct({
   projectId: ProjectId,
+  kind: DefaultThreadKind,
+  workspaceBinding: Schema.optional(OrchestrationWorkspaceBinding),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
@@ -700,6 +790,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
   ),
   bootstrap: Schema.optional(ThreadTurnStartBootstrap),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  delegation: Schema.optional(DelegationOrigin),
   createdAt: IsoDateTime,
 });
 
@@ -939,11 +1030,14 @@ export const OrchestrationActorKind = Schema.Literals(["client", "server", "prov
 
 export const ProjectCreatedPayload = Schema.Struct({
   projectId: ProjectId,
+  kind: DefaultProjectKind,
+  systemRole: Schema.optional(OrchestrationProjectSystemRole),
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
   scripts: Schema.Array(ProjectScript),
+  customActions: Schema.optional(Schema.Array(ProjectCustomAction)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -955,6 +1049,7 @@ export const ProjectMetaUpdatedPayload = Schema.Struct({
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
+  customActions: Schema.optional(Schema.Array(ProjectCustomAction)),
   updatedAt: IsoDateTime,
 });
 
@@ -966,6 +1061,8 @@ export const ProjectDeletedPayload = Schema.Struct({
 export const ThreadCreatedPayload = Schema.Struct({
   threadId: ThreadId,
   projectId: ProjectId,
+  kind: DefaultThreadKind,
+  workspaceBinding: Schema.optional(OrchestrationWorkspaceBinding),
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_RUNTIME_MODE))),
@@ -1059,6 +1156,7 @@ export const ThreadMessageSentPayload = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
+  delegation: Schema.optional(DelegationOrigin),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
@@ -1075,6 +1173,7 @@ export const ThreadTurnStartRequestedPayload = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
   sourceProposedPlan: Schema.optional(SourceProposedPlanReference),
+  delegation: Schema.optional(DelegationOrigin),
   createdAt: IsoDateTime,
 });
 

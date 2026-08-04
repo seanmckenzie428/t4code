@@ -1,0 +1,11 @@
+{
+  "workspaces": [
+    {
+      "slug": "orphaned-create",
+      "worktree_path": "/worktrees/orphaned-create",
+      "branch": "feature/orphaned-create",
+      "status": "up",
+      "health": "healthy"
+    }
+  ]
+}

@@ -208,10 +208,13 @@ export function projectEvent(
           const existing = nextBase.projects.find((entry) => entry.id === payload.projectId);
           const nextProject = {
             id: payload.projectId,
+            kind: payload.kind ?? "workspace",
+            ...(payload.systemRole !== undefined ? { systemRole: payload.systemRole } : {}),
             title: payload.title,
             workspaceRoot: payload.workspaceRoot,
             defaultModelSelection: payload.defaultModelSelection,
             scripts: payload.scripts,
+            customActions: payload.customActions ?? [],
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
             deletedAt: null,
@@ -244,6 +247,9 @@ export function projectEvent(
                     ? { defaultModelSelection: payload.defaultModelSelection }
                     : {}),
                   ...(payload.scripts !== undefined ? { scripts: payload.scripts } : {}),
+                  ...(payload.customActions !== undefined
+                    ? { customActions: payload.customActions }
+                    : {}),
                   updatedAt: payload.updatedAt,
                 }
               : project,
@@ -280,6 +286,10 @@ export function projectEvent(
           {
             id: payload.threadId,
             projectId: payload.projectId,
+            kind: payload.kind ?? "project",
+            ...(payload.workspaceBinding !== undefined
+              ? { workspaceBinding: payload.workspaceBinding }
+              : {}),
             title: payload.title,
             modelSelection: payload.modelSelection,
             runtimeMode: payload.runtimeMode,
@@ -460,6 +470,7 @@ export function projectEvent(
             role: payload.role,
             text: payload.text,
             ...(payload.attachments !== undefined ? { attachments: payload.attachments } : {}),
+            ...(payload.delegation !== undefined ? { delegation: payload.delegation } : {}),
             turnId: payload.turnId,
             streaming: payload.streaming,
             createdAt: payload.createdAt,
@@ -486,6 +497,7 @@ export function projectEvent(
                     ...(message.attachments !== undefined
                       ? { attachments: message.attachments }
                       : {}),
+                    ...(message.delegation !== undefined ? { delegation: message.delegation } : {}),
                   }
                 : entry,
             )

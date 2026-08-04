@@ -25,6 +25,20 @@ describe("resolveThreadDetailRef", () => {
     ).toBe(threadRef);
   });
 
+  it("does not subscribe to an unprovisioned system assistant thread", () => {
+    const assistantRef = scopeThreadRef(
+      EnvironmentId.make("environment-1"),
+      ThreadId.make("t3-global-assistant-thread-environment-1"),
+    );
+
+    expect(
+      resolveThreadDetailRef(assistantRef, {
+        shellExists: false,
+        waitForShell: true,
+      }),
+    ).toBeNull();
+  });
+
   it("keeps direct server-thread lookups enabled when the shell has not loaded it", () => {
     expect(
       resolveThreadDetailRef(threadRef, {

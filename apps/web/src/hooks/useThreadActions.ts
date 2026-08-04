@@ -10,7 +10,7 @@ import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useRouter } from "@tanstack/react-router";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { getFallbackThreadIdAfterDelete } from "../components/Sidebar.logic";
 import { useComposerDraftStore } from "../composerDraftStore";
@@ -33,6 +33,8 @@ import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
 import { useClientSettings } from "./useSettings";
 import { useAtomCommand } from "../state/use-atom-command";
+import { invokeWebAppCommand, registerWebAppCommandHandler } from "../appCommandRegistry";
+import { useAppViewStore } from "../appViewStore";
 
 export class ThreadArchiveBlockedError extends Schema.TaggedErrorClass<ThreadArchiveBlockedError>()(
   "ThreadArchiveBlockedError",
@@ -155,7 +157,7 @@ export function useThreadActions() {
     return resolveThreadRouteRef(currentRouteParams);
   }, [router]);
 
-  const archiveThread = useCallback(
+  const performArchiveThread = useCallback(
     async (target: ScopedThreadRef, opts: { onArchived?: () => void } = {}) => {
       const resolved = resolveThreadTarget(target);
       if (!resolved) return AsyncResult.success(undefined);
@@ -200,7 +202,7 @@ export function useThreadActions() {
     [archiveThreadMutation, getCurrentRouteThreadRef, resolveThreadTarget],
   );
 
-  const unarchiveThread = useCallback(
+  const performUnarchiveThread = useCallback(
     async (target: ScopedThreadRef) => {
       const result = await unarchiveThreadMutation({
         environmentId: target.environmentId,
@@ -214,7 +216,7 @@ export function useThreadActions() {
     [unarchiveThreadMutation],
   );
 
-  const deleteThread = useCallback(
+  const performDeleteThread = useCallback(
     async (target: ScopedThreadRef, opts: { deletedThreadKeys?: ReadonlySet<string> } = {}) => {
       const resolved = resolveThreadTarget(target);
       if (!resolved) {
@@ -225,6 +227,7 @@ export function useThreadActions() {
         });
         if (result._tag === "Success") {
           refreshArchivedThreadsForEnvironment(target.environmentId);
+          useAppViewStore.getState().removeThread(target);
         }
         return result;
       }
@@ -314,6 +317,7 @@ export function useThreadActions() {
         threadRef,
       );
       clearTerminalUiState(threadRef);
+      useAppViewStore.getState().removeThread(threadRef);
 
       if (shouldNavigateToFallback) {
         if (fallbackThreadId) {
@@ -412,7 +416,7 @@ export function useThreadActions() {
     ],
   );
 
-  const settleThread = useCallback(
+  const performSettleThread = useCallback(
     async (target: ScopedThreadRef) => {
       // Version skew: never send the command to a server that predates it —
       // the raw protocol rejection would read as a random failure.
@@ -450,7 +454,7 @@ export function useThreadActions() {
     [resolveThreadTarget, settleThreadMutation],
   );
 
-  const unsettleThread = useCallback(
+  const performUnsettleThread = useCallback(
     async (target: ScopedThreadRef) => {
       if (!readEnvironmentSupportsSettlement(target.environmentId)) {
         return AsyncResult.failure(
@@ -472,7 +476,7 @@ export function useThreadActions() {
     [unsettleThreadMutation],
   );
 
-  const snoozeThread = useCallback(
+  const performSnoozeThread = useCallback(
     async (target: ScopedThreadRef, snoozedUntil: string) => {
       // Version skew: never send the command to a server that predates it.
       if (!readEnvironmentSupportsSnooze(target.environmentId)) {
@@ -507,7 +511,7 @@ export function useThreadActions() {
     [resolveThreadTarget, snoozeThreadMutation],
   );
 
-  const unsnoozeThread = useCallback(
+  const performUnsnoozeThread = useCallback(
     async (target: ScopedThreadRef) => {
       if (!readEnvironmentSupportsSnooze(target.environmentId)) {
         return AsyncResult.failure(
@@ -525,6 +529,139 @@ export function useThreadActions() {
       });
     },
     [unsnoozeThreadMutation],
+  );
+
+  useEffect(() => {
+    const targetFrom = (invocation: { args: unknown }, environmentId: string) => {
+      const { threadId } = invocation.args as { threadId: string };
+      return scopeThreadRef(
+        environmentId as ScopedThreadRef["environmentId"],
+        threadId as ScopedThreadRef["threadId"],
+      );
+    };
+    const disposers = [
+      registerWebAppCommandHandler("thread.archive", (invocation, context) =>
+        performArchiveThread(targetFrom(invocation, context.environmentId)),
+      ),
+      registerWebAppCommandHandler("thread.unarchive", (invocation, context) =>
+        performUnarchiveThread(targetFrom(invocation, context.environmentId)),
+      ),
+      registerWebAppCommandHandler("thread.delete", (invocation, context) =>
+        performDeleteThread(targetFrom(invocation, context.environmentId)),
+      ),
+      registerWebAppCommandHandler("thread.settle", (invocation, context) =>
+        performSettleThread(targetFrom(invocation, context.environmentId)),
+      ),
+      registerWebAppCommandHandler("thread.unsettle", (invocation, context) =>
+        performUnsettleThread(targetFrom(invocation, context.environmentId)),
+      ),
+      registerWebAppCommandHandler("thread.snooze", (invocation, context) => {
+        const { until } = invocation.args as { until?: string };
+        if (!until) throw new Error("A snooze-until timestamp is required.");
+        return performSnoozeThread(targetFrom(invocation, context.environmentId), until);
+      }),
+      registerWebAppCommandHandler("thread.unsnooze", (invocation, context) =>
+        performUnsnoozeThread(targetFrom(invocation, context.environmentId)),
+      ),
+    ];
+    return () => disposers.forEach((dispose) => dispose());
+  }, [
+    performArchiveThread,
+    performDeleteThread,
+    performSettleThread,
+    performSnoozeThread,
+    performUnarchiveThread,
+    performUnsettleThread,
+    performUnsnoozeThread,
+  ]);
+
+  const invokeThreadLifecycle = useCallback(
+    async <T>(
+      commandId: Parameters<typeof invokeWebAppCommand>[0],
+      target: ScopedThreadRef,
+      args: unknown,
+    ) =>
+      (await invokeWebAppCommand(
+        commandId,
+        {
+          environmentId: target.environmentId,
+          threadId: target.threadId,
+          source: "button",
+        },
+        args,
+      )) as T,
+    [],
+  );
+  const archiveThread = useCallback(
+    (target: ScopedThreadRef, opts: { onArchived?: () => void } = {}) => {
+      // Navigation callbacks are renderer-local behavior, so preserve that
+      // specialized path until the command result models navigation effects.
+      if (opts.onArchived) return performArchiveThread(target, opts);
+      return invokeThreadLifecycle<Awaited<ReturnType<typeof performArchiveThread>>>(
+        "thread.archive",
+        target,
+        { threadId: target.threadId },
+      );
+    },
+    [invokeThreadLifecycle, performArchiveThread],
+  );
+  const unarchiveThread = useCallback(
+    (target: ScopedThreadRef) =>
+      invokeThreadLifecycle<Awaited<ReturnType<typeof performUnarchiveThread>>>(
+        "thread.unarchive",
+        target,
+        { threadId: target.threadId },
+      ),
+    [invokeThreadLifecycle, performUnarchiveThread],
+  );
+  const deleteThread = useCallback(
+    (target: ScopedThreadRef, opts: { deletedThreadKeys?: ReadonlySet<string> } = {}) => {
+      // Bulk deletion carries a precomputed fallback set that intentionally
+      // remains outside the public command schema.
+      if (opts.deletedThreadKeys) return performDeleteThread(target, opts);
+      return invokeThreadLifecycle<Awaited<ReturnType<typeof performDeleteThread>>>(
+        "thread.delete",
+        target,
+        { threadId: target.threadId },
+      );
+    },
+    [invokeThreadLifecycle, performDeleteThread],
+  );
+  const settleThread = useCallback(
+    (target: ScopedThreadRef) =>
+      invokeThreadLifecycle<Awaited<ReturnType<typeof performSettleThread>>>(
+        "thread.settle",
+        target,
+        { threadId: target.threadId },
+      ),
+    [invokeThreadLifecycle, performSettleThread],
+  );
+  const unsettleThread = useCallback(
+    (target: ScopedThreadRef) =>
+      invokeThreadLifecycle<Awaited<ReturnType<typeof performUnsettleThread>>>(
+        "thread.unsettle",
+        target,
+        { threadId: target.threadId },
+      ),
+    [invokeThreadLifecycle, performUnsettleThread],
+  );
+  const snoozeThread = useCallback(
+    (target: ScopedThreadRef, until: string) =>
+      invokeThreadLifecycle<Awaited<ReturnType<typeof performSnoozeThread>>>(
+        "thread.snooze",
+        target,
+        { threadId: target.threadId, until },
+      ),
+    [invokeThreadLifecycle, performSnoozeThread],
+  );
+  const unsnoozeThread = useCallback(
+    (target: ScopedThreadRef) =>
+      invokeThreadLifecycle<Awaited<ReturnType<typeof performUnsnoozeThread>>>(
+        "thread.unsnooze",
+        target,
+        { threadId: target.threadId },
+      ),
+    [invokeThreadLifecycle, performUnsnoozeThread],
   );
 
   const confirmAndDeleteThread = useCallback(

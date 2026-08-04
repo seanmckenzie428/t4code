@@ -6,20 +6,36 @@
  *
  * @module ProjectionProjectRepository
  */
-import { IsoDateTime, ModelSelection, ProjectId, ProjectScript } from "@t3tools/contracts";
+import {
+  IsoDateTime,
+  ModelSelection,
+  OrchestrationProjectKind,
+  OrchestrationProjectSystemRole,
+  ProjectId,
+  ProjectScript,
+  ProjectCustomAction,
+} from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
+import * as RuntimeEffect from "effect/Effect";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
 
 export const ProjectionProject = Schema.Struct({
   projectId: ProjectId,
+  kind: OrchestrationProjectKind.pipe(
+    Schema.withDecodingDefault(RuntimeEffect.succeed("workspace" as const)),
+  ),
+  systemRole: Schema.NullOr(OrchestrationProjectSystemRole).pipe(
+    Schema.withDecodingDefault(RuntimeEffect.succeed(null)),
+  ),
   title: Schema.String,
   workspaceRoot: Schema.String,
   defaultModelSelection: Schema.NullOr(ModelSelection),
   scripts: Schema.Array(ProjectScript),
+  customActions: Schema.Array(ProjectCustomAction),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),

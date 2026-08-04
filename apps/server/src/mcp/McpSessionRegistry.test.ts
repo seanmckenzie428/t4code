@@ -1,6 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
-import { EnvironmentId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import { HttpServer } from "effect/unstable/http";
 
@@ -51,6 +51,58 @@ it.effect("stores only a token hash, resolves the bearer token, and revokes by t
     expect(yield* registry.resolve(token)).toBeUndefined();
 
     timestamp += 2_000;
+  }),
+);
+
+it.effect("grants app control only when credential issuance includes a typed principal", () =>
+  Effect.gen(function* () {
+    const registry = yield* makeRegistry(() => 1_000);
+    const threadId = ThreadId.make("thread-principal");
+    const legacy = yield* registry.issue({
+      threadId,
+      providerInstanceId: ProviderInstanceId.make("codex"),
+    });
+    const scoped = yield* registry.issue({
+      threadId,
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      principal: {
+        kind: "thread-agent",
+        threadId,
+        projectId: ProjectId.make("project-1"),
+      },
+      grants: new Set(["thread:mutate"]),
+    });
+
+    const legacyScope = yield* registry.resolve(
+      legacy.config.authorizationHeader.replace(/^Bearer\s+/, ""),
+    );
+    const appScope = yield* registry.resolve(
+      scoped.config.authorizationHeader.replace(/^Bearer\s+/, ""),
+    );
+    expect(legacyScope?.capabilities.has("app-control")).toBe(false);
+    expect(appScope?.capabilities.has("app-control")).toBe(true);
+    expect(appScope?.principal).toMatchObject({ kind: "thread-agent", threadId });
+    expect([...appScope!.grants]).toEqual(["thread:mutate"]);
+  }),
+);
+
+it.effect("rejects a principal bound to a different provider thread", () =>
+  Effect.gen(function* () {
+    const registry = yield* makeRegistry(() => 1_000);
+    const issued = yield* registry.issue({
+      threadId: ThreadId.make("thread-provider"),
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      principal: {
+        kind: "thread-agent",
+        threadId: ThreadId.make("thread-other"),
+        projectId: ProjectId.make("project-1"),
+      },
+    });
+    const scope = yield* registry.resolve(
+      issued.config.authorizationHeader.replace(/^Bearer\s+/, ""),
+    );
+    expect(scope?.principal).toBeUndefined();
+    expect(scope?.capabilities.has("app-control")).toBe(false);
   }),
 );
 

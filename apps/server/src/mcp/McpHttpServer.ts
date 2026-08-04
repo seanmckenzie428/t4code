@@ -10,6 +10,13 @@ import { McpSchema, McpServer, Tool } from "effect/unstable/ai";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import packageJson from "../../package.json" with { type: "json" };
+import * as ProcessRunner from "../processRunner.ts";
+import { AppControlToolkitHandlersLive } from "./toolkits/app/handlers.ts";
+import * as AppControlAudit from "./AppControlAudit.ts";
+import * as AppControlPolicy from "./AppControlPolicy.ts";
+import * as AppControlServerExecutor from "./AppControlServerExecutor.ts";
+import * as AppControlTerminalCommandRunner from "./AppControlTerminalCommandRunner.ts";
+import { AppControlToolkit } from "./toolkits/app/tools.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
@@ -216,10 +223,25 @@ export const PreviewToolkitRegistrationLive = Layer.mergeAll(
   PreviewSnapshotRegistrationLive,
 );
 
+export const AppControlToolkitRegistrationLive = McpServer.toolkit(AppControlToolkit).pipe(
+  Layer.provide(AppControlToolkitHandlersLive),
+  Layer.provide(AppControlPolicy.layer),
+  Layer.provide(AppControlAudit.layer),
+  Layer.provide(
+    AppControlServerExecutor.layer.pipe(
+      Layer.provide(AppControlTerminalCommandRunner.layer),
+      Layer.provide(ProcessRunner.layer),
+    ),
+  ),
+);
+
 const McpTransportLive = McpServer.layerHttp({
   name: "T3 Code",
   version: packageJson.version,
   path: "/mcp",
 }).pipe(Layer.provide(McpAuthMiddlewareLive));
 
-export const layer = PreviewToolkitRegistrationLive.pipe(Layer.provideMerge(McpTransportLive));
+export const layer = Layer.mergeAll(
+  PreviewToolkitRegistrationLive,
+  AppControlToolkitRegistrationLive,
+).pipe(Layer.provideMerge(McpTransportLive));

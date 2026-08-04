@@ -30,6 +30,7 @@ const scope = {
   providerSessionId: "provider-session-1",
   providerInstanceId: ProviderInstanceId.make("codex"),
   capabilities: new Set(["preview"] as const),
+  grants: new Set<string>(),
   issuedAt: 1,
 };
 

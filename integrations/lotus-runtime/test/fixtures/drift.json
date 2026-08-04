@@ -1,0 +1,14 @@
+{
+  "workspace": {
+    "slug": "drifted-stack",
+    "worktree_path": "/worktrees/drifted-stack",
+    "branch": "feature/drifted-stack",
+    "status": "up",
+    "health": "degraded",
+    "drift": {
+      "detected": true,
+      "codes": ["compose_override_stale", "generated_env_stale"]
+    },
+    "checks": [{ "code": "generated_files", "status": "warn" }]
+  }
+}

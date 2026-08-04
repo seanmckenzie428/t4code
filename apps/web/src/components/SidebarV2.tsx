@@ -85,7 +85,6 @@ import { useThreadSelectionStore } from "../threadSelectionStore";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { openCommandPalette } from "../commandPaletteBus";
-import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -97,6 +96,7 @@ import { threadEnvironment } from "../state/threads";
 import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
+import { invokeWebAppCommand, registerWebAppCommandHandler } from "../appCommandRegistry";
 import {
   buildThreadRouteParams,
   resolveActiveThreadRouteRef,
@@ -1084,12 +1084,71 @@ export default function SidebarV2() {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
-  const deleteProject = useAtomCommand(projectEnvironment.delete, {
+  const performDeleteProject = useAtomCommand(projectEnvironment.delete, {
     reportFailure: false,
   });
-  const updateProject = useAtomCommand(projectEnvironment.update, {
+  const performUpdateProject = useAtomCommand(projectEnvironment.update, {
     reportFailure: false,
   });
+  useEffect(() => {
+    const disposers = [
+      registerWebAppCommandHandler("project.rename", (invocation, context) => {
+        const { projectId, title } = invocation.args as { projectId: string; title: string };
+        return performUpdateProject({
+          environmentId: context.environmentId as Parameters<
+            typeof performUpdateProject
+          >[0]["environmentId"],
+          input: {
+            projectId: projectId as Parameters<
+              typeof performUpdateProject
+            >[0]["input"]["projectId"],
+            title,
+          },
+        });
+      }),
+      registerWebAppCommandHandler("project.delete", (invocation, context) => {
+        const { projectId, force } = invocation.args as { projectId: string; force?: boolean };
+        return performDeleteProject({
+          environmentId: context.environmentId as Parameters<
+            typeof performDeleteProject
+          >[0]["environmentId"],
+          input: {
+            projectId: projectId as Parameters<
+              typeof performDeleteProject
+            >[0]["input"]["projectId"],
+            ...(force ? { force: true } : {}),
+          },
+        });
+      }),
+    ];
+    return () => disposers.forEach((dispose) => dispose());
+  }, [performDeleteProject, performUpdateProject]);
+  const deleteProject = useCallback(
+    async (request: Parameters<typeof performDeleteProject>[0]) =>
+      (await invokeWebAppCommand(
+        "project.delete",
+        {
+          environmentId: request.environmentId,
+          projectId: request.input.projectId,
+          source: "button",
+        },
+        request.input,
+      )) as Awaited<ReturnType<typeof performDeleteProject>>,
+    [performDeleteProject],
+  );
+  const updateProject = useCallback(
+    async (request: Parameters<typeof performUpdateProject>[0]) =>
+      (await invokeWebAppCommand(
+        "project.rename",
+        {
+          environmentId: request.environmentId,
+          projectId: request.input.projectId,
+          source: "button",
+        },
+        { projectId: request.input.projectId, title: request.input.title },
+      )) as Awaited<ReturnType<typeof performUpdateProject>>,
+    [performUpdateProject],
+  );
   const updateSettings = useUpdateClientSettings();
   const { copyToClipboard: copyPathToClipboard } = useCopyToClipboard<{ path: string }>({
     onCopy: ({ path }) => {
@@ -2386,17 +2445,47 @@ export default function SidebarV2() {
     // One project: nothing to pick, create immediately.
     if (projectGroups.length <= 1) {
       if (isMobile) setOpenMobile(false);
-      void startNewThreadFromContext({
-        activeDraftThread: newThreadContext.activeDraftThread,
-        activeThread: newThreadContext.activeThread ?? undefined,
-        defaultProjectRef: newThreadContext.defaultProjectRef,
-        handleNewThread: newThreadContext.handleNewThread,
-      });
+      const projectRef = newThreadContext.activeThread
+        ? scopeProjectRef(
+            newThreadContext.activeThread.environmentId,
+            newThreadContext.activeThread.projectId,
+          )
+        : newThreadContext.activeDraftThread
+          ? scopeProjectRef(
+              newThreadContext.activeDraftThread.environmentId,
+              newThreadContext.activeDraftThread.projectId,
+            )
+          : newThreadContext.defaultProjectRef;
+      if (projectRef) {
+        void invokeWebAppCommand(
+          "thread.create",
+          {
+            environmentId: projectRef.environmentId,
+            projectId: projectRef.projectId,
+            source: "button",
+          },
+          { projectId: projectRef.projectId },
+        );
+      }
       return;
     }
     if (isMobile) setOpenMobile(false);
-    openCommandPalette({ open: "new-thread-in" });
-  }, [isMobile, newThreadContext, projectGroups.length, setOpenMobile]);
+    if (primaryEnvironmentId !== null) {
+      void invokeWebAppCommand(
+        "ui.palette.open",
+        { environmentId: primaryEnvironmentId, source: "button" },
+        { open: "new-thread-in" },
+      );
+    }
+  }, [
+    isMobile,
+    newThreadContext.activeDraftThread,
+    newThreadContext.activeThread,
+    newThreadContext.defaultProjectRef,
+    primaryEnvironmentId,
+    projectGroups.length,
+    setOpenMobile,
+  ]);
 
   const commandPaletteShortcutLabel = shortcutLabelForCommand(keybindings, "commandPalette.toggle");
   // Same resolution as v1: prefer the local-thread binding, fall back to

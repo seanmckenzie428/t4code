@@ -13,6 +13,7 @@ import {
   OrchestrationLatestTurn,
   ProjectCreatedPayload,
   ProjectMetaUpdatedPayload,
+  ProjectCustomAction,
   OrchestrationProposedPlan,
   OrchestrationSession,
   OrchestrationThread,
@@ -32,6 +33,7 @@ const decodeThreadTurnDiff = Schema.decodeUnknownEffect(ThreadTurnDiff);
 const decodeProjectCreateCommand = Schema.decodeUnknownEffect(ProjectCreateCommand);
 const decodeProjectCreatedPayload = Schema.decodeUnknownEffect(ProjectCreatedPayload);
 const decodeProjectMetaUpdatedPayload = Schema.decodeUnknownEffect(ProjectMetaUpdatedPayload);
+const decodeProjectCustomAction = Schema.decodeUnknownEffect(ProjectCustomAction);
 const decodeThreadTurnStartCommand = Schema.decodeUnknownEffect(ThreadTurnStartCommand);
 const decodeThreadTurnStartRequestedPayload = Schema.decodeUnknownEffect(
   ThreadTurnStartRequestedPayload,
@@ -42,6 +44,19 @@ const decodeOrchestrationSession = Schema.decodeUnknownEffect(OrchestrationSessi
 const decodeOrchestrationThread = Schema.decodeUnknownEffect(OrchestrationThread);
 const decodeOrchestrationThreadShell = Schema.decodeUnknownEffect(OrchestrationThreadShell);
 const encodeThreadCreatedPayload = Schema.encodeEffect(ThreadCreatedPayload);
+
+it.effect("decodes legacy project custom actions without an icon", () =>
+  Effect.gen(function* () {
+    const action = yield* decodeProjectCustomAction({
+      id: "admin",
+      name: "Admin",
+      placement: "menu",
+      commandId: "ui.external-url.open",
+      args: { url: "https://admin.example.test" },
+    });
+    assert.strictEqual(action.icon, "play");
+  }),
+);
 
 function getOptionValue(
   options: ReadonlyArray<{ id: string; value: unknown }> | undefined,
@@ -173,6 +188,8 @@ it.effect("decodes historical project.created payloads with a default provider",
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.defaultModelSelection?.instanceId, "codex");
+    assert.strictEqual(parsed.kind, undefined);
+    assert.strictEqual(parsed.systemRole, undefined);
   }),
 );
 
@@ -313,6 +330,8 @@ it.effect("decodes thread.created runtime mode for historical events", () =>
 
     assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
     assert.strictEqual(parsed.modelSelection.instanceId, "codex");
+    assert.strictEqual(parsed.kind, undefined);
+    assert.strictEqual(parsed.workspaceBinding, undefined);
   }),
 );
 
@@ -420,8 +439,11 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
 
     assert.strictEqual(thread.settledOverride, null);
     assert.strictEqual(thread.settledAt, null);
+    assert.strictEqual(thread.kind, undefined);
+    assert.strictEqual(thread.workspaceBinding, undefined);
     assert.strictEqual(shell.settledOverride, null);
     assert.strictEqual(shell.settledAt, null);
+    assert.strictEqual(shell.kind, undefined);
   }),
 );
 

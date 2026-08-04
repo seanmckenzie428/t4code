@@ -18,6 +18,34 @@ function invariantError(commandType: string, detail: string): OrchestrationComma
   });
 }
 
+export function requireMutableProject(input: {
+  readonly command: OrchestrationCommand;
+  readonly project: OrchestrationProject;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  return input.project.kind === "system"
+    ? Effect.fail(
+        invariantError(
+          input.command.type,
+          `System project '${input.project.id}' cannot handle ordinary command '${input.command.type}'.`,
+        ),
+      )
+    : Effect.void;
+}
+
+export function requireMutableThread(input: {
+  readonly command: OrchestrationCommand;
+  readonly thread: OrchestrationThread;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  return input.thread.kind === "assistant"
+    ? Effect.fail(
+        invariantError(
+          input.command.type,
+          `Assistant thread '${input.thread.id}' cannot handle ordinary command '${input.command.type}'.`,
+        ),
+      )
+    : Effect.void;
+}
+
 export function findThreadById(
   readModel: OrchestrationReadModel,
   threadId: ThreadId,

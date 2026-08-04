@@ -13,6 +13,8 @@ import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import {
   listThreadsByProjectId,
   requireActiveProjectWorkspaceRootAbsent,
+  requireMutableProject,
+  requireMutableThread,
   requireProject,
   requireProjectAbsent,
   requireThread,
@@ -236,6 +238,27 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         workspaceRoot: command.workspaceRoot,
         exceptProjectId: command.projectId,
       });
+      const projectKind = command.kind ?? "workspace";
+      if (
+        (projectKind === "system" && command.systemRole !== "global-assistant") ||
+        (projectKind === "workspace" && command.systemRole !== undefined)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Only a system project may hold the global-assistant system role.",
+        });
+      }
+      if (
+        command.systemRole === "global-assistant" &&
+        readModel.projects.some(
+          (project) => project.deletedAt === null && project.systemRole === "global-assistant",
+        )
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "An active global-assistant system project already exists.",
+        });
+      }
 
       return {
         ...(yield* withEventBase({
@@ -247,10 +270,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         type: "project.created",
         payload: {
           projectId: command.projectId,
+          kind: projectKind,
+          ...(command.systemRole !== undefined ? { systemRole: command.systemRole } : {}),
           title: command.title,
           workspaceRoot: command.workspaceRoot,
           defaultModelSelection: command.defaultModelSelection ?? null,
           scripts: [],
+          customActions: [],
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
         },
@@ -258,11 +284,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "project.meta.update": {
-      yield* requireProject({
+      const project = yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+      yield* requireMutableProject({ command, project });
       if (command.workspaceRoot !== undefined) {
         yield* requireActiveProjectWorkspaceRootAbsent({
           readModel,
@@ -288,17 +315,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             ? { defaultModelSelection: command.defaultModelSelection }
             : {}),
           ...(command.scripts !== undefined ? { scripts: command.scripts } : {}),
+          ...(command.customActions !== undefined ? { customActions: command.customActions } : {}),
           updatedAt: occurredAt,
         },
       };
     }
 
     case "project.delete": {
-      yield* requireProject({
+      const project = yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+      yield* requireMutableProject({ command, project });
       const activeThreads = listThreadsByProjectId(readModel, command.projectId).filter(
         (thread) => thread.deletedAt === null,
       );
@@ -345,11 +374,35 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.create": {
-      yield* requireProject({
+      const project = yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+      const threadKind = command.kind ?? "project";
+      if (threadKind === "assistant" && project.systemRole !== "global-assistant") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Assistant thread '${command.threadId}' requires a global-assistant system project.`,
+        });
+      }
+      if (threadKind === "project" && project.kind === "system") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Project thread '${command.threadId}' cannot belong to system project '${project.id}'.`,
+        });
+      }
+      if (
+        threadKind === "assistant" &&
+        listThreadsByProjectId(readModel, command.projectId).some(
+          (thread) => thread.deletedAt === null && thread.kind === "assistant",
+        )
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `System project '${project.id}' already has an active assistant thread.`,
+        });
+      }
       yield* requireThreadAbsent({
         readModel,
         command,
@@ -366,6 +419,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           projectId: command.projectId,
+          kind: threadKind,
+          ...(command.workspaceBinding !== undefined
+            ? { workspaceBinding: command.workspaceBinding }
+            : {}),
           title: command.title,
           modelSelection: command.modelSelection,
           runtimeMode: command.runtimeMode,
@@ -379,11 +436,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.delete": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+      yield* requireMutableThread({ command, thread });
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -636,6 +694,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      yield* requireMutableThread({ command, thread });
       const branch =
         command.branch !== undefined &&
         command.expectedBranch !== undefined &&
@@ -754,6 +813,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      if (targetThread.kind === "assistant") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail:
+            "T3 Assistant cannot start because this build does not enforce the required control-only Codex permission profile.",
+        });
+      }
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({
@@ -792,6 +858,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           role: "user",
           text: command.message.text,
           attachments: command.message.attachments,
+          ...(command.delegation !== undefined ? { delegation: command.delegation } : {}),
           turnId: null,
           streaming: false,
           createdAt: command.createdAt,
@@ -817,6 +884,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           runtimeMode: targetThread.runtimeMode,
           interactionMode: targetThread.interactionMode,
           ...(sourceProposedPlan !== undefined ? { sourceProposedPlan } : {}),
+          ...(command.delegation !== undefined ? { delegation: command.delegation } : {}),
           createdAt: command.createdAt,
         },
       };

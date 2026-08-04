@@ -108,6 +108,20 @@ describe("rightPanelStore", () => {
     expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refB)).toBeNull();
   });
 
+  it("opens generated views as distinct persisted surfaces", () => {
+    useRightPanelStore.getState().openAppView(refA, "health");
+    useRightPanelStore.getState().openAppView(refA, "todos");
+
+    expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+      isOpen: true,
+      activeSurfaceId: "app-view:todos",
+      surfaces: [
+        { id: "app-view:health", kind: "app-view", viewId: "health" },
+        { id: "app-view:todos", kind: "app-view", viewId: "todos" },
+      ],
+    });
+  });
+
   it("opening a different kind keeps both surfaces and activates the new one", () => {
     useRightPanelStore.getState().open(refA, "plan");
     useRightPanelStore.getState().open(refA, "preview");
