@@ -6,7 +6,7 @@ import type {
 } from "@t3tools/contracts";
 import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
 import { VirtualizedFile, type SelectedLineRange } from "@pierre/diffs";
-import { Editor } from "@pierre/diffs/editor";
+import { Editor, type EditorOptions } from "@pierre/diffs/edit";
 import { EditProvider, File, type FileOptions, Virtualizer } from "@pierre/diffs/react";
 import {
   isAtomCommandInterrupted,
@@ -14,7 +14,7 @@ import {
 } from "@t3tools/client-runtime/state/runtime";
 import { ChevronRight, Code2, Eye, FolderTree, Globe2, LoaderCircle } from "lucide-react";
 import * as Schema from "effect/Schema";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { isBrowserPreviewFile, openFileInPreview } from "~/browser/openFileInPreview";
 import { useAssetUrlState } from "~/assets/assetUrls";
@@ -116,6 +116,7 @@ const FILE_LINK_REVEAL_UNSAFE_CSS = `
   }
 `;
 type FilePostRender = NonNullable<FileOptions<unknown>["onPostRender"]>;
+type FileEditorChange = NonNullable<EditorOptions<FileCommentAnnotationGroup>["onChange"]>;
 
 function WorkspaceImagePreview(props: {
   readonly environmentId: EnvironmentId;
@@ -445,6 +446,7 @@ function EditableFileSurface({
     [revealRequestId],
   );
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<Editor<FileCommentAnnotationGroup> | null>(null);
   const selectionFrameRef = useRef<number | null>(null);
   const saveCoordinator = useFileSaveCoordinator({
     environmentId,
@@ -452,46 +454,44 @@ function EditableFileSurface({
     relativePath,
     onPendingChange,
   });
-  const editor = useMemo(
-    () =>
-      new Editor<FileCommentAnnotationGroup>({
+  const handleEditorChange = useEffectEvent<FileEditorChange>((file, nextLineAnnotations) => {
+    setProjectFileQueryData(environmentId, cwd, relativePath, file.contents);
+    saveCoordinator.change(file.contents);
+    if (!nextLineAnnotations) return;
+
+    const remapped = remapFileCommentAnnotations(
+      nextLineAnnotations as FileCommentLineAnnotation[],
+    );
+    setLineAnnotations(remapped);
+    for (const annotation of remapped) {
+      for (const entry of annotation.metadata.entries) {
+        if (entry.kind !== "comment") continue;
+        addReviewComment(
+          composerDraftTarget,
+          buildFileReviewComment({
+            id: entry.id,
+            filePath: relativePath,
+            startLine: entry.startLine,
+            endLine: entry.endLine,
+            text: entry.text,
+            contents: file.contents,
+          }),
+        );
+      }
+    }
+  });
+  const createEditor = useCallback(
+    (options: EditorOptions<FileCommentAnnotationGroup>) => {
+      const editor = new Editor<FileCommentAnnotationGroup>({
+        ...options,
         persistState: true,
         persistStateStorage: "inMemory",
-        onChange: (file, nextLineAnnotations) => {
-          setProjectFileQueryData(environmentId, cwd, relativePath, file.contents);
-          saveCoordinator.change(file.contents);
-          if (nextLineAnnotations) {
-            const remapped = remapFileCommentAnnotations(
-              nextLineAnnotations as FileCommentLineAnnotation[],
-            );
-            setLineAnnotations(remapped);
-            for (const annotation of remapped) {
-              for (const entry of annotation.metadata.entries) {
-                if (entry.kind !== "comment") continue;
-                addReviewComment(
-                  composerDraftTarget,
-                  buildFileReviewComment({
-                    id: entry.id,
-                    filePath: relativePath,
-                    startLine: entry.startLine,
-                    endLine: entry.endLine,
-                    text: entry.text,
-                    contents: file.contents,
-                  }),
-                );
-              }
-            }
-          }
-        },
-      }),
-    [addReviewComment, composerDraftTarget, cwd, environmentId, relativePath, saveCoordinator],
-  );
-
-  useEffect(
-    () => () => {
-      editor.cleanUp();
+        onChange: handleEditorChange,
+      });
+      editorRef.current = editor;
+      return editor;
     },
-    [editor],
+    [handleEditorChange],
   );
 
   const removeAnnotationEntry = useCallback(
@@ -591,14 +591,15 @@ function EditableFileSurface({
   );
   useEffect(() => {
     const root = surfaceRef.current;
-    if (!root) return;
+    const editor = editorRef.current;
+    if (!root || !editor) return;
     return installFileEditorDismissal({
       root,
       editor,
       isBlocked: () => hasOpenCommentForm,
       onDismiss: () => setSelectedRange(null),
     });
-  }, [editor, hasOpenCommentForm, setSelectedRange]);
+  }, [hasOpenCommentForm, setSelectedRange]);
   const handleLineSelectionEnd = useCallback(
     (range: SelectedLineRange | null) => {
       setSelectedRange(range);
@@ -629,7 +630,7 @@ function EditableFileSurface({
   );
 
   return (
-    <EditProvider editor={editor}>
+    <EditProvider createEditor={createEditor}>
       <div ref={surfaceRef} className="flex min-h-0 flex-1">
         <Virtualizer
           className="file-preview-virtualizer min-h-0 flex-1 overflow-auto"
@@ -647,7 +648,7 @@ function EditableFileSurface({
                 cwd,
                 relativePath,
                 contents,
-                editor.getFile(),
+                editorRef.current?.getFile(),
               ),
             }}
             options={{
@@ -681,7 +682,7 @@ function EditableFileSurface({
               </div>
             )}
             className="min-h-full"
-            contentEditable
+            edit
           />
         </Virtualizer>
       </div>

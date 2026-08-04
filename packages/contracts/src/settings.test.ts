@@ -33,6 +33,45 @@ describe("ClientSettings word wrap", () => {
   });
 });
 
+describe("ClientSettings code review presentation", () => {
+  it("preserves the existing review defaults", () => {
+    const settings = decodeClientSettings({});
+    expect(settings.diffTheme).toBe("app");
+    expect(settings.diffFont).toBe("jetbrains-mono");
+    expect(settings.diffLineNumbers).toBe(true);
+    expect(settings.diffBackground).toBe(true);
+    expect(settings.diffInlineChanges).toBe("none");
+    expect(settings.diffIndicators).toBe("classic");
+  });
+
+  it("accepts supported review presentation patches", () => {
+    expect(
+      decodeClientSettingsPatch({
+        diffTheme: "github",
+        diffFont: "system-mono",
+        diffLineNumbers: false,
+        diffBackground: false,
+        diffInlineChanges: "word-alt",
+        diffIndicators: "bars",
+      }),
+    ).toEqual({
+      diffTheme: "github",
+      diffFont: "system-mono",
+      diffLineNumbers: false,
+      diffBackground: false,
+      diffInlineChanges: "word-alt",
+      diffIndicators: "bars",
+    });
+  });
+
+  it("rejects unsupported review presentation values", () => {
+    expect(() => decodeClientSettingsPatch({ diffTheme: "custom-css" })).toThrow();
+    expect(() => decodeClientSettingsPatch({ diffFont: "comic-sans" })).toThrow();
+    expect(() => decodeClientSettingsPatch({ diffInlineChanges: "line" })).toThrow();
+    expect(() => decodeClientSettingsPatch({ diffIndicators: "dots" })).toThrow();
+  });
+});
+
 describe("ClientSettings glass opacity", () => {
   it("defaults to a readable translucent surface", () => {
     expect(decodeClientSettings({}).glassOpacity).toBe(80);

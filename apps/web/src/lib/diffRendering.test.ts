@@ -1,5 +1,32 @@
 import { describe, expect, it } from "vite-plus/test";
-import { buildPatchCacheKey, getDiffLineStat, getRenderablePatch } from "./diffRendering";
+import {
+  buildPatchCacheKey,
+  buildFileReviewRevision,
+  getDiffLineStat,
+  getRenderablePatch,
+  resolveDiffFontFamily,
+  resolveDiffTheme,
+} from "./diffRendering";
+
+describe("review diff presentation", () => {
+  it("matches the app theme by default", () => {
+    expect(resolveDiffTheme("light", "app")).toEqual({ name: "pierre-light", type: "light" });
+    expect(resolveDiffTheme("dark", "app")).toEqual({ name: "pierre-dark", type: "dark" });
+  });
+
+  it("uses the selected code theme in the active light or dark appearance", () => {
+    expect(resolveDiffTheme("light", "github")).toEqual({ name: "github-light", type: "light" });
+    expect(resolveDiffTheme("dark", "solarized")).toEqual({
+      name: "solarized-dark",
+      type: "dark",
+    });
+  });
+
+  it("resolves fonts from vetted stacks", () => {
+    expect(resolveDiffFontFamily("jetbrains-mono")).toContain("JetBrains Mono");
+    expect(resolveDiffFontFamily("system-mono")).toContain("ui-monospace");
+  });
+});
 
 describe("buildPatchCacheKey", () => {
   it("returns a stable cache key for identical content", () => {
@@ -80,6 +107,34 @@ describe("getRenderablePatch", () => {
     expect(parsed?.kind).toBe("files");
     if (parsed?.kind !== "files") return;
     expect(parsed.files[0]?.hunks[0]?.unifiedLineStart).toBe(47);
+  });
+});
+
+describe("buildFileReviewRevision", () => {
+  const parseFile = (replacement: string, scope: string) => {
+    const parsed = getRenderablePatch(
+      [
+        "diff --git a/example.ts b/example.ts",
+        "--- a/example.ts",
+        "+++ b/example.ts",
+        "@@ -1 +1 @@",
+        "-before",
+        `+${replacement}`,
+      ].join("\n"),
+      scope,
+    );
+    expect(parsed?.kind).toBe("files");
+    if (parsed?.kind !== "files") throw new Error("Expected parsed files");
+    return parsed.files[0]!;
+  };
+
+  it("ignores Pierre cache scope while tracking file content", () => {
+    expect(buildFileReviewRevision(parseFile("after", "light"))).toBe(
+      buildFileReviewRevision(parseFile("after", "dark")),
+    );
+    expect(buildFileReviewRevision(parseFile("after", "light"))).not.toBe(
+      buildFileReviewRevision(parseFile("changed again", "light")),
+    );
   });
 });
 

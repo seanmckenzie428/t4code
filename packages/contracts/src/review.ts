@@ -1,6 +1,7 @@
 import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { GitCommandError } from "./git.ts";
+import { ProjectReadFileError, ProjectReadFileResult } from "./project.ts";
 import { VcsError } from "./vcs.ts";
 
 export const ReviewDiffPreviewInput = Schema.Struct({
@@ -34,3 +35,23 @@ export type ReviewDiffPreviewResult = typeof ReviewDiffPreviewResult.Type;
 
 export const ReviewDiffPreviewError = Schema.Union([VcsError, GitCommandError]);
 export type ReviewDiffPreviewError = typeof ReviewDiffPreviewError.Type;
+
+export const ReviewWorkingTreeFileContentsInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  relativePath: TrimmedNonEmptyString,
+  previousPath: Schema.optionalKey(TrimmedNonEmptyString),
+  changeType: Schema.Literals(["change", "rename-pure", "rename-changed", "new"]),
+});
+export type ReviewWorkingTreeFileContentsInput = typeof ReviewWorkingTreeFileContentsInput.Type;
+
+export const ReviewWorkingTreeFileContentsResult = Schema.Struct({
+  oldFile: Schema.NullOr(ProjectReadFileResult),
+  newFile: ProjectReadFileResult,
+});
+export type ReviewWorkingTreeFileContentsResult = typeof ReviewWorkingTreeFileContentsResult.Type;
+
+export const ReviewWorkingTreeFileContentsError = Schema.Union([
+  ReviewDiffPreviewError,
+  ProjectReadFileError,
+]);
+export type ReviewWorkingTreeFileContentsError = typeof ReviewWorkingTreeFileContentsError.Type;

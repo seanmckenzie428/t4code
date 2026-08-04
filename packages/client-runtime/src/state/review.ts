@@ -13,5 +13,10 @@ export function createReviewEnvironmentAtoms<R, E>(
       tag: WS_METHODS.reviewGetDiffPreview,
       staleTimeMs: 5_000,
     }),
+    workingTreeFileContents: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:review:working-tree-file-contents",
+      tag: WS_METHODS.reviewGetWorkingTreeFileContents,
+      staleTimeMs: 0,
+    }),
   };
 }

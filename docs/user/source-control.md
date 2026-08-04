@@ -41,6 +41,16 @@ T4 Code works with the platforms your team already uses:
 - Open the review directly in your browser with one click
 - Check out a teammate's branch to review code locally
 
+**Review local changes**
+
+- Open the **Diff** surface to review a turn, your working tree, or all branch changes
+- Use the changed-file list on the right to jump between files, and switch it between tree and flat views
+- Mark a file **Viewed** to collapse it; if that file changes later, it reopens and is marked **Changed since viewed**
+- Choose stacked or split diffs, line wrapping, and whitespace handling from the diff toolbar
+- Choose the code theme, font, line numbers, change backgrounds, word, alternate-word, or character inline highlights, and diff indicators in **Settings → Appearance → Code review**
+- Edit a working-tree file directly from its expanded diff, then save or cancel the edit. Historical, branch, deleted, and truncated diffs stay read-only.
+- Select a line or click its **+** button to attach a review comment to the next message you send to the agent
+
 ### Know Your Setup at a Glance
 
 The **Source Control settings** page shows you exactly what's connected:

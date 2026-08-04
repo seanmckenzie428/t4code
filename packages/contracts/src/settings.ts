@@ -63,6 +63,34 @@ export const EnvironmentIdentificationMode = Schema.Literals(["artwork", "pill",
 export type EnvironmentIdentificationMode = typeof EnvironmentIdentificationMode.Type;
 export const DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE: EnvironmentIdentificationMode = "artwork";
 
+export const DiffThemePreference = Schema.Literals([
+  "app",
+  "github",
+  "vitesse",
+  "solarized",
+  "rose-pine",
+  "catppuccin",
+]);
+export type DiffThemePreference = typeof DiffThemePreference.Type;
+export const DEFAULT_DIFF_THEME: DiffThemePreference = "app";
+
+export const DiffFontPreference = Schema.Literals([
+  "jetbrains-mono",
+  "system-mono",
+  "sf-mono",
+  "menlo",
+]);
+export type DiffFontPreference = typeof DiffFontPreference.Type;
+export const DEFAULT_DIFF_FONT: DiffFontPreference = "jetbrains-mono";
+
+export const DiffInlineChanges = Schema.Literals(["none", "word-alt", "word", "char"]);
+export type DiffInlineChanges = typeof DiffInlineChanges.Type;
+export const DEFAULT_DIFF_INLINE_CHANGES: DiffInlineChanges = "none";
+
+export const DiffIndicators = Schema.Literals(["classic", "bars", "none"]);
+export type DiffIndicators = typeof DiffIndicators.Type;
+export const DEFAULT_DIFF_INDICATORS: DiffIndicators = "classic";
+
 export const ClientSettingsSchema = Schema.Struct({
   autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -70,7 +98,19 @@ export const ClientSettingsSchema = Schema.Struct({
   dismissedProviderUpdateNotificationKeys: Schema.Array(TrimmedNonEmptyString).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
+  diffBackground: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  diffFont: DiffFontPreference.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_DIFF_FONT))),
   diffIgnoreWhitespace: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  diffIndicators: DiffIndicators.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_DIFF_INDICATORS)),
+  ),
+  diffInlineChanges: DiffInlineChanges.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_DIFF_INLINE_CHANGES)),
+  ),
+  diffLineNumbers: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  diffTheme: DiffThemePreference.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_DIFF_THEME)),
+  ),
   environmentIdentificationMode: EnvironmentIdentificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_ENVIRONMENT_IDENTIFICATION_MODE)),
   ),
@@ -699,7 +739,13 @@ export const ClientSettingsPatch = Schema.Struct({
   autoOpenPlanSidebar: Schema.optionalKey(Schema.Boolean),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
   confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
+  diffBackground: Schema.optionalKey(Schema.Boolean),
+  diffFont: Schema.optionalKey(DiffFontPreference),
   diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
+  diffIndicators: Schema.optionalKey(DiffIndicators),
+  diffInlineChanges: Schema.optionalKey(DiffInlineChanges),
+  diffLineNumbers: Schema.optionalKey(Schema.Boolean),
+  diffTheme: Schema.optionalKey(DiffThemePreference),
   environmentIdentificationMode: Schema.optionalKey(EnvironmentIdentificationMode),
   glassOpacity: Schema.optionalKey(GlassOpacity),
   favorites: Schema.optionalKey(

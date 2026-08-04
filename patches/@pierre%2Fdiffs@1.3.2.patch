@@ -1,0 +1,19 @@
+diff --git a/package.json b/package.json
+index 6085c78..17203ce 100644
+--- a/package.json
++++ b/package.json
+@@ -55,6 +55,14 @@
+     "./worker/worker-portable.js": {
+       "types": "./dist/worker/worker-portable.d.ts",
+       "import": "./dist/worker/worker-portable.js"
++    },
++    "./utils/getFiletypeFromFileName": {
++      "types": "./dist/utils/getFiletypeFromFileName.d.ts",
++      "import": "./dist/utils/getFiletypeFromFileName.js"
++    },
++    "./utils/parsePatchFiles": {
++      "types": "./dist/utils/parsePatchFiles.d.ts",
++      "import": "./dist/utils/parsePatchFiles.js"
+     }
+   },
+   "publishConfig": {

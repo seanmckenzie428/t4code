@@ -4,11 +4,15 @@ import type {
   CodeViewItem,
   DiffLineAnnotation,
   FileDiffMetadata,
+  FileContents,
   SelectedLineRange,
 } from "@pierre/diffs";
 import { CodeView, type CodeViewHandle, type CodeViewProps } from "@pierre/diffs/react";
+import { EditProvider } from "@pierre/diffs/react";
+import { Editor, type EditorOptions } from "@pierre/diffs/edit";
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { useCallback, useMemo, useState, type ReactNode, type Ref } from "react";
+import { CheckIcon, LoaderCircleIcon, PencilIcon, XIcon } from "lucide-react";
+import { useCallback, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { fnv1a32 } from "~/lib/diffRendering";
@@ -20,6 +24,8 @@ import {
 
 import { LocalCommentAnnotation } from "../files/LocalCommentAnnotation";
 import { nextFileCommentId } from "../files/fileCommentAnnotations";
+import { Button } from "../ui/button";
+import { toastManager } from "../ui/toast";
 
 interface DiffCommentAnnotationEntry {
   id: string;
@@ -76,6 +82,7 @@ interface AnnotatableCodeViewProps {
     filePath: string;
     fileKey: string;
     collapsed: boolean;
+    editable?: boolean;
   }>;
   sectionId: string;
   sectionTitle: string;
@@ -88,6 +95,9 @@ interface AnnotatableCodeViewProps {
     fileKey: string,
     collapsed: boolean,
   ) => ReactNode;
+  renderHeaderMetadata?: (fileDiff: FileDiffMetadata, fileKey: string) => ReactNode;
+  editable?: boolean;
+  onSaveFile?: (filePath: string, contents: string) => Promise<void>;
 }
 
 interface DiffSelectionContext {
@@ -103,6 +113,9 @@ export function AnnotatableCodeView({
   viewerRef,
   className,
   renderHeaderPrefix,
+  renderHeaderMetadata,
+  editable = false,
+  onSaveFile,
 }: AnnotatableCodeViewProps) {
   const addReviewComment = useComposerDraftStore((store) => store.addReviewComment);
   const removeReviewComment = useComposerDraftStore((store) => store.removeReviewComment);
@@ -117,6 +130,14 @@ export function AnnotatableCodeView({
     fileKey: string;
     annotation: DiffCommentLineAnnotation;
   } | null>(null);
+  const [activeEdit, setActiveEdit] = useState<{
+    fileKey: string;
+    fileDiff: FileDiffMetadata;
+    dirty: boolean;
+    saving: boolean;
+    version: number;
+  } | null>(null);
+  const latestEditFileRef = useRef<FileContents | null>(null);
 
   const filesByKey = useMemo(() => new Map(files.map((file) => [file.fileKey, file])), [files]);
   const items = useMemo<CodeViewDiffItem<DiffCommentAnnotationGroup>[]>(
@@ -145,11 +166,12 @@ export function AnnotatableCodeView({
         return {
           id: fileKey,
           type: "diff",
-          fileDiff,
+          fileDiff: activeEdit?.fileKey === fileKey ? activeEdit.fileDiff : fileDiff,
           annotations,
           collapsed,
+          edit: activeEdit?.fileKey === fileKey,
           version: fnv1a32(
-            `${collapsed ? "1" : "0"}:${annotations
+            `${collapsed ? "1" : "0"}:${activeEdit?.fileKey === fileKey ? activeEdit.version : 0}:${annotations
               .flatMap((annotation) =>
                 annotation.metadata.entries.map(
                   (entry) => `${entry.id}:${entry.rangeLabel}:${entry.text}`,
@@ -159,8 +181,47 @@ export function AnnotatableCodeView({
           ),
         };
       }),
-    [draft, files, reviewComments, sectionId],
+    [activeEdit, draft, files, reviewComments, sectionId],
   );
+
+  const beginEdit = useCallback((fileKey: string, fileDiff: FileDiffMetadata) => {
+    setDraft(null);
+    setSelectedLines(null);
+    latestEditFileRef.current = null;
+    setActiveEdit({
+      fileKey,
+      fileDiff: structuredClone(fileDiff),
+      dirty: false,
+      saving: false,
+      version: Date.now(),
+    });
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    latestEditFileRef.current = null;
+    setActiveEdit(null);
+  }, []);
+
+  const saveEdit = useCallback(async () => {
+    const latestFile = latestEditFileRef.current;
+    if (!activeEdit || !latestFile || !onSaveFile) return;
+    setActiveEdit((current) => (current ? { ...current, saving: true } : current));
+    try {
+      const file = filesByKey.get(activeEdit.fileKey);
+      if (!file) return;
+      await onSaveFile(file.filePath, latestFile.contents);
+      latestEditFileRef.current = null;
+      setActiveEdit(null);
+      toastManager.add({ title: `Saved ${file.filePath}`, type: "success" });
+    } catch (error) {
+      setActiveEdit((current) => (current ? { ...current, saving: false } : current));
+      toastManager.add({
+        title: "Could not save diff edit",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    }
+  }, [activeEdit, filesByKey, onSaveFile]);
 
   const removeEntry = useCallback(
     (entryId: string) => {
@@ -229,18 +290,39 @@ export function AnnotatableCodeView({
     [filesByKey, sectionId, sectionTitle],
   );
 
+  const selectCommentRange = useCallback(
+    (range: SelectedLineRange, context: DiffSelectionContext) => {
+      setSelectedLines({ id: context.item.id, range });
+    },
+    [],
+  );
+
   const hasOpenComment = draft !== null;
-  return (
+  const hasActiveEdit = activeEdit !== null;
+  const createEditor = useCallback(
+    (editorOptions: EditorOptions<DiffCommentAnnotationGroup>) =>
+      new Editor<DiffCommentAnnotationGroup>(editorOptions),
+    [],
+  );
+  const codeView = (
     <CodeView<DiffCommentAnnotationGroup>
       {...(viewerRef ? { ref: viewerRef } : {})}
       {...(className ? { className } : {})}
       items={items}
       selectedLines={selectedLines}
       onSelectedLinesChange={setSelectedLines}
+      editorOptions={{ persistState: false }}
+      onItemEditChange={(item, file) => {
+        latestEditFileRef.current = file;
+        setActiveEdit((current) =>
+          current?.fileKey === item.id && !current.dirty ? { ...current, dirty: true } : current,
+        );
+      }}
       options={{
         ...options,
-        enableGutterUtility: !hasOpenComment,
-        enableLineSelection: !hasOpenComment,
+        enableGutterUtility: !hasOpenComment && !hasActiveEdit,
+        enableLineSelection: !hasOpenComment && !hasActiveEdit,
+        onGutterUtilityClick: selectCommentRange,
         onLineSelectionEnd: beginComment,
       }}
       renderHeaderPrefix={(item) =>
@@ -248,6 +330,70 @@ export function AnnotatableCodeView({
           ? renderHeaderPrefix(item.fileDiff, item.id, item.collapsed === true)
           : null
       }
+      renderHeaderMetadata={(item) => {
+        if (item.type !== "diff") return null;
+        const isEditing = activeEdit?.fileKey === item.id;
+        const anotherFileIsEditing = activeEdit !== null && !isEditing;
+        return (
+          <div className="flex items-center">
+            {renderHeaderMetadata?.(item.fileDiff, item.id)}
+            {editable && onSaveFile && filesByKey.get(item.id)?.editable === true && (
+              <div className="ml-1 flex items-center gap-0.5 font-sans">
+                {isEditing ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Cancel diff edit"
+                      disabled={activeEdit.saving}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        cancelEdit();
+                      }}
+                    >
+                      <XIcon className="size-3" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      aria-label="Save diff edit"
+                      disabled={!activeEdit.dirty || activeEdit.saving}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void saveEdit();
+                      }}
+                    >
+                      {activeEdit.saving ? (
+                        <LoaderCircleIcon className="size-3 animate-spin" />
+                      ) : (
+                        <CheckIcon className="size-3" />
+                      )}
+                      Save
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    aria-label={`Edit ${item.fileDiff.name}`}
+                    disabled={anotherFileIsEditing || item.collapsed === true}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      beginEdit(item.id, item.fileDiff);
+                    }}
+                  >
+                    <PencilIcon className="size-3" />
+                    Edit
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      }}
       renderAnnotation={(annotation) => (
         <div className="py-1">
           {annotation.metadata.entries.map((entry) => (
@@ -265,4 +411,5 @@ export function AnnotatableCodeView({
       )}
     />
   );
+  return editable ? <EditProvider createEditor={createEditor}>{codeView}</EditProvider> : codeView;
 }

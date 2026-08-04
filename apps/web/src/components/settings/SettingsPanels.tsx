@@ -86,6 +86,7 @@ import { usePrimaryEnvironment } from "../../state/environments";
 import { useProjects } from "../../state/entities";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
 import { formatRelativeTimeLabel, getRelativeTimeState } from "../../timestampFormat";
+import { DIFF_FONT_OPTIONS, DIFF_THEME_OPTIONS } from "../../lib/diffRendering";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -165,6 +166,19 @@ const TIMESTAMP_FORMAT_LABELS = {
   "12-hour": "12-hour",
   "24-hour": "24-hour",
 } as const;
+
+const DIFF_INLINE_CHANGE_OPTIONS = [
+  { value: "none", label: "Off" },
+  { value: "word-alt", label: "Words (alternate)" },
+  { value: "word", label: "Words" },
+  { value: "char", label: "Characters" },
+] as const;
+
+const DIFF_INDICATOR_OPTIONS = [
+  { value: "classic", label: "Classic" },
+  { value: "bars", label: "Bars" },
+  { value: "none", label: "None" },
+] as const;
 
 const BACKGROUND_ACTIVITY_PROFILE_LABELS: Record<BackgroundActivityProfile, string> = {
   balanced: "Balanced",
@@ -585,6 +599,20 @@ export function useSettingsRestore(onRestored?: () => void) {
         ? ["Project Grouping"]
         : []),
       ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? ["Word wrap"] : []),
+      ...(settings.diffTheme !== DEFAULT_UNIFIED_SETTINGS.diffTheme ? ["Code theme"] : []),
+      ...(settings.diffFont !== DEFAULT_UNIFIED_SETTINGS.diffFont ? ["Code font"] : []),
+      ...(settings.diffLineNumbers !== DEFAULT_UNIFIED_SETTINGS.diffLineNumbers
+        ? ["Diff line numbers"]
+        : []),
+      ...(settings.diffBackground !== DEFAULT_UNIFIED_SETTINGS.diffBackground
+        ? ["Diff backgrounds"]
+        : []),
+      ...(settings.diffInlineChanges !== DEFAULT_UNIFIED_SETTINGS.diffInlineChanges
+        ? ["Inline diff changes"]
+        : []),
+      ...(settings.diffIndicators !== DEFAULT_UNIFIED_SETTINGS.diffIndicators
+        ? ["Diff indicators"]
+        : []),
       ...(settings.diffIgnoreWhitespace !== DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace
         ? ["Diff whitespace changes"]
         : []),
@@ -625,8 +653,14 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.confirmThreadDelete,
       settings.addProjectBaseDirectory,
       settings.defaultThreadEnvMode,
+      settings.diffBackground,
+      settings.diffFont,
       settings.newWorktreesStartFromOrigin,
       settings.diffIgnoreWhitespace,
+      settings.diffIndicators,
+      settings.diffInlineChanges,
+      settings.diffLineNumbers,
+      settings.diffTheme,
       settings.environmentIdentificationMode,
       settings.glassOpacity,
       settings.enableAssistantStreaming,
@@ -653,6 +687,12 @@ export function useSettingsRestore(onRestored?: () => void) {
     updateSettings({
       timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
       wordWrap: DEFAULT_UNIFIED_SETTINGS.wordWrap,
+      diffTheme: DEFAULT_UNIFIED_SETTINGS.diffTheme,
+      diffFont: DEFAULT_UNIFIED_SETTINGS.diffFont,
+      diffLineNumbers: DEFAULT_UNIFIED_SETTINGS.diffLineNumbers,
+      diffBackground: DEFAULT_UNIFIED_SETTINGS.diffBackground,
+      diffInlineChanges: DEFAULT_UNIFIED_SETTINGS.diffInlineChanges,
+      diffIndicators: DEFAULT_UNIFIED_SETTINGS.diffIndicators,
       diffIgnoreWhitespace: DEFAULT_UNIFIED_SETTINGS.diffIgnoreWhitespace,
       environmentIdentificationMode: DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode,
       glassOpacity: DEFAULT_UNIFIED_SETTINGS.glassOpacity,
@@ -1106,6 +1146,207 @@ export function AppearanceSettingsPanel() {
               onCheckedChange={(checked) => updateSettings({ wordWrap: Boolean(checked) })}
               aria-label="Wrap code, tables, diffs, and file previews by default"
             />
+          }
+        />
+      </SettingsSection>
+
+      <SettingsSection title="Code review">
+        <SettingsRow
+          title="Code theme"
+          description="Choose the syntax theme used in review diffs."
+          resetAction={
+            settings.diffTheme !== DEFAULT_UNIFIED_SETTINGS.diffTheme ? (
+              <SettingResetButton
+                label="code theme"
+                onClick={() => updateSettings({ diffTheme: DEFAULT_UNIFIED_SETTINGS.diffTheme })}
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.diffTheme}
+              onValueChange={(value) => {
+                const option = DIFF_THEME_OPTIONS.find((candidate) => candidate.value === value);
+                if (option) updateSettings({ diffTheme: option.value });
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-44" aria-label="Review code theme">
+                <SelectValue>
+                  {DIFF_THEME_OPTIONS.find((option) => option.value === settings.diffTheme)
+                    ?.label ?? "Match app"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {DIFF_THEME_OPTIONS.map((option) => (
+                  <SelectItem hideIndicator key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Code font"
+          description="Choose the monospace font used in review diffs."
+          resetAction={
+            settings.diffFont !== DEFAULT_UNIFIED_SETTINGS.diffFont ? (
+              <SettingResetButton
+                label="code font"
+                onClick={() => updateSettings({ diffFont: DEFAULT_UNIFIED_SETTINGS.diffFont })}
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.diffFont}
+              onValueChange={(value) => {
+                const option = DIFF_FONT_OPTIONS.find((candidate) => candidate.value === value);
+                if (option) updateSettings({ diffFont: option.value });
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-44" aria-label="Review code font">
+                <SelectValue>
+                  {DIFF_FONT_OPTIONS.find((option) => option.value === settings.diffFont)?.label ??
+                    "JetBrains Mono"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {DIFF_FONT_OPTIONS.map((option) => (
+                  <SelectItem hideIndicator key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Line numbers"
+          description="Show line numbers beside review diffs."
+          resetAction={
+            settings.diffLineNumbers !== DEFAULT_UNIFIED_SETTINGS.diffLineNumbers ? (
+              <SettingResetButton
+                label="diff line numbers"
+                onClick={() =>
+                  updateSettings({ diffLineNumbers: DEFAULT_UNIFIED_SETTINGS.diffLineNumbers })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.diffLineNumbers}
+              onCheckedChange={(checked) => updateSettings({ diffLineNumbers: Boolean(checked) })}
+              aria-label="Show line numbers in review diffs"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Change backgrounds"
+          description="Tint added and removed lines with change colors."
+          resetAction={
+            settings.diffBackground !== DEFAULT_UNIFIED_SETTINGS.diffBackground ? (
+              <SettingResetButton
+                label="diff backgrounds"
+                onClick={() =>
+                  updateSettings({ diffBackground: DEFAULT_UNIFIED_SETTINGS.diffBackground })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.diffBackground}
+              onCheckedChange={(checked) => updateSettings({ diffBackground: Boolean(checked) })}
+              aria-label="Tint changed lines in review diffs"
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Inline changes"
+          description="Highlight changed words or characters inside modified lines."
+          resetAction={
+            settings.diffInlineChanges !== DEFAULT_UNIFIED_SETTINGS.diffInlineChanges ? (
+              <SettingResetButton
+                label="inline diff changes"
+                onClick={() =>
+                  updateSettings({
+                    diffInlineChanges: DEFAULT_UNIFIED_SETTINGS.diffInlineChanges,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.diffInlineChanges}
+              onValueChange={(value) => {
+                const option = DIFF_INLINE_CHANGE_OPTIONS.find(
+                  (candidate) => candidate.value === value,
+                );
+                if (option) updateSettings({ diffInlineChanges: option.value });
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-40" aria-label="Inline diff changes">
+                <SelectValue>
+                  {DIFF_INLINE_CHANGE_OPTIONS.find(
+                    (option) => option.value === settings.diffInlineChanges,
+                  )?.label ?? "Off"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {DIFF_INLINE_CHANGE_OPTIONS.map((option) => (
+                  <SelectItem hideIndicator key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+
+        <SettingsRow
+          title="Diff indicators"
+          description="Choose classic +/- markers, change bars, or no gutter indicators."
+          resetAction={
+            settings.diffIndicators !== DEFAULT_UNIFIED_SETTINGS.diffIndicators ? (
+              <SettingResetButton
+                label="diff indicators"
+                onClick={() =>
+                  updateSettings({ diffIndicators: DEFAULT_UNIFIED_SETTINGS.diffIndicators })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Select
+              value={settings.diffIndicators}
+              onValueChange={(value) => {
+                const option = DIFF_INDICATOR_OPTIONS.find(
+                  (candidate) => candidate.value === value,
+                );
+                if (option) updateSettings({ diffIndicators: option.value });
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-40" aria-label="Diff indicators">
+                <SelectValue>
+                  {DIFF_INDICATOR_OPTIONS.find((option) => option.value === settings.diffIndicators)
+                    ?.label ?? "Classic"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {DIFF_INDICATOR_OPTIONS.map((option) => (
+                  <SelectItem hideIndicator key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
           }
         />
       </SettingsSection>

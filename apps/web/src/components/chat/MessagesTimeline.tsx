@@ -34,7 +34,8 @@ import {
 import { type TurnDiffSummary } from "../../types";
 import {
   getRenderablePatch,
-  resolveDiffThemeName,
+  resolveDiffFontFamily,
+  resolveDiffTheme,
   resolveFileDiffPath,
 } from "../../lib/diffRendering";
 import ChatMarkdown from "../ChatMarkdown";
@@ -97,7 +98,12 @@ import {
 } from "~/lib/previewAnnotation";
 import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
-import { type TimestampFormat } from "@t3tools/contracts/settings";
+import {
+  type DiffIndicators,
+  type DiffInlineChanges,
+  type TimestampFormat,
+} from "@t3tools/contracts/settings";
+import { useClientSettings } from "~/hooks/useSettings";
 import { formatChatTimestampTooltip, formatShortTimestamp } from "../../timestampFormat";
 
 import {
@@ -127,6 +133,14 @@ interface TimelineRowSharedState {
   threadRef: ScopedThreadRef | null;
   markdownCwd: string | undefined;
   resolvedTheme: "light" | "dark";
+  reviewDiffPresentation: {
+    readonly theme: ReturnType<typeof resolveDiffTheme>;
+    readonly fontFamily: string;
+    readonly lineNumbers: boolean;
+    readonly background: boolean;
+    readonly inlineChanges: DiffInlineChanges;
+    readonly indicators: DiffIndicators;
+  };
   workspaceRoot: string | undefined;
   skills: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   activeThreadEnvironmentId: EnvironmentId;
@@ -152,6 +166,7 @@ const TIMELINE_LIST_HEADER = <div className="h-3 sm:h-4" />;
 const TIMELINE_LIST_FADE_HEADER = <div className="h-10 sm:h-12" />;
 const TIMELINE_LIST_FOOTER = <div className="h-3 sm:h-4" />;
 const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
+const NOOP_STOP_DELEGATED_TURN = () => {};
 
 // ---------------------------------------------------------------------------
 // Props (public API)
@@ -224,8 +239,28 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   hideEmptyPlaceholder = false,
   topFadeEnabled = false,
   activeDelegatedActionId = null,
-  onStopDelegatedTurn = () => {},
+  onStopDelegatedTurn = NOOP_STOP_DELEGATED_TURN,
 }: MessagesTimelineProps) {
+  const clientSettings = useClientSettings();
+  const reviewDiffPresentation = useMemo(
+    () => ({
+      theme: resolveDiffTheme(resolvedTheme, clientSettings.diffTheme),
+      fontFamily: resolveDiffFontFamily(clientSettings.diffFont),
+      lineNumbers: clientSettings.diffLineNumbers,
+      background: clientSettings.diffBackground,
+      inlineChanges: clientSettings.diffInlineChanges,
+      indicators: clientSettings.diffIndicators,
+    }),
+    [
+      clientSettings.diffBackground,
+      clientSettings.diffFont,
+      clientSettings.diffIndicators,
+      clientSettings.diffInlineChanges,
+      clientSettings.diffLineNumbers,
+      clientSettings.diffTheme,
+      resolvedTheme,
+    ],
+  );
   const [expandedTurnIds, setExpandedTurnIds] = useState<ReadonlySet<TurnId>>(new Set());
   const [expandedWorkGroupIds, setExpandedWorkGroupIds] = useState<ReadonlySet<string>>(new Set());
   const [minimapStripMap] = useState(() => new Map<string, HTMLSpanElement>());
@@ -428,6 +463,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       threadRef: parseScopedThreadKey(routeThreadKey),
       markdownCwd,
       resolvedTheme,
+      reviewDiffPresentation,
       workspaceRoot,
       skills,
       activeThreadEnvironmentId,
@@ -444,6 +480,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       routeThreadKey,
       markdownCwd,
       resolvedTheme,
+      reviewDiffPresentation,
       workspaceRoot,
       skills,
       activeThreadEnvironmentId,
@@ -1712,10 +1749,16 @@ function UserMessageReviewCommentCard({ comment }: { comment: ReviewCommentConte
           <FileDiff
             key={resolveFileDiffPath(fileDiff)}
             fileDiff={fileDiff}
+            style={{ fontFamily: ctx.reviewDiffPresentation.fontFamily }}
             options={{
               collapsed: false,
+              diffIndicators: ctx.reviewDiffPresentation.indicators,
+              disableBackground: !ctx.reviewDiffPresentation.background,
+              disableLineNumbers: !ctx.reviewDiffPresentation.lineNumbers,
               diffStyle: "unified",
-              theme: resolveDiffThemeName(ctx.resolvedTheme),
+              lineDiffType: ctx.reviewDiffPresentation.inlineChanges,
+              theme: ctx.reviewDiffPresentation.theme.name,
+              themeType: ctx.reviewDiffPresentation.theme.type,
             }}
           />
         ))}

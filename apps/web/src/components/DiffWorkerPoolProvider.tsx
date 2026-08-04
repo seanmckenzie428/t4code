@@ -1,13 +1,15 @@
 import { WorkerPoolContextProvider, useWorkerPool } from "@pierre/diffs/react";
 import DiffsWorker from "@pierre/diffs/worker/worker.js?worker";
+import type { DiffInlineChanges } from "@t3tools/contracts/settings";
 import * as Schema from "effect/Schema";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { useTheme } from "../hooks/useTheme";
-import { resolveDiffThemeName, type DiffThemeName } from "../lib/diffRendering";
+import { useClientSettings } from "../hooks/useSettings";
+import { resolveDiffTheme, type DiffThemeName } from "../lib/diffRendering";
 
 export class DiffWorkerError extends Schema.TaggedErrorClass<DiffWorkerError>()("DiffWorkerError", {
   operation: Schema.Literals(["create-worker", "get-render-options", "set-render-options"]),
-  themeName: Schema.Literals(["pierre-light", "pierre-dark"]),
+  themeName: Schema.String,
   cause: Schema.Defect(),
 }) {
   override get message(): string {
@@ -15,7 +17,13 @@ export class DiffWorkerError extends Schema.TaggedErrorClass<DiffWorkerError>()(
   }
 }
 
-function DiffWorkerThemeSync({ themeName }: { themeName: DiffThemeName }) {
+function DiffWorkerRenderOptionsSync({
+  themeName,
+  lineDiffType,
+}: {
+  themeName: DiffThemeName;
+  lineDiffType: DiffInlineChanges;
+}) {
   const workerPool = useWorkerPool();
 
   useEffect(() => {
@@ -27,7 +35,7 @@ function DiffWorkerThemeSync({ themeName }: { themeName: DiffThemeName }) {
     void (async () => {
       try {
         const current = workerPool.getDiffRenderOptions();
-        if (current.theme === themeName) {
+        if (current.theme === themeName && current.lineDiffType === lineDiffType) {
           return;
         }
 
@@ -35,19 +43,22 @@ function DiffWorkerThemeSync({ themeName }: { themeName: DiffThemeName }) {
         await workerPool.setRenderOptions({
           ...current,
           theme: themeName,
+          lineDiffType,
         });
       } catch (cause) {
         console.error(new DiffWorkerError({ operation, themeName, cause }));
       }
     })();
-  }, [themeName, workerPool]);
+  }, [lineDiffType, themeName, workerPool]);
 
   return null;
 }
 
 export function DiffWorkerPoolProvider({ children }: { children?: ReactNode }) {
   const { resolvedTheme } = useTheme();
-  const diffThemeName = resolveDiffThemeName(resolvedTheme);
+  const diffThemePreference = useClientSettings((settings) => settings.diffTheme);
+  const lineDiffType = useClientSettings((settings) => settings.diffInlineChanges);
+  const diffThemeName = resolveDiffTheme(resolvedTheme, diffThemePreference).name;
   const workerPoolSize = useMemo(() => {
     const cores =
       typeof navigator === "undefined" ? 4 : Math.max(1, navigator.hardwareConcurrency || 4);
@@ -73,11 +84,12 @@ export function DiffWorkerPoolProvider({ children }: { children?: ReactNode }) {
       }}
       highlighterOptions={{
         theme: diffThemeName,
+        lineDiffType,
         tokenizeMaxLineLength: 1_000,
         useTokenTransformer: true,
       }}
     >
-      <DiffWorkerThemeSync themeName={diffThemeName} />
+      <DiffWorkerRenderOptionsSync themeName={diffThemeName} lineDiffType={lineDiffType} />
       {children}
     </WorkerPoolContextProvider>
   );
