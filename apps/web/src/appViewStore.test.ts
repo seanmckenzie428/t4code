@@ -15,6 +15,7 @@ import {
   useAppViewStore,
 } from "./appViewStore";
 import { selectThreadRightPanelState, useRightPanelStore } from "./rightPanelStore";
+import { selectThreadMainView, useMainViewStore } from "./mainViewStore";
 
 const ref = scopeThreadRef("env-1" as EnvironmentId, ThreadId.make("thread-1"));
 
@@ -34,6 +35,7 @@ beforeEach(() => {
     projectPinProposals: {},
   });
   useRightPanelStore.setState({ byThreadKey: {} });
+  useMainViewStore.setState({ byThreadKey: {} });
 });
 
 describe("appViewStore", () => {
@@ -87,6 +89,7 @@ describe("appViewStore", () => {
 
   it("keeps pins while thread deletion removes only unpinned thread state", () => {
     presentAppView(ref, manifest());
+    useMainViewStore.getState().select(ref, "review");
     expect(useAppViewStore.getState().pinPersonal(ref, "health")).toBe(true);
     useAppViewStore.getState().removeThread(ref);
 
@@ -94,6 +97,7 @@ describe("appViewStore", () => {
     expect(
       useAppViewStore.getState().personalByEnvironment[ref.environmentId]?.health,
     ).toBeDefined();
+    expect(selectThreadMainView(useMainViewStore.getState().byThreadKey, ref)).toBe("chat");
   });
 
   it("reopens a personal view in the current thread", () => {

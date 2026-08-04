@@ -5,7 +5,7 @@
  * surface descriptors and the active surface, while each feature continues to
  * own its durable resource state. Browser surfaces point at preview tab ids,
  * terminal surfaces point at terminal session ids, file surfaces point at
- * workspace paths, and diff/plan/files remain singleton surfaces.
+ * workspace paths, and plan/files remain singleton surfaces.
  */
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
@@ -16,7 +16,6 @@ import { resolveStorage } from "./lib/storage";
 
 export const RIGHT_PANEL_KINDS = [
   "plan",
-  "diff",
   "files",
   "file",
   "preview",
@@ -36,7 +35,6 @@ export type RightPanelSurface =
       activeTerminalId: string;
       splitDirection?: "horizontal" | "vertical";
     }
-  | { id: "diff"; kind: "diff" }
   | { id: "files"; kind: "files" }
   | {
       id: `file:${string}`;
@@ -49,7 +47,7 @@ export type RightPanelSurface =
   | { id: `app-view:${string}`; kind: "app-view"; viewId: string };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
-const RIGHT_PANEL_STORAGE_VERSION = 7;
+const RIGHT_PANEL_STORAGE_VERSION = 8;
 
 export interface ThreadRightPanelState {
   isOpen: boolean;
@@ -102,8 +100,6 @@ const singletonSurface = (
   kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "app-view">,
 ): RightPanelSurface => {
   switch (kind) {
-    case "diff":
-      return { id: "diff", kind };
     case "files":
       return { id: "files", kind };
     case "plan":
@@ -190,8 +186,12 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
             ([threadKey, threadState]) => {
               const validThreadState =
                 threadState && typeof threadState === "object" ? threadState : null;
+              type PersistedRightPanelSurface = RightPanelSurface | { id: "diff"; kind: "diff" };
               const surfaces = Array.isArray(validThreadState?.surfaces)
-                ? validThreadState.surfaces.flatMap<RightPanelSurface>((surface) => {
+                ? (
+                    validThreadState.surfaces as PersistedRightPanelSurface[]
+                  ).flatMap<RightPanelSurface>((surface) => {
+                    if (surface.kind === "diff") return [];
                     if (surface.kind === "file") {
                       const revealLine =
                         typeof surface.revealLine === "number" &&
@@ -240,15 +240,20 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                     ];
                   })
                 : [];
+              const persistedActiveSurfaceId = validThreadState?.activeSurfaceId ?? null;
               const activeSurfaceId = surfaces.some(
-                (surface) => surface.id === validThreadState?.activeSurfaceId,
+                (surface) => surface.id === persistedActiveSurfaceId,
               )
-                ? (validThreadState?.activeSurfaceId ?? null)
-                : null;
+                ? persistedActiveSurfaceId
+                : persistedActiveSurfaceId === "diff"
+                  ? (surfaces.at(-1)?.id ?? null)
+                  : null;
               const isOpen =
-                typeof validThreadState?.isOpen === "boolean"
-                  ? validThreadState.isOpen
-                  : activeSurfaceId !== null;
+                surfaces.length === 0
+                  ? false
+                  : typeof validThreadState?.isOpen === "boolean"
+                    ? validThreadState.isOpen
+                    : activeSurfaceId !== null;
               return [threadKey, { isOpen, surfaces, activeSurfaceId }];
             },
           ),

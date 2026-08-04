@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import { selectPersonalAppViews, selectThreadAppViews, useAppViewStore } from "~/appViewStore";
 import { selectThreadRightPanelState, useRightPanelStore } from "~/rightPanelStore";
+import { useMainViewStore } from "~/mainViewStore";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import {
@@ -51,7 +52,7 @@ function useSaveProjectAppView(ref: ScopedThreadRef, projectId: ProjectId | null
       title: result.value.change === "created" ? "Saved to project" : "Project view updated",
       description: "t3.json changed. Review the tracked change in Changes.",
     });
-    useRightPanelStore.getState().open(ref, "diff");
+    useMainViewStore.getState().select(ref, "review");
   };
 
   return { save, savingViewId };

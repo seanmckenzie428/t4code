@@ -2,7 +2,6 @@ import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
 import {
   ClipboardList,
-  FileDiff,
   Files,
   Globe2,
   LayoutDashboard,
@@ -52,11 +51,9 @@ interface RightPanelTabsProps {
   onCopyFilePath: (relativePath: string) => void;
   onAddBrowser: () => void;
   onAddTerminal: () => void;
-  onAddDiff: () => void;
   onAddFiles: () => void;
   onManageAppViews: () => void;
   browserAvailable: boolean;
-  diffAvailable: boolean;
   filesAvailable: boolean;
   children: ReactNode;
 }
@@ -64,7 +61,6 @@ interface RightPanelTabsProps {
 const SURFACE_DISABLED_REASONS = {
   browser: "Browser previews are only available in the T4 Code desktop app.",
   files: "Files are only available when a project is open.",
-  diff: "Diff is only available for server threads in Git repositories.",
 } as const;
 
 type TabContextMenuAction = "copy-path" | "close" | "close-others" | "close-to-right" | "close-all";
@@ -100,11 +96,9 @@ function SurfaceMenuItem(props: {
 function RightPanelEmptyState(props: {
   onAddBrowser: () => void;
   onAddTerminal: () => void;
-  onAddDiff: () => void;
   onAddFiles: () => void;
   onManageAppViews: () => void;
   browserAvailable: boolean;
-  diffAvailable: boolean;
   filesAvailable: boolean;
 }) {
   const actions = [
@@ -139,14 +133,6 @@ function RightPanelEmptyState(props: {
       available: props.filesAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.files,
       onClick: props.onAddFiles,
-    },
-    {
-      label: "Diff",
-      description: "Review changes in this thread.",
-      icon: FileDiff,
-      available: props.diffAvailable,
-      disabledReason: SURFACE_DISABLED_REASONS.diff,
-      onClick: props.onAddDiff,
     },
   ] as const;
 
@@ -213,8 +199,6 @@ function surfaceTitle(
   appViewTitles: Readonly<Record<string, string>>,
 ): string {
   switch (surface.kind) {
-    case "diff":
-      return "Diff";
     case "files":
       return "Files";
     case "file":
@@ -272,8 +256,6 @@ function SurfaceIcon({
       const url = !snapshot || snapshot.navStatus._tag === "Idle" ? null : snapshot.navStatus.url;
       return <PreviewFavicon url={url} />;
     }
-    case "diff":
-      return <FileDiff className="size-3.5 shrink-0" />;
     case "files":
       return <Files className="size-3.5 shrink-0" />;
     case "file":
@@ -498,14 +480,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     <Files />
                     Files
                   </SurfaceMenuItem>
-                  <SurfaceMenuItem
-                    available={props.diffAvailable}
-                    disabledReason={SURFACE_DISABLED_REASONS.diff}
-                    onClick={props.onAddDiff}
-                  >
-                    <FileDiff />
-                    Diff
-                  </SurfaceMenuItem>
                 </MenuPopup>
               </Menu>
             ) : null}
@@ -518,11 +492,9 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           <RightPanelEmptyState
             onAddBrowser={props.onAddBrowser}
             onAddTerminal={props.onAddTerminal}
-            onAddDiff={props.onAddDiff}
             onAddFiles={props.onAddFiles}
             onManageAppViews={props.onManageAppViews}
             browserAvailable={props.browserAvailable}
-            diffAvailable={props.diffAvailable}
             filesAvailable={props.filesAvailable}
           />
         ) : (

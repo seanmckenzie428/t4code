@@ -9,6 +9,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
+import { useMainViewStore } from "./mainViewStore";
 import { useRightPanelStore } from "./rightPanelStore";
 
 const APP_VIEW_STORAGE_KEY = "t3code:app-views:v1";
@@ -129,6 +130,7 @@ export const useAppViewStore = create<AppViewStoreState>()(
           const { [threadKey]: _removed, ...byThreadKey } = state.byThreadKey;
           return { byThreadKey };
         });
+        useMainViewStore.getState().removeThread(ref);
         useRightPanelStore.getState().removeThread(ref);
       },
       pinPersonal: (ref, viewId) => {
