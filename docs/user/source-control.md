@@ -29,6 +29,13 @@ T3 Code works with the platforms your team already uses:
 
 ### Manage Code Reviews Without Context Switching
 
+**Review local changes alongside your conversation**
+
+- Use the **Chat** and **Review** tabs above the main view to switch between the conversation and a full-width diff
+- Press `Cmd/Ctrl + D` to toggle between the two views
+- In **Review**, compare working-tree changes, branch changes, the latest turn, or any completed turn
+- Opening a turn diff from the conversation takes you directly to that selection in **Review**
+
 **Create pull requests while you work**
 
 - Push a branch and create a pull request from the Git actions controls in the toolbar

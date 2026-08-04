@@ -70,6 +70,12 @@ import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
+  type MainView,
+  resolveActiveMainView,
+  selectThreadMainView,
+  useMainViewStore,
+} from "../mainViewStore";
+import {
   collapseExpandedComposerCursor,
   parseStandaloneComposerSlashCommand,
 } from "../composer-logic";
@@ -148,7 +154,9 @@ import {
   AlarmClockIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
+  FileDiffIcon,
   GitBranchIcon,
+  MessageSquareIcon,
   TriangleAlertIcon,
   WifiOffIcon,
 } from "lucide-react";
@@ -461,6 +469,62 @@ function formatOutgoingPrompt(params: {
 }
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
+
+function MainViewTabs(props: {
+  activeView: MainView;
+  reviewAvailable: boolean;
+  onSelect: (view: MainView) => void;
+}) {
+  const tabs = [
+    { id: "chat" as const, label: "Chat", icon: MessageSquareIcon, available: true },
+    {
+      id: "review" as const,
+      label: "Review",
+      icon: FileDiffIcon,
+      available: props.reviewAvailable,
+    },
+  ];
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Thread view"
+      className="surface-subheader gap-1 px-3 sm:px-5"
+      data-main-view-tabs
+    >
+      {tabs.map((tab) => {
+        const active = props.activeView === tab.id;
+        const Icon = tab.icon;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-controls={`main-${tab.id}-view`}
+            disabled={!tab.available}
+            title={
+              tab.available
+                ? tab.label
+                : "Review is available for server threads in Git repositories."
+            }
+            onClick={() => props.onSelect(tab.id)}
+            className={cn(
+              "flex h-7 items-center gap-1.5 rounded-md px-2 text-sm transition-colors",
+              active
+                ? "bg-accent text-foreground"
+                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+              !tab.available && "cursor-not-allowed opacity-40",
+            )}
+          >
+            <Icon className="size-3.5 shrink-0" />
+            <span>{tab.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 type ChatViewProps =
   | {
@@ -1512,7 +1576,6 @@ function ChatViewContent(props: ChatViewProps) {
   const activeRightPanelKind = useRightPanelStore((state) =>
     selectActiveRightPanel(state.byThreadKey, activeThreadRef),
   );
-  const diffOpen = activeRightPanelKind === "diff";
   const rightPanelState = useRightPanelStore((state) =>
     selectThreadRightPanelState(state.byThreadKey, activeThreadRef),
   );
@@ -2505,6 +2568,21 @@ function ChatViewContent(props: ChatViewProps) {
   const initialDiffPanelGitScope =
     gitStatusQuery.data?.hasWorkingTreeChanges === true ? "unstaged" : "branch";
   const diffPanelGitStatusResolutionKey = gitStatusQuery.data ? "resolved" : "pending";
+  const reviewAvailable = isServerThread && isGitRepo;
+  const selectedMainView = useMainViewStore((state) =>
+    selectThreadMainView(state.byThreadKey, activeThreadRef),
+  );
+  const activeMainView = resolveActiveMainView(selectedMainView, reviewAvailable);
+  const selectMainView = useCallback(
+    (view: MainView) => {
+      if (!activeThreadRef || (view === "review" && !reviewAvailable)) return;
+      useMainViewStore.getState().select(activeThreadRef, view);
+      if (view === "review" && activeMainView !== "review") {
+        onDiffPanelOpen?.();
+      }
+    },
+    [activeMainView, activeThreadRef, onDiffPanelOpen, reviewAvailable],
+  );
   const terminalShortcutLabelOptions = useMemo(
     () => ({
       context: {
@@ -2532,16 +2610,9 @@ function ChatViewContent(props: ChatViewProps) {
     [keybindings, terminalShortcutLabelOptions],
   );
   const onToggleDiff = useCallback(() => {
-    if (!isServerThread) {
-      return;
-    }
-    if (!diffOpen) {
-      onDiffPanelOpen?.();
-    }
-    if (activeThreadRef) {
-      useRightPanelStore.getState().toggle(activeThreadRef, "diff");
-    }
-  }, [activeThreadRef, diffOpen, isServerThread, onDiffPanelOpen]);
+    if (!reviewAvailable) return;
+    selectMainView(activeMainView === "review" ? "chat" : "review");
+  }, [activeMainView, reviewAvailable, selectMainView]);
 
   const envLocked = Boolean(
     activeThread &&
@@ -3113,21 +3184,6 @@ function ChatViewContent(props: ChatViewProps) {
     if (!activeThreadRef) return;
     void addBrowserSurface({ threadRef: activeThreadRef, openPreview });
   }, [activeThreadRef, openPreview]);
-  const addDiffSurface = useCallback(() => {
-    if (!activeThreadRef || !isServerThread || !isGitRepo) return;
-    if (planSidebarOpen) {
-      dismissPlanSidebarForCurrentTurn();
-    }
-    useRightPanelStore.getState().open(activeThreadRef, "diff");
-    onDiffPanelOpen?.();
-  }, [
-    activeThreadRef,
-    dismissPlanSidebarForCurrentTurn,
-    isGitRepo,
-    isServerThread,
-    onDiffPanelOpen,
-    planSidebarOpen,
-  ]);
   const addFilesSurface = useCallback(() => {
     if (!activeThreadRef || !activeProject) return;
     useRightPanelStore.getState().open(activeThreadRef, "files");
@@ -3271,11 +3327,8 @@ function ChatViewContent(props: ChatViewProps) {
       if (surface.kind === "terminal") {
         setTerminalFocusRequestId((value) => value + 1);
       }
-      if (surface.kind === "diff" && !diffOpen) {
-        onDiffPanelOpen?.();
-      }
     },
-    [activeThreadRef, diffOpen, dismissPlanSidebarForCurrentTurn, onDiffPanelOpen, planSidebarOpen],
+    [activeThreadRef, dismissPlanSidebarForCurrentTurn, planSidebarOpen],
   );
   const toggleRightPanel = useCallback(() => {
     if (!activeThreadRef) return;
@@ -5606,10 +5659,9 @@ function ChatViewContent(props: ChatViewProps) {
     (turnId: TurnId, filePath?: string) => {
       if (!isServerThread || !activeThreadRef) return;
       useDiffPanelStore.getState().selectTurn(activeThreadRef, turnId, filePath);
-      useRightPanelStore.getState().open(activeThreadRef, "diff");
-      onDiffPanelOpen?.();
+      selectMainView("review");
     },
-    [activeThreadRef, isServerThread, onDiffPanelOpen],
+    [activeThreadRef, isServerThread, selectMainView],
   );
   // Both the Map and the revert handler are read from refs at call-time so
   // the callback reference is fully stable and never busts context identity.
@@ -5682,15 +5734,6 @@ function ChatViewContent(props: ChatViewProps) {
         newShortcutLabel={newTerminalShortcutLabel ?? undefined}
         closeShortcutLabel={closeTerminalShortcutLabel ?? undefined}
       />
-    ) : activeRightPanelSurface?.kind === "diff" ? (
-      <Suspense fallback={null}>
-        <DiffPanel
-          key={`${activeThreadKey}:${diffPanelGitStatusResolutionKey}`}
-          mode="embedded"
-          composerDraftTarget={composerDraftTarget}
-          initialGitScope={initialDiffPanelGitScope}
-        />
-      </Suspense>
     ) : activeRightPanelSurface?.kind === "plan" ? (
       <PlanSidebar
         activePlan={activePlan}
@@ -5779,6 +5822,12 @@ function ChatViewContent(props: ChatViewProps) {
           />
         </header>
 
+        <MainViewTabs
+          activeView={activeMainView}
+          reviewAvailable={reviewAvailable}
+          onSelect={selectMainView}
+        />
+
         <ThreadErrorBanner
           error={threadError}
           onDismiss={() => setThreadError(activeThread.id, null)}
@@ -5786,7 +5835,13 @@ function ChatViewContent(props: ChatViewProps) {
         {/* Main content area with optional plan sidebar */}
         <div className="flex min-h-0 min-w-0 flex-1">
           {/* Chat column */}
-          <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <div
+            id="main-chat-view"
+            role="tabpanel"
+            aria-label="Chat"
+            hidden={activeMainView !== "chat"}
+            className="relative flex min-h-0 min-w-0 flex-1 flex-col"
+          >
             {/* Provider status overlays the timeline without changing its content height. */}
             <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
               <ProviderStatusBanner
@@ -6092,6 +6147,23 @@ function ChatViewContent(props: ChatViewProps) {
             ) : null}
           </div>
           {/* end chat column */}
+          {activeMainView === "review" ? (
+            <div
+              id="main-review-view"
+              role="tabpanel"
+              aria-label="Review"
+              className="flex min-h-0 min-w-0 flex-1 flex-col"
+            >
+              <Suspense fallback={null}>
+                <DiffPanel
+                  key={`${activeThreadKey}:${diffPanelGitStatusResolutionKey}`}
+                  mode="embedded"
+                  composerDraftTarget={composerDraftTarget}
+                  initialGitScope={initialDiffPanelGitScope}
+                />
+              </Suspense>
+            </div>
+          ) : null}
         </div>
         {/* end horizontal flex container */}
 
@@ -6132,10 +6204,8 @@ function ChatViewContent(props: ChatViewProps) {
           onCopyFilePath={copyRightPanelFilePath}
           onAddBrowser={createBrowserSurface}
           onAddTerminal={addTerminalSurface}
-          onAddDiff={addDiffSurface}
           onAddFiles={addFilesSurface}
           browserAvailable={isPreviewSupportedInRuntime()}
-          diffAvailable={isServerThread && isGitRepo}
           filesAvailable={activeProject !== null}
         >
           {rightPanelContent}
@@ -6159,10 +6229,8 @@ function ChatViewContent(props: ChatViewProps) {
             onCopyFilePath={copyRightPanelFilePath}
             onAddBrowser={createBrowserSurface}
             onAddTerminal={addTerminalSurface}
-            onAddDiff={addDiffSurface}
             onAddFiles={addFilesSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
-            diffAvailable={isServerThread && isGitRepo}
             filesAvailable={activeProject !== null}
           >
             {rightPanelContent}
