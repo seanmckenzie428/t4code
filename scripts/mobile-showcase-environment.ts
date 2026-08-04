@@ -105,9 +105,9 @@ const PROJECT_FAVICONS = {
 export const SHOWCASE_PROJECTS = [
   {
     id: "t3code",
-    title: "T3 Code",
+    title: "T4 Code",
     directory: "t3code",
-    repositoryUrl: "https://github.com/pingdotgg/t3code.git",
+    repositoryUrl: "https://github.com/seanmckenzie428/t4.git",
     favicon: PROJECT_FAVICONS.t3code,
   },
   {
@@ -283,7 +283,7 @@ async function seedT3CodeWorkspace(workspaceRoot: string): Promise<void> {
   );
   await initializeRepository({
     workspaceRoot,
-    repositoryUrl: "https://github.com/pingdotgg/t3code.git",
+    repositoryUrl: "https://github.com/seanmckenzie428/t4.git",
     commitMessage: "Show connected environments",
   });
   await runGit(workspaceRoot, ["checkout", "-b", "feat/remote-command-center"]);

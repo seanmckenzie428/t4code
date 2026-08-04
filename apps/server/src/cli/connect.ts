@@ -111,7 +111,7 @@ const authorizeCli = Effect.fn("cloud.cli.authorize")(function* (options: {
   const existing = yield* tokens.getExisting.pipe(
     Effect.catchTag("CloudCliCredentialRefreshError", () =>
       Console.log(
-        "The stored T3 Connect credential could not be refreshed; signing in again.",
+        "The stored T4 Connect credential could not be refreshed; signing in again.",
       ).pipe(Effect.as(Option.none())),
     ),
   );
@@ -191,15 +191,15 @@ function formatCloudStatus(status: CloudCliStatus, options?: { readonly json?: b
       ? "pending server startup"
       : "not provisioned";
   const nextStep = !status.authenticated
-    ? "Run `t3 connect link` to authorize and enable T3 Connect."
+    ? "Run `t4 connect link` to authorize and enable T4 Connect."
     : !status.desired
-      ? "Run `t3 connect link` to enable T3 Connect."
+      ? "Run `t4 connect link` to enable T4 Connect."
       : !status.linked
         ? "Start T3 to provision the environment link and launch its managed tunnel."
         : undefined;
 
   return [
-    "T3 Connect",
+    "T4 Connect",
     `  Exposure: ${status.desired ? "enabled" : "disabled"}`,
     `  Authorization: ${status.authenticated ? "stored credential" : "missing"}`,
     `  Environment link: ${provisioned}`,
@@ -215,7 +215,7 @@ const CLOUD_CLI_LIVE_SERVER_TIMEOUT = Duration.seconds(5);
 const confirmRelayClientInstall = (version: string) =>
   Prompt.run(
     Prompt.confirm({
-      message: `The T3 relay client is required for T3 Connect. Download and install version ${version}?`,
+      message: `The T4 relay client is required for T4 Connect. Download and install version ${version}?`,
       initial: false,
     }),
   );
@@ -320,7 +320,7 @@ const logCloudDisconnectFailure = (
   clearAuthorization: boolean,
   cause: Cause.Cause<unknown>,
 ) =>
-  Effect.logWarning("T3 Connect disconnect operation failed.").pipe(
+  Effect.logWarning("T4 Connect disconnect operation failed.").pipe(
     Effect.annotateLogs({
       operation,
       clearAuthorization,
@@ -366,10 +366,10 @@ export const reportCloudDisconnectResults = Effect.fn("cloud.cli.report_disconne
         input.liveResult.cause,
       );
       yield* Console.warn(
-        "T3 Connect is disabled, but the running server could not stop its tunnel.\nRestart that server to stop the connector.",
+        "T4 Connect is disabled, but the running server could not stop its tunnel.\nRestart that server to stop the connector.",
       );
     } else {
-      yield* Console.log("T3 Connect is disabled locally.");
+      yield* Console.log("T4 Connect is disabled locally.");
     }
 
     if (Exit.isFailure(input.relayResult)) {
@@ -410,7 +410,7 @@ const disconnectCloud = Effect.fn("cloud.cli.disconnect")(function* (options: {
 
   if (options.clearAuthorization) {
     yield* Console.log(
-      "Signed out of T3 Connect locally.\nThe background service is managed separately with `t3 service`.",
+      "Signed out of T4 Connect locally.\nThe background service is managed separately with `t4 service`.",
     );
   }
 });
@@ -477,7 +477,7 @@ const linkEnvironmentForConnect = Effect.fn("cloud.cli.link_environment")(functi
       reportRelayClientInstallProgress,
     );
     if (Option.isNone(installed)) {
-      yield* Console.log("T3 Connect setup cancelled. The relay client was not installed.");
+      yield* Console.log("T4 Connect setup cancelled. The relay client was not installed.");
       return null;
     }
     yield* Console.log(formatRelayClientReady(installed.value.version));
@@ -501,7 +501,7 @@ const connectLoginCommand = Command.make("login", {
     runCloudCommand(
       flags,
       Effect.gen(function* () {
-        yield* Console.log("T3 Connect\n");
+        yield* Console.log("T4 Connect\n");
         const identity = yield* authorizeCli(flags);
         yield* Console.log(`✓ Signed in${connectedAs(identity)}`);
       }),
@@ -695,7 +695,7 @@ export const connectCommand = Command.make("connect", {
         const background = yield* recoverServiceOnboardingOffer(offerServiceDuringOnboarding);
         if (background) {
           yield* Console.log(
-            "\n✓ Background service ready\n\nT3 Code will stay reachable after you log out.",
+            "\n✓ Background service ready\n\nT4 Code will stay reachable after you log out.",
           );
           return;
         }

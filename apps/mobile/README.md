@@ -1,7 +1,7 @@
-# T3 Code Mobile
+# T4 Code Mobile
 
 > [!WARNING]
-> T3 Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> T4 Code Mobile is source-only. This fork has no independent EAS project, signing account, App Store listing, or Google Play listing.
 
 ## Quickstart
 
@@ -10,13 +10,13 @@
 
 This app has three variants:
 
-- `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
-- `preview`: persistent internal preview build, installable side-by-side as `T3 Code Preview`
-- `production`: store/release build as `T3 Code`
+- `development`: Expo dev client displayed as `T4 Code Dev`
+- `preview`: persistent internal preview build displayed as `T4 Code Preview`
+- `production`: release build displayed as `T4 Code`
 
 Run commands from `apps/mobile`.
 
-T3 Connect is optional and disabled in a fresh clone. Public configuration belongs in the
+T4 Connect is optional and disabled in a fresh clone. Public configuration belongs in the
 repository-root `.env` or `.env.local`, not an `apps/mobile/.env` file. See
 [`../../.env.example`](../../.env.example).
 
@@ -88,6 +88,11 @@ node ../../scripts/mobile-native-static-check.ts
 The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin. Missing native tools are reported as warnings and skipped locally. CI installs the default toolset from `apps/mobile/Brewfile` before running the native checks.
 
 ## EAS Builds
+
+> [!CAUTION]
+> The checked-in EAS UUID, store IDs, bundle IDs, app groups, update URL, and signing identifiers
+> remain upstream T3 compatibility values. Do not publish T4 with them. Create independent records
+> before enabling preview or production distribution.
 
 CI uses Expo fingerprinting with the `preview:dev` profile to reuse an existing compatible build when possible, or start a new internal EAS build when native runtime inputs change. Production and default local builds continue to use the `appVersion` runtime policy.
 

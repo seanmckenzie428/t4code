@@ -1,4 +1,6 @@
-const REPO = "pingdotgg/t3code";
+import { REPOSITORY_SLUG } from "@t3tools/shared/branding";
+
+const REPO = REPOSITORY_SLUG;
 
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 

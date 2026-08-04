@@ -4,11 +4,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pingdotgg/t3code",
+    "url": "https://github.com/seanmckenzie428/t4",
     "directory": "apps/server"
   },
   "bin": {
-    "t3": "./dist/bin.mjs"
+    "t3": "./dist/bin.mjs",
+    "t4": "./dist/bin.mjs"
   },
   "files": [
     "dist"

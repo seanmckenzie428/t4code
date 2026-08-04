@@ -24,7 +24,7 @@ export interface CloudLinkDesiredState {
 }
 
 /**
- * Drives the primary environment's T3 Connect link. T3 Connect (managed
+ * Drives the primary environment's T4 Connect link. T4 Connect (managed
  * tunnel) and agent-activity publishing are independent capabilities backed by
  * a single relay link, so consumers express the full desired state and
  * `reconcileCloudState` applies it: unlink when neither is wanted, otherwise
@@ -51,9 +51,9 @@ export function useCloudLinkController() {
   const [operationError, setOperationError] = useState<string | null>(null);
 
   const reportUpdateFailure = (cause: unknown) => {
-    const message = cause instanceof Error ? cause.message : "Could not update T3 Connect access.";
+    const message = cause instanceof Error ? cause.message : "Could not update T4 Connect access.";
     const traceId = findErrorTraceId(cause);
-    console.error("[t3-connect] Could not update T3 Connect", { message, traceId, cause });
+    console.error("[t3-connect] Could not update T4 Connect", { message, traceId, cause });
     setOperationError(traceId ? `${message} Trace ID: ${traceId}` : message);
     toastManager.add({
       type: "error",

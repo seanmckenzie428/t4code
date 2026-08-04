@@ -1,15 +1,13 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import { RELEASES_URL } from "../lib/releases";
-import { ANDROID_PLAY_STORE_URL, IOS_APP_STORE_URL } from "../lib/site";
 ---
 
-<Layout title="Download — T3 Code" description="Download T3 Code for macOS, Windows, or Linux.">
+<Layout title="Distribution — T4 Code" description="T4 Code distribution status.">
   <div class="download-page">
-  <h1 class="heading">Download T3 Code</h1>
+  <h1 class="heading">T4 Code releases are not published yet</h1>
   <p class="subheading">
-    <span id="version-label">Loading latest release&hellip;</span>
-    <a id="changelog-link" class="changelog-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none">View changelog<span aria-hidden="true"> &#8599;</span></a>
+    Build the personal fork from source. Do not use official T3 downloads as T4 releases.
   </p>
 
   <div class="platforms" id="platforms">
@@ -20,14 +18,14 @@ import { ANDROID_PLAY_STORE_URL, IOS_APP_STORE_URL } from "../lib/site";
         <h2 class="platform-name">macOS</h2>
       </div>
       <div class="download-cards">
-        <a class="download-card" data-asset="arm64.dmg" href={RELEASES_URL}>
+        <div class="download-card" aria-disabled="true">
           <span class="card-arch">Apple Silicon (arm64)</span>
           <span class="card-format">.dmg</span>
-        </a>
-        <a class="download-card" data-asset="x64.dmg" href={RELEASES_URL}>
+        </div>
+        <div class="download-card" aria-disabled="true">
           <span class="card-arch">Intel (x64)</span>
           <span class="card-format">.dmg</span>
-        </a>
+        </div>
       </div>
     </section>
 
@@ -38,10 +36,10 @@ import { ANDROID_PLAY_STORE_URL, IOS_APP_STORE_URL } from "../lib/site";
         <h2 class="platform-name">Windows</h2>
       </div>
       <div class="download-cards">
-        <a class="download-card" data-asset="x64.exe" href={RELEASES_URL}>
+        <div class="download-card" aria-disabled="true">
           <span class="card-arch">Windows 10, 11</span>
           <span class="card-format">.exe</span>
-        </a>
+        </div>
       </div>
     </section>
 
@@ -52,10 +50,10 @@ import { ANDROID_PLAY_STORE_URL, IOS_APP_STORE_URL } from "../lib/site";
         <h2 class="platform-name">Linux</h2>
       </div>
       <div class="download-cards">
-        <a class="download-card" data-asset="x86_64.AppImage" href={RELEASES_URL}>
+        <div class="download-card" aria-disabled="true">
           <span class="card-arch">x86_64</span>
           <span class="card-format">AppImage</span>
-        </a>
+        </div>
       </div>
     </section>
 
@@ -66,71 +64,26 @@ import { ANDROID_PLAY_STORE_URL, IOS_APP_STORE_URL } from "../lib/site";
         <h2 class="platform-name">Mobile</h2>
       </div>
       <div class="download-cards">
-        <a class="download-card" href={IOS_APP_STORE_URL} target="_blank" rel="noopener noreferrer">
+        <div class="download-card" aria-disabled="true">
           <span class="card-arch">iPhone &amp; iPad</span>
-          <span class="card-format">App Store</span>
-        </a>
-        <a class="download-card" href={ANDROID_PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">
+          <span class="card-format">Not published</span>
+        </div>
+        <div class="download-card" aria-disabled="true">
           <span class="card-arch">Android</span>
-          <span class="card-format">Google Play</span>
-        </a>
+          <span class="card-format">Not published</span>
+        </div>
       </div>
     </section>
   </div>
 
   <p class="releases-link">
-    Looking for older versions? Check the
-    <a href="https://github.com/pingdotgg/t3code/releases" target="_blank" rel="noopener noreferrer">
-      GitHub releases page<span aria-hidden="true"> &#8599;</span>
+    Future T4 builds will appear on the
+    <a href={RELEASES_URL} target="_blank" rel="noopener noreferrer">
+      personal fork releases page<span aria-hidden="true"> &#8599;</span>
     </a>
   </p>
   </div>
 </Layout>
-
-<script>
-  import { fetchLatestRelease, RELEASES_URL } from "../lib/releases";
-
-  async function init() {
-    const versionLabel = document.getElementById("version-label");
-    // Only release-asset cards; mobile store cards have no data-asset and keep their href.
-    const cards = document.querySelectorAll<HTMLAnchorElement>(".download-card[data-asset]");
-
-    try {
-      const release = await fetchLatestRelease();
-
-      if (versionLabel && release.tag_name) {
-        versionLabel.textContent = `Latest (${release.tag_name})`;
-      }
-
-      const changelogLink = document.getElementById("changelog-link") as HTMLAnchorElement | null;
-      if (changelogLink && release.html_url) {
-        changelogLink.href = release.html_url;
-        changelogLink.style.display = "";
-      }
-
-      cards.forEach((card) => {
-        const suffix = card.dataset.asset;
-        if (!suffix) return;
-
-        const match = (release.assets ?? []).find((a) => a.name.endsWith(`-${suffix}`));
-        if (match) {
-          card.href = match.browser_download_url;
-        } else {
-          card.href = RELEASES_URL;
-        }
-      });
-    } catch {
-      if (versionLabel) {
-        versionLabel.textContent = "Could not load release info.";
-      }
-      cards.forEach((card) => {
-        card.href = RELEASES_URL;
-      });
-    }
-  }
-
-  init();
-</script>
 
 <style>
   .download-page {

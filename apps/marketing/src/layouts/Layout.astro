@@ -1,10 +1,6 @@
 ---
-import {
-  ANDROID_PLAY_STORE_URL,
-  GITHUB_REPOSITORY_URL,
-  IOS_APP_STORE_URL,
-  MARKETING_STATS,
-} from "../lib/site";
+import { PRODUCT_NAME } from "@t3tools/shared/branding";
+import { GITHUB_REPOSITORY_URL } from "../lib/site";
 
 interface Props {
   title?: string;
@@ -13,8 +9,8 @@ interface Props {
 }
 
 const {
-  title = "T3 Code",
-  description = "T3 Code — The open-source control plane for coding agents.",
+  title = PRODUCT_NAME,
+  description = `${PRODUCT_NAME} — A personal fork of T3 Code.`,
   pageClass,
 } = Astro.props;
 ---
@@ -40,8 +36,8 @@ const {
     <div class:list={["page", pageClass]}>
       <nav class="nav">
         <div class="nav-inner">
-          <a href="/" class="nav-brand" aria-label="T3 Code home">
-            <span class="nav-brand-name">T3 Code</span>
+          <a href="/" class="nav-brand" aria-label={`${PRODUCT_NAME} home`}>
+            <span class="nav-brand-name">{PRODUCT_NAME}</span>
           </a>
           <div class="nav-right">
             <a
@@ -49,12 +45,12 @@ const {
               href={GITHUB_REPOSITORY_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={`Star T3 Code on GitHub — ${MARKETING_STATS.githubStars} stars`}
+              aria-label={`View ${PRODUCT_NAME} on GitHub`}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2.3l2.9 5.88 6.49.94-4.7 4.58 1.11 6.47L12 17.12l-5.8 3.05 1.11-6.47-4.7-4.58 6.49-.94L12 2.3z"/>
               </svg>
-              <span><strong>{MARKETING_STATS.githubStars}</strong> GitHub stars</span>
+              <span>View on GitHub</span>
             </a>
           </div>
         </div>
@@ -74,11 +70,6 @@ const {
             <a href={GITHUB_REPOSITORY_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
             <a href="https://discord.gg/jn4EGJjrvv" target="_blank" rel="noopener noreferrer">Discord</a>
             <a href="/download">Download</a>
-            <a href={IOS_APP_STORE_URL} target="_blank" rel="noopener noreferrer">iOS app</a>
-            <a href={ANDROID_PLAY_STORE_URL} target="_blank" rel="noopener noreferrer">Android app</a>
-            <a href="/terms-of-service">Terms</a>
-            <a href="/privacy-policy">Privacy</a>
-            <a href="/security-policy">Security</a>
           </div>
         </div>
       </footer>

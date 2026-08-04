@@ -101,7 +101,7 @@ it("renders a systemd unit with absolute paths and append-mode logging", () => {
     unit,
     [
       "[Unit]",
-      "Description=T3 Code server",
+      "Description=T4 Code server",
       "StartLimitIntervalSec=300",
       "StartLimitBurst=5",
       "",

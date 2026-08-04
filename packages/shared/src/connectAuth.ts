@@ -1,4 +1,5 @@
 import { readHashParams } from "./remote.ts";
+import { CONNECT_PRODUCT_NAME } from "./branding.ts";
 
 const CONNECT_AUTH_STATE_PARAM = "state";
 const CONNECT_AUTH_CHALLENGE_PARAM = "challenge";
@@ -104,7 +105,7 @@ export function checkConnectAuthCode(
 ): ConnectAuthCode | string {
   const parsed = parseConnectAuthCode(blob);
   if (parsed === null) {
-    return "That does not look like a T3 Connect code. Copy the full code.";
+    return `That does not look like a ${CONNECT_PRODUCT_NAME} code. Copy the full code.`;
   }
   if (parsed.state !== expectedState) {
     return "That code belongs to a different connect request. Open the URL above and try again.";

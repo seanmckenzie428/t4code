@@ -91,8 +91,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (Alpha)");
-    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Code (Nightly)");
+    assert.equal(resolveDesktopProductName("0.0.17"), "T4 Code (Alpha)");
+    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T4 Code (Nightly)");
   });
 
   it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
@@ -121,7 +121,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           ConfigProvider.layer(
             ConfigProvider.fromEnv({
               env: {
-                T3CODE_DESKTOP_UPDATE_REPOSITORY: "pingdotgg/t3code",
+                T3CODE_DESKTOP_UPDATE_REPOSITORY: "seanmckenzie428/t4",
               },
             }),
           ),
@@ -132,7 +132,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
           ConfigProvider.layer(
             ConfigProvider.fromEnv({
               env: {
-                GITHUB_REPOSITORY: "pingdotgg/t3code",
+                GITHUB_REPOSITORY: "seanmckenzie428/t4",
               },
             }),
           ),
@@ -141,14 +141,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
       assert.deepStrictEqual(latestConfig, {
         provider: "github",
-        owner: "pingdotgg",
-        repo: "t3code",
+        owner: "seanmckenzie428",
+        repo: "t4",
         releaseType: "release",
       });
       assert.deepStrictEqual(nightlyConfig, {
         provider: "github",
-        owner: "pingdotgg",
-        repo: "t3code",
+        owner: "seanmckenzie428",
+        repo: "t4",
         releaseType: "prerelease",
         channel: "nightly",
       });
@@ -349,10 +349,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.notProperty(mac, "asarUnpack");
       assert.notProperty(linux, "asarUnpack");
       assert.deepStrictEqual(win.asarUnpack, WINDOWS_ASAR_UNPACK);
+      assert.equal(mac.productName, "T4 Code (Alpha)");
+      assert.equal(mac.artifactName, "T4-Code-${version}-${arch}.${ext}");
       // Linux must register the renderer schemes so the generated .desktop
       // entry advertises MimeType=x-scheme-handler/t3code; for OAuth deep links.
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
-        { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
+        { name: "T4 Code", schemes: ["t3code", "t3code-dev"] },
       ]);
       for (const config of [mac, linux, win]) {
         assert.deepStrictEqual(config.electronLanguages, DESKTOP_ELECTRON_LANGUAGES);
@@ -528,7 +530,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.deepStrictEqual(mac.protocols, [
-        { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
+        { name: "T4 Code", schemes: ["t3code", "t3code-dev"] },
       ]);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
