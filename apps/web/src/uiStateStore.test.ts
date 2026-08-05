@@ -13,12 +13,15 @@ import {
   resolveProjectExpanded,
   setDefaultAdvertisedEndpointKey,
   setProjectExpanded,
+  setSidebarShelfExpanded,
   setThreadChangedFilesExpanded,
   type UiState,
 } from "./uiStateStore";
 
 function makeUiState(overrides: Partial<UiState> = {}): UiState {
   return {
+    sidebarSettledShelfExpanded: true,
+    sidebarSnoozedShelfExpanded: false,
     projectExpandedById: {},
     projectOrder: [],
     threadLastVisitedAtById: {},
@@ -144,6 +147,17 @@ describe("uiStateStore pure functions", () => {
       defaultAdvertisedEndpointKey: null,
     });
   });
+
+  it("stores sidebar shelf expansion choices", () => {
+    const settled = setSidebarShelfExpanded(makeUiState(), "settled", false);
+    const snoozed = setSidebarShelfExpanded(settled, "snoozed", true);
+
+    expect(snoozed).toMatchObject({
+      sidebarSettledShelfExpanded: false,
+      sidebarSnoozedShelfExpanded: true,
+    });
+    expect(setSidebarShelfExpanded(snoozed, "snoozed", true)).toBe(snoozed);
+  });
 });
 
 describe("parsePersistedState", () => {
@@ -169,6 +183,8 @@ describe("parsePersistedState", () => {
     });
 
     expect(parsed).toEqual({
+      sidebarSettledShelfExpanded: true,
+      sidebarSnoozedShelfExpanded: false,
       projectExpandedById: {
         logical: false,
       },
@@ -288,6 +304,8 @@ describe("uiStateStore persistence", () => {
       localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
     ) as PersistedUiState;
     expect(persisted).toEqual({
+      sidebarSettledShelfExpanded: true,
+      sidebarSnoozedShelfExpanded: false,
       projectExpandedById: {
         logical: false,
       },

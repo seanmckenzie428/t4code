@@ -4,10 +4,13 @@ import {
   isProjectFaviconFallbackUrl,
 } from "@t3tools/shared/projectFavicon";
 import { FolderIcon } from "lucide-react";
+import { DynamicIcon, iconNames, type IconName } from "lucide-react/dynamic";
 import type { ComponentType } from "react";
 import { useState } from "react";
 import { useAssetUrl } from "../assets/assetUrls";
 import { cn } from "~/lib/utils";
+import { derivePhysicalProjectKeyFromPath } from "../logicalProject";
+import { useProjectAppearanceStore } from "../projectAppearanceStore";
 
 const loadedProjectFaviconSrcs = new Map<string, string>();
 
@@ -17,11 +20,33 @@ export function ProjectFavicon(input: {
   className?: string | undefined;
   fallbackIcon?: ComponentType<{ className?: string }>;
 }) {
+  const appearance = useProjectAppearanceStore(
+    (state) => state.byKey[derivePhysicalProjectKeyFromPath(input.environmentId, input.cwd)],
+  );
   const src = useAssetUrl(input.environmentId, {
     _tag: "project-favicon",
     cwd: input.cwd,
   });
   const FallbackIcon = input.fallbackIcon ?? FolderIcon;
+
+  if (appearance?.icon?.type === "image") {
+    return (
+      <img
+        src={appearance.icon.dataUrl}
+        alt=""
+        className={cn("size-3.5 shrink-0 rounded-sm object-cover", input.className)}
+      />
+    );
+  }
+
+  if (appearance?.icon?.type === "lucide" && iconNames.includes(appearance.icon.name as IconName)) {
+    return (
+      <DynamicIcon
+        name={appearance.icon.name as IconName}
+        className={cn("size-3.5 shrink-0 text-muted-foreground", input.className)}
+      />
+    );
+  }
 
   if (!src || isProjectFaviconFallbackUrl(src)) {
     return <ProjectFaviconFallback className={input.className} icon={FallbackIcon} />;

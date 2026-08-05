@@ -36,6 +36,7 @@ import {
   Trash2Icon,
   Undo2Icon,
 } from "lucide-react";
+import { iconNames, type IconName } from "lucide-react/dynamic";
 import {
   memo,
   useCallback,
@@ -81,6 +82,7 @@ import {
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
+import { type ProjectAppearance, useProjectAppearanceStore } from "../projectAppearanceStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
@@ -1191,6 +1193,8 @@ export default function SidebarV2() {
   const [projectActionsTarget, setProjectActionsTarget] = useState<SidebarProjectSnapshot | null>(
     null,
   );
+  const projectAppearances = useProjectAppearanceStore((state) => state.byKey);
+  const setProjectAppearanceForKeys = useProjectAppearanceStore((state) => state.setForKeys);
   const [projectScopeMenuOpen, setProjectScopeMenuOpen] = useState(false);
   const newThreadContext = useHandleNewThread();
   const openAddProjectCommandPalette = useCallback(
@@ -1244,23 +1248,32 @@ export default function SidebarV2() {
       }),
     [projectOrder, projects],
   );
-  const unsortedProjectGroups = useMemo(
-    () =>
-      buildSidebarProjectSnapshots({
-        projects: sidebarProjectSortOrder === "manual" ? orderedProjects : projects,
-        settings: projectGroupingSettings,
-        primaryEnvironmentId,
-        resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
-      }),
-    [
-      environmentLabelById,
-      orderedProjects,
+  const unsortedProjectGroups = useMemo(() => {
+    const groups = buildSidebarProjectSnapshots({
+      projects: sidebarProjectSortOrder === "manual" ? orderedProjects : projects,
+      settings: projectGroupingSettings,
       primaryEnvironmentId,
-      projectGroupingSettings,
-      projects,
-      sidebarProjectSortOrder,
-    ],
-  );
+      resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
+    });
+    return groups.map((group) => {
+      const appearance =
+        projectAppearances[group.projectKey] ??
+        group.memberProjects.flatMap((member) =>
+          projectAppearances[member.physicalProjectKey]
+            ? [projectAppearances[member.physicalProjectKey]]
+            : [],
+        )[0];
+      return appearance?.name ? { ...group, displayName: appearance.name } : group;
+    });
+  }, [
+    environmentLabelById,
+    orderedProjects,
+    primaryEnvironmentId,
+    projectAppearances,
+    projectGroupingSettings,
+    projects,
+    sidebarProjectSortOrder,
+  ]);
   const projectGroups = useMemo(
     () => sortLogicalProjectsForSidebar(unsortedProjectGroups, threads, sidebarProjectSortOrder),
     [sidebarProjectSortOrder, threads, unsortedProjectGroups],
@@ -1488,6 +1501,40 @@ export default function SidebarV2() {
     [updateProject],
   );
 
+  const updateProjectAppearance = useCallback(
+    (
+      group: SidebarProjectSnapshot,
+      changes: {
+        readonly name?: string | undefined;
+        readonly icon?: ProjectAppearance["icon"] | undefined;
+      },
+    ) => {
+      const keys = [
+        group.projectKey,
+        ...group.memberProjects.map((member) => member.physicalProjectKey),
+      ];
+      const current =
+        projectAppearances[group.projectKey] ??
+        group.memberProjects.flatMap((member) =>
+          projectAppearances[member.physicalProjectKey]
+            ? [projectAppearances[member.physicalProjectKey]]
+            : [],
+        )[0] ??
+        {};
+      const next = { ...current };
+      if ("name" in changes) {
+        if (changes.name) next.name = changes.name;
+        else delete next.name;
+      }
+      if ("icon" in changes) {
+        if (changes.icon) next.icon = changes.icon;
+        else delete next.icon;
+      }
+      setProjectAppearanceForKeys(keys, next);
+    },
+    [projectAppearances, setProjectAppearanceForKeys],
+  );
+
   const updateProjectGroupingPreference = useCallback(
     (member: SidebarProjectGroupMember, selection: SidebarProjectGroupingMode | "inherit") => {
       const overrideKey = deriveProjectGroupingOverrideKey(member);
@@ -1631,8 +1678,13 @@ export default function SidebarV2() {
     () => setSettledVisibleCount((count) => count + SETTLED_TAIL_PAGE_COUNT),
     [],
   );
-  const [settledShelfExpanded, setSettledShelfExpanded] = useState(true);
-  const toggleSettledShelf = useCallback(() => setSettledShelfExpanded((value) => !value), []);
+  const settledShelfExpanded = useUiStateStore((state) => state.sidebarSettledShelfExpanded);
+  const snoozedShelfExpanded = useUiStateStore((state) => state.sidebarSnoozedShelfExpanded);
+  const setSidebarShelfExpanded = useUiStateStore((state) => state.setSidebarShelfExpanded);
+  const toggleSettledShelf = useCallback(
+    () => setSidebarShelfExpanded("settled", !settledShelfExpanded),
+    [setSidebarShelfExpanded, settledShelfExpanded],
+  );
   const renderedSettledThreads = useMemo(() => {
     if (settledShelfExpanded) return visibleSettledThreads;
     if (routeThreadKey === null) return [];
@@ -1646,8 +1698,10 @@ export default function SidebarV2() {
   // The snoozed shelf is collapsed by default: out of the way, never gone.
   // Collapsed threads don't render (and so don't participate in jump
   // shortcuts or multi-select), matching the settled tail's paging model.
-  const [snoozedShelfExpanded, setSnoozedShelfExpanded] = useState(false);
-  const toggleSnoozedShelf = useCallback(() => setSnoozedShelfExpanded((value) => !value), []);
+  const toggleSnoozedShelf = useCallback(
+    () => setSidebarShelfExpanded("snoozed", !snoozedShelfExpanded),
+    [setSidebarShelfExpanded, snoozedShelfExpanded],
+  );
   const visibleSnoozedThreads = useMemo(() => {
     if (snoozedShelfExpanded) return snoozedThreads;
     // The open thread must never vanish behind the collapsed shelf: a
@@ -2888,6 +2942,94 @@ export default function SidebarV2() {
           </DialogHeader>
           <DialogPanel className="p-0">
             <div className="divide-y divide-border/60">
+              {projectActionsTarget ? (
+                <section className="grid gap-4 px-6 pb-5 pt-2 sm:grid-cols-2 sm:gap-3 sm:pb-4">
+                  <label className="grid min-w-0 gap-1.5">
+                    <span className="font-medium text-foreground">Display name</span>
+                    <Input
+                      key={`${projectActionsTarget.projectKey}:${projectActionsTarget.displayName}`}
+                      aria-label="Project display name"
+                      defaultValue={projectActionsTarget.displayName}
+                      onBlur={(event) => {
+                        const name = event.currentTarget.value.trim();
+                        updateProjectAppearance(projectActionsTarget, {
+                          name: name && name !== projectActionsTarget.title ? name : undefined,
+                        });
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") event.currentTarget.blur();
+                      }}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      Shared by every grouped copy of this project.
+                    </span>
+                  </label>
+                  <div className="grid min-w-0 gap-1.5">
+                    <span className="font-medium text-foreground">Project icon</span>
+                    <Input
+                      list="lucide-project-icons"
+                      aria-label="Lucide project icon"
+                      placeholder="Search Lucide icons"
+                      defaultValue={(() => {
+                        const icon = projectAppearances[projectActionsTarget.projectKey]?.icon;
+                        return icon?.type === "lucide" ? icon.name : "";
+                      })()}
+                      onChange={(event) => {
+                        const name = event.currentTarget.value.trim() as IconName;
+                        if (iconNames.includes(name)) {
+                          updateProjectAppearance(projectActionsTarget, {
+                            icon: { type: "lucide", name },
+                          });
+                        }
+                      }}
+                    />
+                    <datalist id="lucide-project-icons">
+                      {iconNames.map((name) => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
+                    <div className="flex flex-wrap gap-2">
+                      <label className="inline-flex cursor-pointer items-center rounded-md border border-input px-2.5 py-1 text-xs font-medium hover:bg-accent">
+                        Custom image
+                        <input
+                          className="sr-only"
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                          onChange={(event) => {
+                            const file = event.currentTarget.files?.[0];
+                            event.currentTarget.value = "";
+                            if (!file) return;
+                            if (file.size > 262_144) {
+                              toastManager.add({
+                                type: "warning",
+                                title: "Project image must be 256 KB or smaller",
+                              });
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.addEventListener("load", () => {
+                              if (typeof reader.result !== "string") return;
+                              updateProjectAppearance(projectActionsTarget, {
+                                icon: { type: "image", dataUrl: reader.result },
+                              });
+                            });
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                      </label>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        onClick={() =>
+                          updateProjectAppearance(projectActionsTarget, { icon: undefined })
+                        }
+                      >
+                        Use detected icon
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
               {projectActionsTarget?.memberProjects.map((member) => (
                 <section
                   key={member.physicalProjectKey}

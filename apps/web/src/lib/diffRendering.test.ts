@@ -20,6 +20,10 @@ describe("review diff presentation", () => {
       name: "solarized-dark",
       type: "dark",
     });
+    expect(resolveDiffTheme("dark", "jetbrains")).toEqual({
+      name: "material-theme",
+      type: "dark",
+    });
   });
 
   it("resolves fonts from vetted stacks", () => {

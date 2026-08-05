@@ -1,6 +1,7 @@
 import {
   DEFAULT_SERVER_SETTINGS,
   type EditorId,
+  type ResolvedKeybindingsConfig,
   type ServerConfig,
   type ServerConfigStreamEvent,
   type ServerLifecycleWelcomePayload,
@@ -80,9 +81,20 @@ export const primaryServerProvidersAtom = Atom.make(
     get(primaryServerConfigAtom)?.providers ?? EMPTY_SERVER_PROVIDERS,
 ).pipe(Atom.withLabel("web-primary-server-providers"));
 
-export const primaryServerKeybindingsAtom = Atom.make(
-  (get): ServerConfig["keybindings"] =>
-    get(primaryServerConfigAtom)?.keybindings ?? DEFAULT_RESOLVED_KEYBINDINGS,
+export function mergeClientDefaultKeybindings(
+  serverKeybindings: ResolvedKeybindingsConfig,
+): ResolvedKeybindingsConfig {
+  const serverCommands = new Set(serverKeybindings.map((binding) => binding.command));
+  const missingDefaults = DEFAULT_RESOLVED_KEYBINDINGS.filter(
+    (binding) => !serverCommands.has(binding.command),
+  );
+  return missingDefaults.length === 0
+    ? serverKeybindings
+    : [...missingDefaults, ...serverKeybindings];
+}
+
+export const primaryServerKeybindingsAtom = Atom.make((get): ServerConfig["keybindings"] =>
+  mergeClientDefaultKeybindings(get(primaryServerConfigAtom)?.keybindings ?? []),
 ).pipe(Atom.withLabel("web-primary-server-keybindings"));
 
 export const primaryServerAvailableEditorsAtom = Atom.make(

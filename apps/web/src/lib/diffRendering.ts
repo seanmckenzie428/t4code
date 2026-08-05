@@ -13,6 +13,7 @@ const STATIC_DIFF_THEMES = {
   solarized: { light: "solarized-light", dark: "solarized-dark" },
   "rose-pine": { light: "rose-pine-dawn", dark: "rose-pine" },
   catppuccin: { light: "catppuccin-latte", dark: "catppuccin-mocha" },
+  jetbrains: { light: "material-theme-lighter", dark: "material-theme" },
 } as const;
 
 export type DiffThemeName =
@@ -34,6 +35,7 @@ export const DIFF_THEME_OPTIONS: ReadonlyArray<{
   { value: "solarized", label: "Solarized" },
   { value: "rose-pine", label: "Rosé Pine" },
   { value: "catppuccin", label: "Catppuccin" },
+  { value: "jetbrains", label: "JetBrains" },
 ];
 
 export const DIFF_FONT_OPTIONS: ReadonlyArray<{

@@ -70,6 +70,7 @@ export const DiffThemePreference = Schema.Literals([
   "solarized",
   "rose-pine",
   "catppuccin",
+  "jetbrains",
 ]);
 export type DiffThemePreference = typeof DiffThemePreference.Type;
 export const DEFAULT_DIFF_THEME: DiffThemePreference = "app";

@@ -47,7 +47,7 @@ describe("ClientSettings code review presentation", () => {
   it("accepts supported review presentation patches", () => {
     expect(
       decodeClientSettingsPatch({
-        diffTheme: "github",
+        diffTheme: "jetbrains",
         diffFont: "system-mono",
         diffLineNumbers: false,
         diffBackground: false,
@@ -55,7 +55,7 @@ describe("ClientSettings code review presentation", () => {
         diffIndicators: "bars",
       }),
     ).toEqual({
-      diffTheme: "github",
+      diffTheme: "jetbrains",
       diffFont: "system-mono",
       diffLineNumbers: false,
       diffBackground: false,
