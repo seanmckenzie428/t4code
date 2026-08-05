@@ -1402,7 +1402,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
         const controlOnlyProfile =
           input.sessionProfile === "global-assistant"
             ? yield* materializeCodexControlOnlyProfile({
-                assistantRoot: `${serverConfig.stateDir}/assistant`,
+                assistantRoot: `${serverConfig.stateDir}/quick-chat`,
                 authHomePath: options?.authHomePath ?? codexConfig.homePath,
               }).pipe(
                 Effect.provideService(FileSystem.FileSystem, fileSystem),

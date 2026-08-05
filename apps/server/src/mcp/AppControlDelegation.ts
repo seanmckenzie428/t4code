@@ -37,7 +37,7 @@ export function activeDelegatedTurnCount(
 export function validateDelegationPrincipal(principal: AppControlPrincipal): string | undefined {
   return principal.kind === "global-assistant"
     ? undefined
-    : "Delegation is available only to the environment's T3 Assistant.";
+    : "Delegation is available only to Quick Chat.";
 }
 
 export function validateDelegationTarget(input: {
@@ -48,7 +48,7 @@ export function validateDelegationTarget(input: {
   const target = input.target;
   if (target === undefined || target.deletedAt !== null) return "Delegation target does not exist.";
   if (target.id === input.principal.assistantThreadId || target.kind === "assistant") {
-    return "T3 Assistant cannot delegate to itself or another assistant thread.";
+    return "Quick Chat cannot delegate to itself or another control thread.";
   }
   if (target.kind !== "project") return "Delegation target must be a project thread.";
   if (

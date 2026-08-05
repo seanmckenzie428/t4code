@@ -5,6 +5,7 @@ import {
   type AppCommandResult,
   type AppControlRisk,
   type AppControlSnapshot,
+  type AppControlPrincipal,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 
@@ -48,6 +49,32 @@ export const isAgentDiscoverableCommand = (descriptor: AppCommandDescriptor): bo
 export const isAgentInvocableCommandId = (commandId: string): boolean =>
   !FORBIDDEN_COMMAND_IDS.has(commandId);
 
+export function scopeAppControlSnapshot(
+  snapshot: AppControlSnapshot,
+  principal: AppControlPrincipal,
+): AppControlSnapshot {
+  if (principal.kind === "global-assistant") {
+    return snapshot;
+  }
+  const focusedClient = snapshot.focusedClient;
+  return {
+    ...snapshot,
+    focusedClient:
+      focusedClient?.projectId === principal.projectId ||
+      focusedClient?.threadId === principal.threadId
+        ? focusedClient
+        : null,
+    projects: snapshot.projects.filter((project) => project.id === principal.projectId),
+    threads: snapshot.threads.filter((thread) => thread.id === principal.threadId),
+    views: snapshot.views.filter(
+      (view) =>
+        (view.scope.kind === "thread" && view.scope.threadId === principal.threadId) ||
+        (view.scope.kind === "project" && view.scope.projectId === principal.projectId),
+    ),
+    commands: snapshot.commands.filter(isAgentDiscoverableCommand),
+  };
+}
+
 const requireScope = () =>
   McpInvocationContext.requireAppControlScope().pipe(
     Effect.mapError((error) => ({
@@ -81,7 +108,7 @@ const handlers = {
       const scope = yield* requireScope();
       yield* AppControlPolicy.AppControlPolicy;
       const broker = yield* AppControlBroker.AppControlBroker;
-      return yield* broker.invoke<AppControlSnapshot>({
+      const snapshot = yield* broker.invoke<AppControlSnapshot>({
         scope,
         invocation: {
           actionId: readonlyActionId(scope, "status"),
@@ -89,6 +116,7 @@ const handlers = {
           args: {},
         },
       });
+      return scopeAppControlSnapshot(snapshot, scope.principal);
     }),
   app_commands: (input) =>
     Effect.gen(function* () {

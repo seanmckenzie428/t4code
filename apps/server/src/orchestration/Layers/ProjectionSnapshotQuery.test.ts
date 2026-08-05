@@ -276,6 +276,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
               runOnWorktreeCreate: false,
             },
           ],
+          customActions: [],
           createdAt: "2026-02-24T00:00:00.000Z",
           updatedAt: "2026-02-24T00:00:01.000Z",
           deletedAt: null,
@@ -394,6 +395,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
               runOnWorktreeCreate: false,
             },
           ],
+          customActions: [],
           createdAt: "2026-02-24T00:00:00.000Z",
           updatedAt: "2026-02-24T00:00:01.000Z",
         },
@@ -468,6 +470,8 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       yield* sql`
         INSERT INTO projection_projects (
           project_id,
+          kind,
+          system_role,
           title,
           workspace_root,
           default_model_selection_json,
@@ -476,22 +480,38 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           updated_at,
           deleted_at
         )
-        VALUES (
-          'project-archive-test',
-          'Archive Test',
-          '/tmp/archive-test',
-          '{"provider":"codex","model":"gpt-5-codex"}',
-          '[]',
-          '2026-04-06T00:00:00.000Z',
-          '2026-04-06T00:00:01.000Z',
-          NULL
-        )
+        VALUES
+          (
+            'project-archive-test',
+            'workspace',
+            NULL,
+            'Archive Test',
+            '/tmp/archive-test',
+            '{"provider":"codex","model":"gpt-5-codex"}',
+            '[]',
+            '2026-04-06T00:00:00.000Z',
+            '2026-04-06T00:00:01.000Z',
+            NULL
+          ),
+          (
+            'project-quick-chat-test',
+            'system',
+            'quick-chat',
+            'Quick Chat',
+            '/tmp/quick-chat',
+            '{"provider":"codex","model":"gpt-5-codex"}',
+            '[]',
+            '2026-04-06T00:00:00.000Z',
+            '2026-04-06T00:00:01.000Z',
+            NULL
+          )
       `;
 
       yield* sql`
         INSERT INTO projection_threads (
           thread_id,
           project_id,
+          kind,
           title,
           model_selection_json,
           runtime_mode,
@@ -512,6 +532,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           (
             'thread-active',
             'project-archive-test',
+            'project',
             'Active Thread',
             '{"provider":"codex","model":"gpt-5-codex"}',
             'full-access',
@@ -531,6 +552,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           (
             'thread-archived',
             'project-archive-test',
+            'project',
             'Archived Thread',
             '{"provider":"codex","model":"gpt-5-codex"}',
             'full-access',
@@ -545,6 +567,26 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             '2026-04-06T00:00:04.000Z',
             '2026-04-06T00:00:05.000Z',
             '2026-04-06T00:00:06.000Z',
+            NULL
+          ),
+          (
+            'thread-quick-archived',
+            'project-quick-chat-test',
+            'quick',
+            'Saved Quick Chat',
+            '{"provider":"codex","model":"gpt-5-codex"}',
+            'approval-required',
+            'default',
+            NULL,
+            NULL,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            '2026-04-06T00:00:07.000Z',
+            '2026-04-06T00:00:08.000Z',
+            '2026-04-06T00:00:09.000Z',
             NULL
           )
       `;
@@ -570,9 +612,10 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const archivedShellSnapshot = yield* snapshotQuery.getArchivedShellSnapshot();
       assert.deepEqual(
         archivedShellSnapshot.threads.map((thread) => thread.id),
-        [ThreadId.make("thread-archived")],
+        [ThreadId.make("thread-archived"), ThreadId.make("thread-quick-archived")],
       );
       assert.equal(archivedShellSnapshot.threads[0]?.archivedAt, "2026-04-06T00:00:06.000Z");
+      assert.equal(archivedShellSnapshot.threads[1]?.kind, "quick");
     }),
   );
 

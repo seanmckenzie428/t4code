@@ -130,7 +130,9 @@ export const ClientUiSnapshot = Schema.Struct({
   surface: Schema.Literals(["web", "desktop"]),
   projectId: Schema.NullOr(ProjectId),
   threadId: Schema.NullOr(ThreadId),
-  assistantOpen: Schema.Boolean,
+  quickChatOpen: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  /** Legacy client field accepted during rolling upgrades. */
+  assistantOpen: Schema.optionalKey(Schema.Boolean),
   activePanel: Schema.NullOr(TrimmedNonEmptyString),
   revision: NonNegativeInt,
 });

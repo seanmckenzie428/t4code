@@ -3,7 +3,7 @@
 Status: accepted and implemented for this fork (2026-08-02).
 
 This document is the architecture decision record and implementation ledger
-for agent control, the environment assistant, generated views, and extensions.
+for agent control, Quick Chat, generated views, and extensions.
 
 T3 exposes a typed semantic control plane to coding agents. Agents discover
 registered commands and invoke them with schema-validated arguments. They do
@@ -48,21 +48,33 @@ host retains 256 client receipts. Active work is never evicted. Approval
 responses, user-input responses, credentials, pairing, grant mutation, raw
 orchestration dispatch, and direct database access are not discoverable.
 
-## Global assistant and delegation
+## Quick Chat and delegation
 
-Each environment may own an immutable system project/assistant thread. The
-drawer persists independently of project navigation. Codex runs from an
-isolated home with a named control-only profile: explicit root/workspace/temp
-denial, network disabled, and shell, approval, user-input, browser, apps,
-plugins, memories, and multi-agent tools disabled. Startup fails unless Codex
-reports the expected home, version, profile provenance, root deny, and network
-deny.
+Quick Chat uses a hidden environment system project and disposable `quick`
+threads. Codex runs from an isolated home with a named control-only profile:
+explicit root/workspace/temp denial, network disabled, and shell, approval,
+user-input, browser, apps, plugins, memories, and multi-agent tools disabled.
+Startup fails unless Codex reports the expected home, version, profile
+provenance, root deny, and network deny.
 
 Direct conversation, one-level delegation, origin metadata, a three-turn
 concurrency limit, grant revocation, and stop controls are implemented. Target
-project threads retain normal project permissions; the assistant never
+project threads retain normal project permissions; Quick Chat never
 inherits them. Proactive suggestion cards and mute controls are not yet
 implemented.
+
+Ordinary Codex project threads also receive app-control credentials, scoped to
+their current environment, project, and thread. This lets a regular chat
+inspect and control its own T4 context without switching to Quick Chat. Read
+snapshots are filtered to the same scope; destructive and
+external actions retain their normal confirmation requirements.
+
+The web client subscribes to the active quick thread directly, so it
+can render in a floating popup without entering the public project/thread
+index. The first message atomically creates the thread and starts its turn.
+The active thread reference is client-persisted; closing it or starting a
+replacement archives the previous thread for reopen/delete from Settings
+history.
 
 ## Generated views
 
@@ -120,7 +132,7 @@ relay, tunnel, web, and desktop clients.
 - Extension management and external-origin approval have no end-user UI.
 - Lotus terminal/preview/URL handoffs are typed, but generic app-control
   execution for every handoff is incomplete.
-- Mobile decodes contracts and hides unsupported controls; it does not host the
-  assistant drawer or generated views.
+- Mobile decodes contracts and hides unsupported controls; it does not host
+  Quick Chat or generated views.
 - Integrated web/desktop certification remains a manual release step; see the
   operations runbook.

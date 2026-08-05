@@ -240,23 +240,23 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       });
       const projectKind = command.kind ?? "workspace";
       if (
-        (projectKind === "system" && command.systemRole !== "global-assistant") ||
+        (projectKind === "system" && command.systemRole === undefined) ||
         (projectKind === "workspace" && command.systemRole !== undefined)
       ) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: "Only a system project may hold the global-assistant system role.",
+          detail: "System projects require a system role, and workspace projects cannot hold one.",
         });
       }
       if (
-        command.systemRole === "global-assistant" &&
+        command.systemRole !== undefined &&
         readModel.projects.some(
-          (project) => project.deletedAt === null && project.systemRole === "global-assistant",
+          (project) => project.deletedAt === null && project.systemRole === command.systemRole,
         )
       ) {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: "An active global-assistant system project already exists.",
+          detail: `An active '${command.systemRole}' system project already exists.`,
         });
       }
 
@@ -384,6 +384,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
           detail: `Assistant thread '${command.threadId}' requires a global-assistant system project.`,
+        });
+      }
+      if (threadKind === "quick" && project.systemRole !== "quick-chat") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Quick-chat thread '${command.threadId}' requires a quick-chat system project.`,
         });
       }
       if (threadKind === "project" && project.kind === "system") {
@@ -813,13 +819,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
-      if (targetThread.kind === "assistant") {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail:
-            "T3 Assistant cannot start because this build does not enforce the required control-only Codex permission profile.",
-        });
-      }
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({

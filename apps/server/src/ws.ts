@@ -675,11 +675,17 @@ const makeWsRpcLayer = (
                     threadId,
                   }),
                 onSome: (nextThread) =>
-                  Option.some<OrchestrationShellStreamEvent>({
-                    kind: "thread-upserted" as const,
-                    sequence,
-                    thread: nextThread,
-                  }),
+                  nextThread.kind === "assistant" || nextThread.kind === "quick"
+                    ? Option.some<OrchestrationShellStreamEvent>({
+                        kind: "thread-removed" as const,
+                        sequence,
+                        threadId,
+                      })
+                    : Option.some<OrchestrationShellStreamEvent>({
+                        kind: "thread-upserted" as const,
+                        sequence,
+                        thread: nextThread,
+                      }),
               }),
             ),
           ),

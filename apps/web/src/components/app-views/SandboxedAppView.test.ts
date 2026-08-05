@@ -15,7 +15,7 @@ const context = (): SandboxedAppViewBridgeContext => ({
   channelId: "secret-channel",
   viewId: "sandbox",
   revision: 3,
-  allowedCommandIds: new Set(["assistant.toggle", "ui.project.select"]),
+  allowedCommandIds: new Set(["quick-chat.toggle", "ui.project.select"]),
   seenRequestIds: new Set(),
 });
 
@@ -26,7 +26,7 @@ const request = {
   viewId: "sandbox",
   revision: 3,
   requestId: "request-1",
-  commandId: "assistant.toggle",
+  commandId: "quick-chat.toggle",
   args: {},
 } as const;
 
@@ -42,7 +42,7 @@ describe("SandboxedAppView", () => {
 
   it("binds requests to protocol, opaque channel, view, and revision", () => {
     expect(decodeSandboxedAppViewBridgeRequest(request, context())).toMatchObject({
-      commandId: "assistant.toggle",
+      commandId: "quick-chat.toggle",
       requestId: "request-1",
     });
     for (const mutation of [

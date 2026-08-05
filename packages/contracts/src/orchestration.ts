@@ -257,9 +257,9 @@ export type ProjectCustomAction = typeof ProjectCustomAction.Type;
 
 export const OrchestrationProjectKind = Schema.Literals(["workspace", "system"]);
 export type OrchestrationProjectKind = typeof OrchestrationProjectKind.Type;
-export const OrchestrationProjectSystemRole = Schema.Literal("global-assistant");
+export const OrchestrationProjectSystemRole = Schema.Literals(["global-assistant", "quick-chat"]);
 export type OrchestrationProjectSystemRole = typeof OrchestrationProjectSystemRole.Type;
-export const OrchestrationThreadKind = Schema.Literals(["project", "assistant"]);
+export const OrchestrationThreadKind = Schema.Literals(["project", "assistant", "quick"]);
 export type OrchestrationThreadKind = typeof OrchestrationThreadKind.Type;
 
 export const OrchestrationWorkspaceBinding = Schema.Struct({

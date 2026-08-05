@@ -1692,7 +1692,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   : Result.failVoid,
               ),
               threads: Arr.filterMap(threadRows, (row) =>
-                row.deletedAt === null && row.kind !== "assistant"
+                row.deletedAt === null && row.kind !== "assistant" && row.kind !== "quick"
                   ? Result.succeed({
                       id: row.threadId,
                       projectId: row.projectId,
@@ -1830,7 +1830,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               snapshotSequence: computeSnapshotSequence(stateRows),
               projects: Arr.filterMap(projectRows, (row) =>
                 row.deletedAt === null &&
-                row.kind !== "system" &&
+                (row.kind !== "system" || row.systemRole === "quick-chat") &&
                 activeProjectIds.has(row.projectId)
                   ? Result.succeed(
                       mapProjectShellRow(row, repositoryIdentities.get(row.projectId) ?? null),

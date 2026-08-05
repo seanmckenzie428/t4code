@@ -229,7 +229,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const principal =
         instance.driverKind !== "codex" || Option.isNone(thread)
           ? undefined
-          : thread.value.kind === "assistant"
+          : thread.value.kind === "assistant" || thread.value.kind === "quick"
             ? ({ kind: "global-assistant", assistantThreadId: threadId } as const)
             : ({
                 kind: "thread-agent",
@@ -267,7 +267,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const thread = yield* projectionSnapshotQuery.value
         .getThreadShellById(threadId)
         .pipe(Effect.orElseSucceed(() => Option.none()));
-      return Option.isSome(thread) && thread.value.kind === "assistant"
+      return Option.isSome(thread) &&
+        (thread.value.kind === "assistant" || thread.value.kind === "quick")
         ? ("global-assistant" as const)
         : undefined;
     });

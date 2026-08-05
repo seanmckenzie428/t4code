@@ -39,8 +39,12 @@ Commands are IDs like `terminal.toggle`, `commandPalette.toggle`, `preview.refre
 
 `filePicker.toggle` opens file search for the active project and defaults to `mod+p`.
 `projectSearch.toggle` searches inside the active project's files and defaults to `mod+shift+f`.
-`assistant.toggle` opens or closes the environment assistant drawer and defaults to `mod+shift+a`.
-Repeating either shortcut closes that search, and switching shortcuts replaces the open search.
+`quickChat.toggle` opens or closes Quick Chat and defaults to `mod+shift+space`. Quick Chat is not
+attached to the active project and does not appear in the project sidebar. Closing it or starting
+a new Quick Chat saves the previous conversation under **Settings** → **Archived** → **Quick Chat
+history**.
+Repeating a toggle shortcut closes its surface. Switching between the file and project search
+shortcuts replaces the open search.
 
 The command palette searches active thread titles, projects, branches, user messages, and final
 agent responses across connected environments. Message matches show one labeled excerpt while

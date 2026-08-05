@@ -29,7 +29,6 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
-  BotIcon,
   CornerLeftUpIcon,
   FileSearchIcon,
   FolderIcon,
@@ -1603,17 +1602,16 @@ function OpenCommandPaletteDialog(props: {
   const assistantEnvironmentId = currentProjectEnvironmentId ?? primaryEnvironmentId;
   actionItems.push({
     kind: "action",
-    value: "action:assistant-toggle",
-    searchTerms: ["assistant", "ai", "codex", "control", "drawer"],
-    title: "Toggle T3 Assistant",
+    value: "action:quick-chat-toggle",
+    searchTerms: ["quick chat", "assistant", "control", "ephemeral", "ai", "codex"],
+    title: "Toggle Quick Chat",
     disabled: assistantEnvironmentId === null,
-    icon: <BotIcon className={ITEM_ICON_CLASS} />,
-    shortcutCommand: "assistant.toggle",
+    icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
+    shortcutCommand: "quickChat.toggle",
     run: async () => {
       if (assistantEnvironmentId === null) return;
-      await invokeWebAppCommand("assistant.toggle", {
+      await invokeWebAppCommand("quick-chat.toggle", {
         environmentId: assistantEnvironmentId,
-        ...(currentProjectId ? { projectId: currentProjectId } : {}),
         source: "palette",
       });
     },
