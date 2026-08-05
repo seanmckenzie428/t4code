@@ -41,6 +41,7 @@ export function setDiffFileViewed(
     nextCollapsed.add(filePath);
   } else {
     nextReviewed.delete(filePath);
+    nextCollapsed.delete(filePath);
   }
   return { reviewedRevisions: nextReviewed, collapsedFilePaths: nextCollapsed };
 }

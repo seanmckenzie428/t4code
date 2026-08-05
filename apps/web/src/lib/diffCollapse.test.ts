@@ -27,7 +27,7 @@ describe("diff collapse controls", () => {
     expect(toggleAllDiffFiles(FILE_KEYS, new Set(FILE_KEYS))).toEqual(new Set());
   });
 
-  it("collapses viewed files without changing manual collapse state when unviewed", () => {
+  it("collapses viewed files and expands them when unviewed", () => {
     const viewed = setDiffFileViewed(FIRST_FILE_KEY, "revision-1", true, new Map(), new Set());
     expect(viewed.reviewedRevisions).toEqual(new Map([[FIRST_FILE_KEY, "revision-1"]]));
     expect(viewed.collapsedFilePaths).toEqual(new Set([FIRST_FILE_KEY]));
@@ -40,7 +40,7 @@ describe("diff collapse controls", () => {
       viewed.collapsedFilePaths,
     );
     expect(unviewed.reviewedRevisions).toEqual(new Map());
-    expect(unviewed.collapsedFilePaths).toEqual(new Set([FIRST_FILE_KEY]));
+    expect(unviewed.collapsedFilePaths).toEqual(new Set());
   });
 
   it("requires review again when a viewed file revision changes", () => {

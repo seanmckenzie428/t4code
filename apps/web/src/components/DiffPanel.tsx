@@ -10,7 +10,6 @@ import type { ScopedThreadRef, TurnId } from "@t3tools/contracts";
 import {
   ArrowRightIcon,
   CheckIcon,
-  CheckCircle2Icon,
   ChevronDownIcon,
   ChevronRightIcon,
   ChevronsDownUpIcon,
@@ -1147,22 +1146,33 @@ export default function DiffPanel({
                           )}
                           <button
                             type="button"
+                            role="checkbox"
                             className={cn(
-                              "ml-2 inline-flex h-5 items-center gap-1 rounded-sm px-1.5 font-sans text-[10px] font-medium transition-colors hover:bg-foreground/10 focus-visible:outline-hidden",
-                              viewed ? "text-foreground" : "text-muted-foreground",
+                              "ml-2 inline-flex h-6 items-center gap-1.5 rounded-md border px-1.5 font-sans text-[11px] font-medium shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+                              viewed
+                                ? "border-primary/70 bg-primary/20 text-foreground hover:bg-primary/25"
+                                : "border-border bg-background/55 text-muted-foreground hover:bg-muted/80 hover:text-foreground",
                             )}
                             aria-label={
                               viewed ? `Mark ${filePath} unviewed` : `Mark ${filePath} viewed`
                             }
-                            aria-pressed={viewed}
+                            aria-checked={viewed}
                             onClick={(event) => {
                               event.stopPropagation();
                               updateDiffFileViewed(filePath, !viewed);
                             }}
                           >
-                            <CheckCircle2Icon
-                              className={cn("size-3", viewed && "fill-primary/20 text-primary")}
-                            />
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "inline-flex size-3.5 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+                                viewed
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-muted-foreground/60 bg-background/80",
+                              )}
+                            >
+                              {viewed && <CheckIcon className="size-2.5 stroke-3" />}
+                            </span>
                             Viewed
                           </button>
                         </>
