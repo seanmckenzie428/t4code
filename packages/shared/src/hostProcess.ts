@@ -9,6 +9,13 @@ export const HostProcessPlatform = Context.Reference<NodeJS.Platform>(
   },
 );
 
+export const HostProcessId = Context.Reference<number>(
+  "@t3tools/shared/hostProcess/HostProcessId",
+  {
+    defaultValue: () => process.pid,
+  },
+);
+
 export const HostProcessArchitecture = Context.Reference<NodeJS.Architecture>(
   "@t3tools/shared/hostProcess/HostProcessArchitecture",
   {

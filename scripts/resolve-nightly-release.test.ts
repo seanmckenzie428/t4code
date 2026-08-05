@@ -9,6 +9,9 @@ import * as PlatformError from "effect/PlatformError";
 
 import {
   readDesktopBaseVersion,
+  resolveLocalNightlyBuildNumber,
+  resolveLocalNightlyDate,
+  resolveLocalNightlyVersion,
   resolveNightlyBaseVersion,
   resolveNightlyReleaseMetadata,
   resolveNightlyTargetVersion,
@@ -51,6 +54,15 @@ it("derives nightly metadata including the short commit sha in the release name"
     },
   );
 });
+
+it.effect("derives a strict local nightly version from the next patch and current UTC time", () =>
+  Effect.gen(function* () {
+    const now = { year: 2026, month: 8, day: 4, hours: 14, minutes: 5, seconds: 6 };
+    assert.equal(resolveLocalNightlyDate(now), "20260804");
+    assert.equal(resolveLocalNightlyBuildNumber(now), 50_707);
+    assert.equal(yield* resolveLocalNightlyVersion("0.0.31", now), "0.0.32-nightly.20260804.50707");
+  }),
+);
 
 it.effect("preserves the GITHUB_OUTPUT configuration cause", () => {
   const metadata = resolveNightlyReleaseMetadata("1.2.4", "20260620", 42, "abcdef1234567890");

@@ -4,15 +4,18 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { beforeEach, vi } from "vite-plus/test";
 
-const { createClerkBridgeMock, storageAdapter, storageMock } = vi.hoisted(() => ({
-  createClerkBridgeMock: vi.fn(),
-  storageAdapter: {
-    getItem: vi.fn(),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-  },
-  storageMock: vi.fn(),
-}));
+const { acquireStateLockMock, createClerkBridgeMock, storageAdapter, storageMock } = vi.hoisted(
+  () => ({
+    acquireStateLockMock: vi.fn(() => ({ status: "acquired", release: vi.fn() })),
+    createClerkBridgeMock: vi.fn(),
+    storageAdapter: {
+      getItem: vi.fn(),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+    },
+    storageMock: vi.fn(),
+  }),
+);
 
 vi.mock("@clerk/electron", () => ({
   createClerkBridge: createClerkBridgeMock,
@@ -22,9 +25,14 @@ vi.mock("@clerk/electron/storage", () => ({
   storage: storageMock,
 }));
 
+vi.mock("./DesktopStateDirectoryLock.ts", () => ({
+  acquireDesktopStateDirectoryLock: acquireStateLockMock,
+}));
+
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as ElectronApp from "../electron/ElectronApp.ts";
+import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopClerk from "./DesktopClerk.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
@@ -33,6 +41,7 @@ const makeDesktopClerkLayer = (isDevelopment = true, events: string[] = []) => {
   const environment = DesktopEnvironment.DesktopEnvironment.of({
     stateDir: "/tmp/t3-state",
     isDevelopment,
+    displayName: isDevelopment ? "T4 Code (Dev)" : "T4 Code (Alpha)",
     appDataDirectory: "/tmp/app-data",
     userDataDirName: isDevelopment ? "t3code-dev" : "t3code",
     legacyUserDataDirName: isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)",
@@ -45,12 +54,16 @@ const makeDesktopClerkLayer = (isDevelopment = true, events: string[] = []) => {
         events.push(`setPath:${name}:${value}`);
       }),
   } as unknown as ElectronApp.ElectronApp["Service"];
+  const electronDialog = {
+    showErrorBox: () => Effect.void,
+  } as unknown as ElectronDialog.ElectronDialog["Service"];
 
   return DesktopClerk.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
         Layer.succeed(DesktopEnvironment.DesktopEnvironment, environment),
         Layer.succeed(ElectronApp.ElectronApp, electronApp),
+        Layer.succeed(ElectronDialog.ElectronDialog, electronDialog),
         FileSystem.layerNoop({ exists: () => Effect.succeed(false) }),
       ),
     ),
@@ -59,6 +72,8 @@ const makeDesktopClerkLayer = (isDevelopment = true, events: string[] = []) => {
 
 describe("DesktopClerk", () => {
   beforeEach(() => {
+    acquireStateLockMock.mockReset();
+    acquireStateLockMock.mockReturnValue({ status: "acquired", release: vi.fn() });
     createClerkBridgeMock.mockReset();
     storageMock.mockReset();
   });
@@ -182,6 +197,7 @@ describe("DesktopClerk", () => {
   });
 
   it.effect("quits and interrupts startup in a secondary instance", () => {
+    acquireStateLockMock.mockReturnValue({ status: "same-application", release: vi.fn() });
     storageMock.mockReturnValue(storageAdapter);
     createClerkBridgeMock.mockReturnValue({ cleanup: vi.fn(), isPrimaryInstance: false });
     const quit = vi.fn();

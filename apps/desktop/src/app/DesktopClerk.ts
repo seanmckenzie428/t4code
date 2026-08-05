@@ -8,11 +8,14 @@ import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 
 import { clerkFrontendApiHostnameFromPublishableKey } from "@t3tools/shared/relayAuth";
+import { HostProcessId } from "@t3tools/shared/hostProcess";
 import * as ElectronApp from "../electron/ElectronApp.ts";
+import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopAppIdentity from "./DesktopAppIdentity.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
+import { acquireDesktopStateDirectoryLock } from "./DesktopStateDirectoryLock.ts";
 
 declare const __T3CODE_BUILD_CLERK_PUBLISHABLE_KEY__: string | undefined;
 
@@ -86,6 +89,8 @@ export function createDesktopClerkBridge(stateDir: string, isDevelopment: boolea
 export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const electronApp = yield* ElectronApp.ElectronApp;
+  const electronDialog = yield* ElectronDialog.ElectronDialog;
+  const hostProcessId = yield* HostProcessId;
 
   // Electron scopes the single-instance lock to the userData directory and
   // creates that directory when the lock is acquired. The SDK bridge takes
@@ -95,6 +100,27 @@ export const make = Effect.gen(function* () {
   // detection in resolveUserDataPath match on fresh installs.
   const userDataPath = yield* DesktopAppIdentity.resolveUserDataPath;
   yield* electronApp.setPath("userData", userDataPath);
+
+  const stateDirectoryLock = yield* Effect.acquireRelease(
+    Effect.sync(() =>
+      acquireDesktopStateDirectoryLock(environment.stateDir, environment.displayName, {
+        pid: hostProcessId,
+        platform: environment.platform,
+      }),
+    ),
+    (lock) => Effect.sync(() => lock.status === "acquired" && lock.release()),
+  );
+
+  if (stateDirectoryLock.status === "occupied") {
+    const processDetail =
+      stateDirectoryLock.pid === null ? "" : ` (process ${String(stateDirectoryLock.pid)})`;
+    yield* electronDialog.showErrorBox(
+      `${environment.displayName} is already running`,
+      `${stateDirectoryLock.displayName} is already using this T3/T4 Code data directory${processDetail}. Quit it before opening ${environment.displayName}.`,
+    );
+    yield* electronApp.quit;
+    return yield* Effect.interrupt;
+  }
 
   const bridge = yield* Effect.acquireRelease(
     Effect.try({

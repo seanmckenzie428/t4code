@@ -113,6 +113,27 @@ export const resolveNightlyReleaseMetadata = (
   };
 };
 
+export interface LocalNightlyClock {
+  readonly year: number;
+  readonly month: number;
+  readonly day: number;
+  readonly hours: number;
+  readonly minutes: number;
+  readonly seconds: number;
+}
+
+export const resolveLocalNightlyDate = (now: LocalNightlyClock) =>
+  `${now.year}${String(now.month).padStart(2, "0")}${String(now.day).padStart(2, "0")}`;
+
+export const resolveLocalNightlyBuildNumber = (now: LocalNightlyClock) =>
+  now.hours * 3600 + now.minutes * 60 + now.seconds + 1;
+
+export const resolveLocalNightlyVersion = (packageVersion: string, now: LocalNightlyClock) =>
+  Effect.gen(function* () {
+    const baseVersion = yield* resolveNightlyTargetVersion(packageVersion);
+    return `${baseVersion}-nightly.${resolveLocalNightlyDate(now)}.${resolveLocalNightlyBuildNumber(now)}`;
+  });
+
 export const readDesktopBaseVersion = Effect.fn("readDesktopBaseVersion")(function* (
   rootDir: string | undefined,
 ) {

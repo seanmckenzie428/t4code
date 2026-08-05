@@ -84,6 +84,7 @@ const readWorkspaceConfig = Effect.fn("readWorkspaceConfig")(function* () {
 });
 
 interface DesktopBuildIconAssets {
+  readonly macIconComposerProject: string;
   readonly macIconPng: string;
   readonly linuxIconPng: string;
   readonly windowsIconIco: string;
@@ -1254,44 +1255,28 @@ const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* (input:
   }
 });
 
-function generateMacIconSet(
+export const stageMacIconComposerProject = Effect.fn("stageMacIconComposerProject")(function* (
+  stageResourcesDir: string,
+  sourceProject: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  if (!(yield* fs.exists(sourceProject))) {
+    return yield* new DesktopIconSourceMissingError({
+      platform: "mac",
+      sourcePath: sourceProject,
+    });
+  }
+
+  yield* fs.copy(sourceProject, path.join(stageResourcesDir, "icon.icon"));
+});
+
+function stageMacIcons(
+  stageResourcesDir: string,
+  sourceProject: string,
   sourcePng: string,
-  targetIcns: string,
-  tmpRoot: string,
-  path: Path.Path,
   verbose: boolean,
 ) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const iconsetDir = path.join(tmpRoot, "icon.iconset");
-    yield* fs.makeDirectory(iconsetDir, { recursive: true });
-
-    const iconSizes = [16, 32, 128, 256, 512] as const;
-    for (const size of iconSizes) {
-      yield* runCommand(
-        ChildProcess.make(
-          {},
-        )`sips -z ${size} ${size} ${sourcePng} --out ${path.join(iconsetDir, `icon_${size}x${size}.png`)}`,
-        { label: `sips icon ${size}x${size}`, verbose },
-      );
-
-      const retinaSize = size * 2;
-      yield* runCommand(
-        ChildProcess.make(
-          {},
-        )`sips -z ${retinaSize} ${retinaSize} ${sourcePng} --out ${path.join(iconsetDir, `icon_${size}x${size}@2x.png`)}`,
-        { label: `sips icon ${size}x${size}@2x`, verbose },
-      );
-    }
-
-    yield* runCommand(ChildProcess.make({})`iconutil -c icns ${iconsetDir} -o ${targetIcns}`, {
-      label: "iconutil icns",
-      verbose,
-    });
-  });
-}
-
-function stageMacIcons(stageResourcesDir: string, sourcePng: string, verbose: boolean) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -1302,19 +1287,13 @@ function stageMacIcons(stageResourcesDir: string, sourcePng: string, verbose: bo
       });
     }
 
-    const tmpRoot = yield* fs.makeTempDirectoryScoped({
-      prefix: "t3code-icon-build-",
-    });
+    yield* stageMacIconComposerProject(stageResourcesDir, sourceProject);
 
     const iconPngPath = path.join(stageResourcesDir, "icon.png");
-    const iconIcnsPath = path.join(stageResourcesDir, "icon.icns");
-
     yield* runCommand(ChildProcess.make({})`sips -z 512 512 ${sourcePng} --out ${iconPngPath}`, {
       label: "sips mac icon",
       verbose,
     });
-
-    yield* generateMacIconSet(sourcePng, iconIcnsPath, tmpRoot, path, verbose);
   });
 }
 
@@ -1486,6 +1465,7 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
 export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
   if (resolveDesktopUpdateChannel(version) === "nightly") {
     return {
+      macIconComposerProject: BRAND_ASSET_PATHS.nightlyIconComposerProject,
       macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
       linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
       windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
@@ -1493,6 +1473,7 @@ export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIcon
   }
 
   return {
+    macIconComposerProject: BRAND_ASSET_PATHS.productionIconComposerProject,
     macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
     linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
     windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
@@ -1567,7 +1548,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "mac") {
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
-      icon: "icon.icns",
+      icon: "icon.icon",
       category: "public.app-category.developer-tools",
       protocols: [
         {
@@ -1581,6 +1562,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
             provisioningProfile: macPasskeySigning.provisioningProfilePath,
           }
         : {}),
+    };
+    buildConfig.dmg = {
+      // Use electron-builder's Icon Composer compiler for the DMG badge too.
+      // Tahoe's iconutil rejects even iconsets extracted from valid ICNS files.
+      badgeIcon: "icon.icon",
     };
   }
 
@@ -1633,7 +1619,12 @@ const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(f
   verbose: boolean,
 ) {
   if (platform === "mac") {
-    yield* stageMacIcons(stageResourcesDir, iconAssets.macIconPng, verbose);
+    yield* stageMacIcons(
+      stageResourcesDir,
+      iconAssets.macIconComposerProject,
+      iconAssets.macIconPng,
+      verbose,
+    );
     return;
   }
 
@@ -1850,6 +1841,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     options.platform,
     stageResourcesDir,
     {
+      macIconComposerProject: path.join(repoRoot, iconAssets.macIconComposerProject),
       macIconPng: path.join(repoRoot, iconAssets.macIconPng),
       linuxIconPng: path.join(repoRoot, iconAssets.linuxIconPng),
       windowsIconIco: path.join(repoRoot, iconAssets.windowsIconIco),

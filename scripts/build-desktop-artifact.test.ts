@@ -2,8 +2,10 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/unstable/process";
@@ -34,6 +36,7 @@ import {
   resolveDesktopProductName,
   resolveDesktopUpdateChannel,
   resolveDesktopWebAssetBrand,
+  stageMacIconComposerProject,
   resolveResourceMonitorRustTargets,
   resourceMonitorExecutableName,
   resolveGitHubPublishConfig,
@@ -97,17 +100,39 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
     assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17"), {
+      macIconComposerProject: BRAND_ASSET_PATHS.productionIconComposerProject,
       macIconPng: BRAND_ASSET_PATHS.productionMacIconPng,
       linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
       windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
     });
 
     assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17-nightly.20260413.42"), {
+      macIconComposerProject: BRAND_ASSET_PATHS.nightlyIconComposerProject,
       macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
       linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
       windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
     });
   });
+
+  it.effect("stages the selected Icon Composer project for macOS packaging", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "desktop-icon-composer-test-" });
+      const source = path.join(root, "nightly.icon");
+      const resources = path.join(root, "resources");
+      yield* fs.makeDirectory(source, { recursive: true });
+      yield* fs.makeDirectory(resources, { recursive: true });
+      yield* fs.writeFileString(path.join(source, "icon.json"), '{"fill":"nightly"}\n');
+
+      yield* stageMacIconComposerProject(resources, source);
+
+      assert.equal(
+        yield* fs.readFileString(path.join(resources, "icon.icon", "icon.json")),
+        '{"fill":"nightly"}\n',
+      );
+    }),
+  );
 
   it("switches the bundled splash and favicon branding for nightly versions", () => {
     assert.equal(resolveDesktopWebAssetBrand("0.0.17"), "production");
@@ -351,6 +376,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.deepStrictEqual(win.asarUnpack, WINDOWS_ASAR_UNPACK);
       assert.equal(mac.productName, "T4 Code (Alpha)");
       assert.equal(mac.artifactName, "T4-Code-${version}-${arch}.${ext}");
+      assert.equal((mac.mac as Record<string, unknown>).icon, "icon.icon");
+      assert.equal((mac.dmg as Record<string, unknown>).badgeIcon, "icon.icon");
       // Linux must register the renderer schemes so the generated .desktop
       // entry advertises MimeType=x-scheme-handler/t3code; for OAuth deep links.
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [

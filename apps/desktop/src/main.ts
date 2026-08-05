@@ -193,6 +193,7 @@ const desktopClerkLayer = DesktopClerk.layer.pipe(
   Layer.provideMerge(desktopEnvironmentLayer),
   Layer.provideMerge(NodeServices.layer),
   Layer.provideMerge(ElectronApp.layer),
+  Layer.provideMerge(ElectronDialog.layer),
 );
 
 const desktopRuntimeLayer = desktopClerkLayer.pipe(
