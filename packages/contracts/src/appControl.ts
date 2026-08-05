@@ -157,6 +157,29 @@ export const AppControlThreadSummary = Schema.Struct({
 });
 export type AppControlThreadSummary = typeof AppControlThreadSummary.Type;
 
+export const AppControlViewPlacementSummary = Schema.Struct({
+  slot: Schema.Literals(["chat-topbar", "project-sidebar", "right-panel-launcher"]),
+  mode: Schema.optional(Schema.Literals(["append", "replace"])),
+  targetId: Schema.optional(Schema.Literals(["generated-views", "browser", "terminal", "files"])),
+  label: Schema.optional(TrimmedNonEmptyString),
+  description: Schema.optional(TrimmedNonEmptyString),
+  icon: Schema.optional(
+    Schema.Literals([
+      "sparkles",
+      "dashboard",
+      "globe",
+      "terminal",
+      "files",
+      "diff",
+      "database",
+      "server",
+      "link",
+    ]),
+  ),
+  order: Schema.optional(Schema.Int),
+});
+export type AppControlViewPlacementSummary = typeof AppControlViewPlacementSummary.Type;
+
 export const AppControlViewSummary = Schema.Struct({
   id: TrimmedNonEmptyString,
   title: TrimmedNonEmptyString,
@@ -167,6 +190,7 @@ export const AppControlViewSummary = Schema.Struct({
     Schema.Struct({ kind: Schema.Literal("personal") }),
     Schema.Struct({ kind: Schema.Literal("project"), projectId: ProjectId }),
   ]),
+  placements: Schema.optional(Schema.Array(AppControlViewPlacementSummary)),
 });
 export type AppControlViewSummary = typeof AppControlViewSummary.Type;
 

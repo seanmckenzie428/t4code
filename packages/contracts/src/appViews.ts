@@ -23,6 +23,76 @@ export const AppViewScope = Schema.Union([
 ]);
 export type AppViewScope = typeof AppViewScope.Type;
 
+export const APP_VIEW_PLACEMENT_SLOTS = [
+  "chat-topbar",
+  "project-sidebar",
+  "right-panel-launcher",
+] as const;
+export const AppViewPlacementSlot = Schema.Literals(APP_VIEW_PLACEMENT_SLOTS);
+export type AppViewPlacementSlot = typeof AppViewPlacementSlot.Type;
+
+export const APP_VIEW_PLACEMENT_ICONS = [
+  "sparkles",
+  "dashboard",
+  "globe",
+  "terminal",
+  "files",
+  "diff",
+  "database",
+  "server",
+  "link",
+] as const;
+export const AppViewPlacementIcon = Schema.Literals(APP_VIEW_PLACEMENT_ICONS);
+export type AppViewPlacementIcon = typeof AppViewPlacementIcon.Type;
+
+export const APP_VIEW_RIGHT_PANEL_LAUNCHER_TARGETS = [
+  "generated-views",
+  "browser",
+  "terminal",
+  "files",
+] as const;
+export const AppViewRightPanelLauncherTarget = Schema.Literals(
+  APP_VIEW_RIGHT_PANEL_LAUNCHER_TARGETS,
+);
+export type AppViewRightPanelLauncherTarget = typeof AppViewRightPanelLauncherTarget.Type;
+
+export const AppViewPlacement = Schema.Struct({
+  slot: AppViewPlacementSlot,
+  mode: Schema.optionalKey(Schema.Literals(["append", "replace"])),
+  targetId: Schema.optionalKey(AppViewRightPanelLauncherTarget),
+  label: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(80))),
+  description: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(200))),
+  icon: Schema.optionalKey(AppViewPlacementIcon),
+  order: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: -100, maximum: 100 }))),
+}).check(
+  Schema.makeFilter((placement) => {
+    const mode = placement.mode ?? "append";
+    if (mode === "replace") {
+      return (
+        (placement.slot === "right-panel-launcher" && placement.targetId !== undefined) ||
+        "Replacement placements require a right-panel-launcher targetId."
+      );
+    }
+    return (
+      placement.targetId === undefined ||
+      "Append placements cannot target a built-in right-panel launcher."
+    );
+  }),
+);
+export type AppViewPlacement = typeof AppViewPlacement.Type;
+
+const AppViewPlacements = Schema.Array(AppViewPlacement)
+  .check(Schema.isMaxLength(12))
+  .check(
+    Schema.makeFilter((placements) => {
+      const keys = placements.map(
+        (placement) =>
+          `${placement.slot}:${placement.mode ?? "append"}:${placement.targetId ?? ""}`,
+      );
+      return new Set(keys).size === keys.length || "App view placements must be unique.";
+    }),
+  );
+
 const APP_VIEW_BINDING_PATH = /^\$?(?:\.[A-Za-z0-9_-]+|\[\d+\])*$/;
 const APP_VIEW_FORBIDDEN_PATH_SEGMENT = /(?:^|\.)(?:__proto__|constructor|prototype)(?:\.|$)/;
 
@@ -149,29 +219,32 @@ const AppViewManifestBase = {
   revision: AppViewRevision,
   title: TrimmedNonEmptyString,
   scope: AppViewScope,
+  placements: Schema.optionalKey(AppViewPlacements),
 } as const;
+
+function validateNativeAppViewManifest(manifest: {
+  readonly root: NativeAppViewNodeType;
+}): boolean | string {
+  let nodes = 0;
+  const visit = (node: NativeAppViewNodeType, depth: number): boolean => {
+    nodes += 1;
+    if (nodes > APP_VIEW_MAX_NODES || depth > APP_VIEW_MAX_DEPTH) return false;
+    return node.children?.every((child) => visit(child, depth + 1)) ?? true;
+  };
+  if (!visit(manifest.root, 1)) {
+    return `Native app views are limited to ${APP_VIEW_MAX_NODES} nodes and depth ${APP_VIEW_MAX_DEPTH}.`;
+  }
+  return (
+    new TextEncoder().encode(JSON.stringify(manifest)).byteLength <= APP_VIEW_MAX_PAYLOAD_BYTES ||
+    `Native app view payload exceeds ${APP_VIEW_MAX_PAYLOAD_BYTES} bytes.`
+  );
+}
 
 export const NativeAppViewManifest = Schema.Struct({
   ...AppViewManifestBase,
   kind: Schema.Literal("native"),
   root: NativeAppViewNode,
-}).check(
-  Schema.makeFilter((manifest) => {
-    let nodes = 0;
-    const visit = (node: NativeAppViewNodeType, depth: number): boolean => {
-      nodes += 1;
-      if (nodes > APP_VIEW_MAX_NODES || depth > APP_VIEW_MAX_DEPTH) return false;
-      return node.children?.every((child) => visit(child, depth + 1)) ?? true;
-    };
-    if (!visit(manifest.root, 1)) {
-      return `Native app views are limited to ${APP_VIEW_MAX_NODES} nodes and depth ${APP_VIEW_MAX_DEPTH}.`;
-    }
-    return (
-      new TextEncoder().encode(JSON.stringify(manifest)).byteLength <= APP_VIEW_MAX_PAYLOAD_BYTES ||
-      `Native app view payload exceeds ${APP_VIEW_MAX_PAYLOAD_BYTES} bytes.`
-    );
-  }),
-);
+}).check(Schema.makeFilter(validateNativeAppViewManifest));
 export type NativeAppViewManifest = typeof NativeAppViewManifest.Type;
 
 const SandboxedAppViewResourceUri = TrimmedNonEmptyString.check(
@@ -214,6 +287,39 @@ export const SandboxedAppViewResource = Schema.Union([
 ]);
 export type SandboxedAppViewResource = typeof SandboxedAppViewResource.Type;
 
+function validateSandboxedAppViewManifest(manifest: {
+  readonly html?: string | undefined;
+  readonly resource?: SandboxedAppViewResource | undefined;
+  readonly tool?: { readonly resourceUri: string } | undefined;
+  readonly externalOrigins?: ReadonlyArray<string> | undefined;
+}): boolean | string {
+  if (manifest.resource?.kind === "remote") {
+    if (manifest.html !== undefined) return "Remote sandboxed app views cannot include HTML.";
+  } else if (manifest.html === undefined) {
+    return "Bundled sandboxed app views require inline HTML.";
+  }
+  if (manifest.tool !== undefined && manifest.tool.resourceUri !== manifest.resource?.uri) {
+    return "Sandboxed app view tool and resource URIs must match.";
+  }
+  if (manifest.resource?.kind === "bundled" && !manifest.resource.uri.startsWith("ui://")) {
+    return "Bundled sandboxed app views require a ui:// resource URI.";
+  }
+  if (manifest.resource?.kind === "remote" && !manifest.resource.uri.startsWith("https://")) {
+    return "Remote sandboxed app views require an HTTPS resource URI.";
+  }
+  const origins = manifest.externalOrigins ?? [];
+  if (
+    origins.length > SANDBOXED_APP_VIEW_MAX_EXTERNAL_ORIGINS ||
+    new Set(origins).size !== origins.length
+  ) {
+    return `Sandboxed app views allow at most ${SANDBOXED_APP_VIEW_MAX_EXTERNAL_ORIGINS} unique external origins.`;
+  }
+  return (
+    new TextEncoder().encode(manifest.html ?? "").byteLength <= SANDBOXED_APP_VIEW_MAX_HTML_BYTES ||
+    `Sandboxed app view HTML exceeds ${SANDBOXED_APP_VIEW_MAX_HTML_BYTES} bytes.`
+  );
+}
+
 export const SandboxedAppViewManifest = Schema.Struct({
   ...AppViewManifestBase,
   kind: Schema.Literal("sandboxed"),
@@ -226,40 +332,57 @@ export const SandboxedAppViewManifest = Schema.Struct({
   ),
   commandIds: Schema.Array(AppCommandId),
   externalOrigins: Schema.optional(Schema.Array(SandboxedAppViewExternalOrigin)),
-}).check(
-  Schema.makeFilter((manifest) => {
-    if (manifest.resource?.kind === "remote") {
-      if (manifest.html !== undefined) return "Remote sandboxed app views cannot include HTML.";
-    } else if (manifest.html === undefined) {
-      return "Bundled sandboxed app views require inline HTML.";
-    }
-    if (manifest.tool !== undefined && manifest.tool.resourceUri !== manifest.resource?.uri) {
-      return "Sandboxed app view tool and resource URIs must match.";
-    }
-    if (manifest.resource?.kind === "bundled" && !manifest.resource.uri.startsWith("ui://")) {
-      return "Bundled sandboxed app views require a ui:// resource URI.";
-    }
-    if (manifest.resource?.kind === "remote" && !manifest.resource.uri.startsWith("https://")) {
-      return "Remote sandboxed app views require an HTTPS resource URI.";
-    }
-    const origins = manifest.externalOrigins ?? [];
-    if (
-      origins.length > SANDBOXED_APP_VIEW_MAX_EXTERNAL_ORIGINS ||
-      new Set(origins).size !== origins.length
-    ) {
-      return `Sandboxed app views allow at most ${SANDBOXED_APP_VIEW_MAX_EXTERNAL_ORIGINS} unique external origins.`;
-    }
-    return (
-      new TextEncoder().encode(manifest.html ?? "").byteLength <=
-        SANDBOXED_APP_VIEW_MAX_HTML_BYTES ||
-      `Sandboxed app view HTML exceeds ${SANDBOXED_APP_VIEW_MAX_HTML_BYTES} bytes.`
-    );
-  }),
-);
+}).check(Schema.makeFilter(validateSandboxedAppViewManifest));
 export type SandboxedAppViewManifest = typeof SandboxedAppViewManifest.Type;
 
 export const AppViewManifest = Schema.Union([NativeAppViewManifest, SandboxedAppViewManifest]);
 export type AppViewManifest = typeof AppViewManifest.Type;
+
+const ProjectAppViewManifestBase = {
+  id: AppViewId,
+  revision: AppViewRevision,
+  title: TrimmedNonEmptyString,
+  scope: Schema.Struct({ kind: Schema.Literal("project") }),
+  placements: Schema.optionalKey(AppViewPlacements),
+} as const;
+
+export const ProjectNativeAppViewManifest = Schema.Struct({
+  ...ProjectAppViewManifestBase,
+  kind: Schema.Literal("native"),
+  root: NativeAppViewNode,
+}).check(Schema.makeFilter(validateNativeAppViewManifest));
+
+export const ProjectSandboxedAppViewManifest = Schema.Struct({
+  ...ProjectAppViewManifestBase,
+  kind: Schema.Literal("sandboxed"),
+  html: Schema.optional(Schema.String),
+  resource: Schema.optional(SandboxedAppViewResource),
+  tool: Schema.optional(
+    Schema.Struct({ name: TrimmedNonEmptyString, resourceUri: SandboxedAppViewResourceUri }),
+  ),
+  commandIds: Schema.Array(AppCommandId),
+  externalOrigins: Schema.optional(Schema.Array(SandboxedAppViewExternalOrigin)),
+}).check(Schema.makeFilter(validateSandboxedAppViewManifest));
+
+export const ProjectAppViewManifest = Schema.Union([
+  ProjectNativeAppViewManifest,
+  ProjectSandboxedAppViewManifest,
+]);
+export type ProjectAppViewManifest = typeof ProjectAppViewManifest.Type;
+
+export function toProjectAppViewManifest(manifest: AppViewManifest): ProjectAppViewManifest {
+  if (manifest.scope.kind !== "project") {
+    throw new Error("Only project-scoped app views can be saved to t3.json.");
+  }
+  return { ...manifest, scope: { kind: "project" } };
+}
+
+export function bindProjectAppViewManifest(
+  manifest: ProjectAppViewManifest,
+  projectId: ProjectId,
+): AppViewManifest {
+  return { ...manifest, scope: { kind: "project", projectId } };
+}
 
 export const AppViewCreated = Schema.Struct({
   type: Schema.Literal("app-view.created"),

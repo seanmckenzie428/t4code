@@ -4,10 +4,14 @@ import * as Schema from "effect/Schema";
 
 import {
   APP_VIEW_MAX_NODES,
+  AppViewManifest,
+  bindProjectAppViewManifest,
   NativeAppViewManifest,
   SANDBOXED_APP_VIEW_MAX_HTML_BYTES,
   SandboxedAppViewManifest,
+  toProjectAppViewManifest,
 } from "./appViews.ts";
+import { ProjectId } from "./baseSchemas.ts";
 
 const nativeManifest = {
   id: "view-1",
@@ -173,5 +177,51 @@ it.effect("rejects malformed origins, mismatched resources, and oversized HTML",
       );
       assert.strictEqual(exit._tag, "Failure");
     }
+  }),
+);
+
+it.effect("decodes bounded chrome launcher placements", () =>
+  Effect.gen(function* () {
+    const parsed = yield* Schema.decodeUnknownEffect(NativeAppViewManifest)({
+      ...nativeManifest,
+      placements: [
+        { slot: "chat-topbar", label: "Cockpit", icon: "dashboard" },
+        {
+          slot: "right-panel-launcher",
+          mode: "replace",
+          targetId: "browser",
+          label: "Project browser",
+        },
+      ],
+    });
+    assert.strictEqual(parsed.placements?.[1]?.targetId, "browser");
+  }),
+);
+
+it.effect("rejects replacement placements outside the right-panel launcher", () =>
+  Effect.gen(function* () {
+    const exit = yield* Effect.exit(
+      Schema.decodeUnknownEffect(NativeAppViewManifest)({
+        ...nativeManifest,
+        placements: [{ slot: "chat-topbar", mode: "replace", targetId: "browser" }],
+      }),
+    );
+    assert.strictEqual(exit._tag, "Failure");
+  }),
+);
+
+it.effect("stores project views without environment-local project IDs", () =>
+  Effect.gen(function* () {
+    const projectId = ProjectId.make("project-portable");
+    const runtime = yield* Schema.decodeUnknownEffect(AppViewManifest)({
+      ...nativeManifest,
+      scope: { kind: "project", projectId },
+    });
+    const portable = toProjectAppViewManifest(runtime);
+    assert.deepStrictEqual(portable.scope, { kind: "project" });
+    assert.deepStrictEqual(bindProjectAppViewManifest(portable, projectId).scope, {
+      kind: "project",
+      projectId,
+    });
   }),
 );

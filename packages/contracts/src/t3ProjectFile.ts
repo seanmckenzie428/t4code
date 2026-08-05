@@ -3,7 +3,7 @@ import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { ProjectScriptIcon } from "./orchestration.ts";
 import { T3ProjectExtensionRequest } from "./extensions.ts";
-import { AppViewManifest } from "./appViews.ts";
+import { ProjectAppViewManifest } from "./appViews.ts";
 
 /** File name of the checked-in T3 project file, resolved at the workspace root. */
 export const T3_PROJECT_FILE_NAME = "t3.json";
@@ -93,7 +93,7 @@ export const T3ProjectFile = Schema.Struct({
       .check(Schema.isMaxLength(T3_PROJECT_FILE_MAX_EXTENSIONS)),
   ),
   appViews: Schema.optionalKey(
-    Schema.Array(AppViewManifest)
+    Schema.Array(ProjectAppViewManifest)
       .annotate({
         description:
           "Generated views shared with everyone who opens this repository. T3 Code writes these only after an explicit user save.",

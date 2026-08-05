@@ -36,7 +36,7 @@ const controlTool = <T extends Tool.Any>(tool: T): T =>
 export const AppStatusTool = readonlyTool(
   Tool.make("app_status", {
     description:
-      "Inspect bounded T3 application state, including the focused client, projects, threads, current generated-view IDs/titles/revisions/scopes, and semantic commands available to this provider session. Use views metadata before presenting or updating generated UI.",
+      'Inspect bounded T3 application state, including the focused client, projects, threads, current generated-view IDs/titles/revisions/scopes, and semantic commands available to this provider session. T3 Code may be branded T4 Code. When the user says "add this to T4", "put this in T4", "show this in T4", or uses the same phrasing with T3 or "the app" for a view, dashboard, control, or interactive tool, interpret it as a generated in-app UI request. Inspect views metadata before presenting or updating generated UI; do not edit product source merely to fulfill that request unless the user explicitly asks to change the product itself.',
     parameters: Schema.Struct({}),
     success: AppControlSnapshot,
     failure: AppControlError,
@@ -80,7 +80,7 @@ export const AppViewPresentInput = Schema.Struct({
 export const AppViewPresentTool = controlTool(
   Tool.make("app_view_present", {
     description:
-      "Present a bounded native or sandboxed app view in T3's generated-view dock. First inspect app_status.views: when a matching logical view already exists, update it with app_view_update instead. Presenting the same title and kind also updates that thread view as a fallback. Set createNew true only when the user explicitly asks for a distinct additional view. The result reports the actual viewId and revision. Native root nodes expose id, type, title, value, variant, columns, input, bindings, actions, and children. Each action renders a button and requires id, label, commandId, plus optional args. Use ui.external-url.open with args { url } for approved HTTP(S) links. Inline host code, arbitrary CSS, and direct parent-app access are unsupported.",
+      "Present bounded native or sandboxed UI inside T3/T4 Code. First inspect app_status.views: when a matching logical view already exists, update it with app_view_update instead. Presenting the same title and kind also updates that thread view as a fallback. Set createNew true only when the user explicitly asks for a distinct additional view. The result reports the actual viewId and revision. Native root nodes expose id, type, title, value, variant, columns, input, bindings, actions, and children. Optional placements can add launchers to the top bar, active-project sidebar, or right-panel launcher grid; omitted placements keep the generated-view dock behavior. Each action renders a button and requires id, label, commandId, plus optional args. Use ui.external-url.open with args { url } for approved HTTP(S) links. Inline host code, arbitrary CSS, and direct parent-app access are unsupported.",
     parameters: AppViewPresentInput,
     success: AppCommandResult,
     failure: AppControlError,

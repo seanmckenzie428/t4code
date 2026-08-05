@@ -27,6 +27,7 @@ interface AppViewStoreState {
   remove: (ref: ScopedThreadRef, viewId: string) => void;
   removeThread: (ref: ScopedThreadRef) => void;
   pinPersonal: (ref: ScopedThreadRef, viewId: string) => boolean;
+  openManifest: (ref: ScopedThreadRef, manifest: AppViewManifest) => boolean;
   openPersonal: (ref: ScopedThreadRef, viewId: string) => boolean;
   pinProject: (
     ref: ScopedThreadRef,
@@ -149,9 +150,7 @@ export const useAppViewStore = create<AppViewStoreState>()(
         }));
         return true;
       },
-      openPersonal: (ref, viewId) => {
-        const environmentView = get().personalByEnvironment[String(ref.environmentId)]?.[viewId];
-        if (!environmentView) return false;
+      openManifest: (ref, manifest) => {
         const threadKey = scopedThreadKey(ref);
         set((state) => ({
           byThreadKey: {
@@ -159,16 +158,21 @@ export const useAppViewStore = create<AppViewStoreState>()(
             [threadKey]: {
               manifests: {
                 ...(state.byThreadKey[threadKey]?.manifests ?? {}),
-                [viewId]: {
-                  ...environmentView,
+                [manifest.id]: {
+                  ...manifest,
                   scope: { kind: "thread" as const, threadId: ref.threadId },
                 },
               },
             },
           },
         }));
-        useRightPanelStore.getState().openAppView(ref, viewId);
+        useRightPanelStore.getState().openAppView(ref, manifest.id);
         return true;
+      },
+      openPersonal: (ref, viewId) => {
+        const environmentView = get().personalByEnvironment[String(ref.environmentId)]?.[viewId];
+        if (!environmentView) return false;
+        return get().openManifest(ref, environmentView);
       },
       pinProject: (ref, viewId, projectId) => {
         const manifest = selectAppView(get().byThreadKey, ref, viewId);

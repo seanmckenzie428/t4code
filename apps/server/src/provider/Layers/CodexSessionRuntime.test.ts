@@ -307,6 +307,21 @@ describe("T3 browser developer instructions", () => {
   });
 });
 
+describe("T3 generated-view developer instructions", () => {
+  it("teaches both collaboration modes how to interpret in-app UI requests", () => {
+    for (const instructions of [
+      CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
+      CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
+    ]) {
+      NodeAssert.match(instructions, /add this to T4/);
+      NodeAssert.match(instructions, /app_status/);
+      NodeAssert.match(instructions, /app_view_present/);
+      NodeAssert.match(instructions, /app_view_update/);
+      NodeAssert.match(instructions, /Do not edit the T4 Code source tree/);
+    }
+  });
+});
+
 describe("hasConfiguredMcpServer", () => {
   it("detects inline Codex MCP configuration arguments", () => {
     NodeAssert.equal(hasConfiguredMcpServer(undefined), false);

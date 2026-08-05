@@ -153,7 +153,14 @@ function AppControlHost({ environmentId }: { readonly environmentId: Environment
             kind: thread.kind ?? "project",
           })),
           views: Object.values(selectThreadAppViews(appViewsByThread, ref).manifests).map(
-            ({ id, title, kind, revision, scope }) => ({ id, title, kind, revision, scope }),
+            ({ id, title, kind, revision, scope, placements }) => ({
+              id,
+              title,
+              kind,
+              revision,
+              scope,
+              ...(placements ? { placements } : {}),
+            }),
           ),
           commands: webAppCommandRegistry
             .list(context, { includeUnavailable: false })

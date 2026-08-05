@@ -2,7 +2,6 @@ import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
 import { AppViewId, AppViewRevision } from "./appViews.ts";
-import { ProjectId } from "./baseSchemas.ts";
 import { T3ProjectFile } from "./t3ProjectFile.ts";
 
 const decode = Schema.decodeUnknownSync(T3ProjectFile);
@@ -67,7 +66,6 @@ describe("T3ProjectFile", () => {
   });
 
   it("validates project-saved generated views", () => {
-    const projectId = ProjectId.make("project-1");
     const decoded = decode({
       appViews: [
         {
@@ -75,7 +73,7 @@ describe("T3ProjectFile", () => {
           revision: AppViewRevision.make(1),
           title: "Cockpit",
           kind: "native",
-          scope: { kind: "project", projectId },
+          scope: { kind: "project" },
           root: { id: "root", type: "text", value: "Ready" },
         },
       ],

@@ -188,6 +188,7 @@ import {
 } from "./Sidebar.logic";
 import { sortThreads } from "../lib/threadSort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { ProjectSidebarAppViewLaunchers } from "./app-views/ProjectSidebarAppViewLaunchers";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { CommandDialogTrigger } from "./ui/command";
@@ -3677,6 +3678,9 @@ export default function Sidebar() {
         <SettingsSidebarNav pathname={pathname} />
       ) : (
         <>
+          <div className="px-2 pt-2">
+            <ProjectSidebarAppViewLaunchers threadRef={routeThreadRef} />
+          </div>
           <SidebarProjectsContent
             showArm64IntelBuildWarning={showArm64IntelBuildWarning}
             arm64IntelBuildWarningDescription={arm64IntelBuildWarningDescription}

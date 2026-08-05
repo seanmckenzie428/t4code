@@ -88,6 +88,7 @@ import { openCommandPalette } from "../commandPaletteBus";
 import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useNowMinute } from "../hooks/useNowMinute";
+import { ProjectSidebarAppViewLaunchers } from "./app-views/ProjectSidebarAppViewLaunchers";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import { useProjects, useThreadShells } from "../state/entities";
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
@@ -2644,6 +2645,7 @@ export default function SidebarV2() {
                 </Tooltip>
               </div>
             ) : null}
+            <ProjectSidebarAppViewLaunchers threadRef={routeThreadRef} />
           </SidebarGroup>
         }
       >

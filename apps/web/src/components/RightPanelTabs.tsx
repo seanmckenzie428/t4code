@@ -1,4 +1,4 @@
-import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
+import type { AppViewManifest, ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
 import {
   ClipboardList,
@@ -32,6 +32,11 @@ import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 
 import { PreviewPanelShell, type PreviewPanelMode } from "./preview/PreviewPanelShell";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
+import {
+  partitionRightPanelAppViewPlacements,
+  type ResolvedAppViewPlacement,
+} from "./app-views/AppViewPlacements.logic";
+import { AppViewPlacementIcon } from "./app-views/AppViewPlacementIcon";
 
 interface RightPanelTabsProps {
   mode: PreviewPanelMode;
@@ -43,6 +48,7 @@ interface RightPanelTabsProps {
   previewSessions: Readonly<Record<string, PreviewSessionSnapshot>>;
   terminalLabelsById: ReadonlyMap<string, string>;
   appViewTitles: Readonly<Record<string, string>>;
+  appViewPlacements: ReadonlyArray<ResolvedAppViewPlacement>;
   onActivate: (surface: RightPanelSurface) => void;
   onCloseSurface: (surface: RightPanelSurface) => void;
   onCloseOtherSurfaces: (surface: RightPanelSurface) => void;
@@ -53,6 +59,7 @@ interface RightPanelTabsProps {
   onAddTerminal: () => void;
   onAddFiles: () => void;
   onManageAppViews: () => void;
+  onOpenAppView: (manifest: AppViewManifest) => void;
   browserAvailable: boolean;
   filesAvailable: boolean;
   children: ReactNode;
@@ -98,43 +105,66 @@ function RightPanelEmptyState(props: {
   onAddTerminal: () => void;
   onAddFiles: () => void;
   onManageAppViews: () => void;
+  onOpenAppView: (manifest: AppViewManifest) => void;
+  appViewPlacements: ReadonlyArray<ResolvedAppViewPlacement>;
   browserAvailable: boolean;
   filesAvailable: boolean;
 }) {
-  const actions = [
+  const builtInActions = [
     {
+      id: "generated-views" as const,
       label: "Generated views",
       description: "Reopen and pin agent-created views.",
-      icon: LayoutDashboard,
+      icon: <LayoutDashboard className="mb-3 size-5" />,
       available: true,
       disabledReason: null,
       onClick: props.onManageAppViews,
     },
     {
+      id: "browser" as const,
       label: "Browser",
       description: "Open a local app or URL.",
-      icon: Globe2,
+      icon: <Globe2 className="mb-3 size-5" />,
       available: props.browserAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.browser,
       onClick: props.onAddBrowser,
     },
     {
+      id: "terminal" as const,
       label: "Terminal",
       description: "Start a shell in this workspace.",
-      icon: TerminalSquare,
+      icon: <TerminalSquare className="mb-3 size-5" />,
       available: true,
       disabledReason: null,
       onClick: props.onAddTerminal,
     },
     {
+      id: "files" as const,
       label: "Files",
       description: "Browse and read workspace files.",
-      icon: Files,
+      icon: <Files className="mb-3 size-5" />,
       available: props.filesAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.files,
       onClick: props.onAddFiles,
     },
   ] as const;
+  const { replacements, appended } = partitionRightPanelAppViewPlacements(props.appViewPlacements);
+  const customAction = (item: ResolvedAppViewPlacement) => ({
+    id: item.id,
+    label: item.label,
+    description: item.description,
+    icon: <AppViewPlacementIcon icon={item.placement.icon} className="mb-3 size-5" />,
+    available: true,
+    disabledReason: null,
+    onClick: () => props.onOpenAppView(item.manifest),
+  });
+  const actions = [
+    ...builtInActions.map((action) => {
+      const replacement = replacements.get(action.id);
+      return replacement ? customAction(replacement) : action;
+    }),
+    ...appended.map(customAction),
+  ];
 
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center p-6">
@@ -147,10 +177,9 @@ function RightPanelEmptyState(props: {
         </div>
         <div className="grid grid-cols-2 gap-2">
           {actions.map((action) => {
-            const Icon = action.icon;
             const content = (
               <>
-                <Icon className="mb-3 size-5" />
+                {action.icon}
                 <span className="text-sm font-medium">{action.label}</span>
                 <span className="mt-1 text-xs leading-relaxed text-muted-foreground">
                   {action.description}
@@ -160,7 +189,7 @@ function RightPanelEmptyState(props: {
             if (action.available) {
               return (
                 <button
-                  key={action.label}
+                  key={action.id}
                   type="button"
                   onClick={action.onClick}
                   className="flex min-h-28 w-full flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left transition hover:border-border hover:bg-accent/60 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
@@ -180,8 +209,8 @@ function RightPanelEmptyState(props: {
             );
             return (
               <DisabledReasonTooltip
-                key={action.label}
-                reason={action.disabledReason}
+                key={action.id}
+                reason={action.disabledReason ?? "This surface is unavailable."}
                 trigger={disabledCard}
               />
             );
@@ -494,6 +523,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddTerminal={props.onAddTerminal}
             onAddFiles={props.onAddFiles}
             onManageAppViews={props.onManageAppViews}
+            onOpenAppView={props.onOpenAppView}
+            appViewPlacements={props.appViewPlacements}
             browserAvailable={props.browserAvailable}
             filesAvailable={props.filesAvailable}
           />

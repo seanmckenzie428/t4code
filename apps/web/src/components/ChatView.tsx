@@ -1,5 +1,6 @@
 import {
   type ApprovalRequestId,
+  type AppViewManifest,
   DEFAULT_MODEL,
   defaultInstanceIdForDriver,
   type EnvironmentId,
@@ -148,7 +149,12 @@ import {
 import { RightPanelTabs } from "./RightPanelTabs";
 import { AppViewRenderer } from "./app-views/AppViewRenderer";
 import { GeneratedViewLibrary, GeneratedViewToolbar } from "./app-views/GeneratedViewLibrary";
-import { selectThreadAppViews, useAppViewStore } from "../appViewStore";
+import { selectPersonalAppViews, selectThreadAppViews, useAppViewStore } from "../appViewStore";
+import {
+  mergeContextAppViews,
+  resolveAppViewPlacements,
+} from "./app-views/AppViewPlacements.logic";
+import { useT3ProjectFileAppViews } from "~/hooks/useT3ProjectFileAppViews";
 import {
   invokeKeybindingAppCommand,
   invokeWebAppCommand,
@@ -431,6 +437,7 @@ const PreviewPanel = lazy(() =>
 const DiffPanel = lazy(() => import("./DiffPanel"));
 const FilePreviewPanel = lazy(() => import("./files/FilePreviewPanel"));
 const EMPTY_PENDING_FILE_SURFACE_IDS: ReadonlySet<string> = new Set();
+const EMPTY_APP_VIEW_MANIFESTS: Record<string, AppViewManifest> = {};
 const TYPE_TO_FOCUS_EDITABLE_SELECTOR = [
   "input",
   "textarea",
@@ -1623,6 +1630,11 @@ function ChatViewContent(props: ChatViewProps) {
   const activeThreadAppViews = useAppViewStore((state) =>
     selectThreadAppViews(state.byThreadKey, activeThreadRef),
   );
+  const activePersonalAppViews = useAppViewStore((state) =>
+    activeThread
+      ? selectPersonalAppViews(state.personalByEnvironment, activeThread.environmentId)
+      : EMPTY_APP_VIEW_MANIFESTS,
+  );
   const appViewTitles = useMemo(
     () =>
       Object.fromEntries(
@@ -1739,6 +1751,34 @@ function ChatViewContent(props: ChatViewProps) {
     : null;
   const [generatedViewLibraryOpen, setGeneratedViewLibraryOpen] = useState(false);
   const activeProject = useProject(activeProjectRef);
+  const activeProjectAppViews = useT3ProjectFileAppViews(
+    activeThread?.environmentId ?? null,
+    activeProject?.workspaceRoot ?? null,
+    activeProject?.id ?? null,
+  );
+  const contextualAppViews = useMemo(
+    () =>
+      mergeContextAppViews({
+        personal: activePersonalAppViews,
+        project: activeProjectAppViews,
+        thread: activeThreadAppViews.manifests,
+      }),
+    [activePersonalAppViews, activeProjectAppViews, activeThreadAppViews.manifests],
+  );
+  const topbarAppViewPlacements = useMemo(
+    () => resolveAppViewPlacements(contextualAppViews, "chat-topbar"),
+    [contextualAppViews],
+  );
+  const rightPanelAppViewPlacements = useMemo(
+    () => resolveAppViewPlacements(contextualAppViews, "right-panel-launcher"),
+    [contextualAppViews],
+  );
+  const openPlacedAppView = useCallback(
+    (manifest: AppViewManifest) => {
+      if (activeThreadRef) useAppViewStore.getState().openManifest(activeThreadRef, manifest);
+    },
+    [activeThreadRef],
+  );
   const handleNewThreadInActiveProject = useCallback(() => {
     startNewThreadForProject(activeProjectRef, handleNewThread);
   }, [activeProjectRef, handleNewThread]);
@@ -6272,6 +6312,7 @@ function ChatViewContent(props: ChatViewProps) {
             keybindings={keybindings}
             availableEditors={availableEditors}
             rightPanelOpen={rightPanelOpen}
+            appViewPlacements={topbarAppViewPlacements}
             gitCwd={gitCwd}
             onNewThreadInProject={handleNewThreadInActiveProject}
             onRunProjectScript={runProjectScript}
@@ -6281,6 +6322,7 @@ function ChatViewContent(props: ChatViewProps) {
             onRunProjectCustomAction={runProjectCustomAction}
             onSetProjectCustomActionPlacement={updateProjectCustomActionPlacement}
             onDeleteProjectCustomAction={deleteProjectCustomAction}
+            onOpenAppView={openPlacedAppView}
           />
         </header>
 
@@ -6678,6 +6720,7 @@ function ChatViewContent(props: ChatViewProps) {
           previewSessions={activePreviewState.sessions}
           terminalLabelsById={activeTerminalLabelsById}
           appViewTitles={appViewTitles}
+          appViewPlacements={rightPanelAppViewPlacements}
           onActivate={activateRightPanelSurface}
           onCloseSurface={closeRightPanelSurface}
           onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
@@ -6688,6 +6731,7 @@ function ChatViewContent(props: ChatViewProps) {
           onAddTerminal={addTerminalSurface}
           onAddFiles={addFilesSurface}
           onManageAppViews={() => setGeneratedViewLibraryOpen(true)}
+          onOpenAppView={openPlacedAppView}
           browserAvailable={isPreviewSupportedInRuntime()}
           filesAvailable={activeProject !== null}
         >
@@ -6705,6 +6749,7 @@ function ChatViewContent(props: ChatViewProps) {
             previewSessions={activePreviewState.sessions}
             terminalLabelsById={activeTerminalLabelsById}
             appViewTitles={appViewTitles}
+            appViewPlacements={rightPanelAppViewPlacements}
             onActivate={activateRightPanelSurface}
             onCloseSurface={closeRightPanelSurface}
             onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
@@ -6715,6 +6760,7 @@ function ChatViewContent(props: ChatViewProps) {
             onAddTerminal={addTerminalSurface}
             onAddFiles={addFilesSurface}
             onManageAppViews={() => setGeneratedViewLibraryOpen(true)}
+            onOpenAppView={openPlacedAppView}
             browserAvailable={isPreviewSupportedInRuntime()}
             filesAvailable={activeProject !== null}
           >

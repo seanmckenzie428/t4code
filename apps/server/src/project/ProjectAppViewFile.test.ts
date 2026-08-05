@@ -36,6 +36,9 @@ it.effect("adds a generated view while preserving unrelated t3.json fields", () 
       futureField: true,
       appViews: [{ id: "cockpit", revision: 1 }],
     });
+    expect(
+      (decodeJson(result.contents) as { appViews: Array<{ scope: unknown }> }).appViews[0]?.scope,
+    ).toEqual({ kind: "project" });
   }),
 );
 

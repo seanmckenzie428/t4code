@@ -5,7 +5,10 @@ Status: accepted and implemented for this fork (2026-08-02).
 This document is the architecture decision record and implementation ledger
 for agent control, Quick Chat, generated views, and extensions.
 
-T3 exposes a typed semantic control plane to coding agents. Agents discover
+T3 exposes a typed semantic control plane to coding agents. Codex, Claude,
+Cursor, Grok, and OpenCode sessions receive the same authenticated `t3-code`
+MCP surface and app-control principal derived from the thread, not the provider.
+Agents discover
 registered commands and invoke them with schema-validated arguments. They do
 not drive T3 with DOM selectors, dispatch orchestration internals, or access
 the database directly.
@@ -83,6 +86,20 @@ and 256 KiB. They use theme tokens, explicit bindings, and registered commands;
 there is no inline JavaScript, shell, arbitrary CSS, or evaluation. Thread and
 personal views persist in client userdata. Project pinning creates a review-only
 `t3.json` proposal and never writes tracked configuration silently.
+
+The manifest may declare at most 12 bounded launcher placements across
+`chat-topbar`, `project-sidebar`, and `right-panel-launcher`. Chrome placements
+render only a label and allowlisted icon and open the full right-panel view.
+Right-panel placements may append a tile or replace one visible built-in tile;
+the add menu retains every built-in as the reverse path. Context merging is
+deterministic: personal, then project, then thread, with narrower scope winning
+for a stable view ID or conflicting replacement target. Durable project manifests omit the environment-local
+project ID, which the client binds to the active project while loading `t3.json`.
+
+Provider-neutral MCP tool descriptions define the phrases “add this to T4,”
+“put this in T3,” and equivalent “the app” requests as generated UI intent.
+Provider-specific system prompt support may reinforce that behavior, but is not
+the authority or compatibility seam.
 
 Rich views follow MCP Apps resource linkage and run in an iframe with
 `sandbox="allow-scripts"` but no `allow-same-origin`. Inline HTML is capped at

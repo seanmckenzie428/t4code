@@ -2,6 +2,7 @@ import {
   ProjectSaveAppViewError,
   T3ProjectFile,
   T3_PROJECT_FILE_NAME,
+  toProjectAppViewManifest,
   type AppViewManifest,
   type ProjectId,
   type ProjectSaveAppViewResult,
@@ -98,8 +99,9 @@ export function mergeProjectAppView(
         candidate.id === manifest.id,
     );
     const nextViews = [...appViews];
-    if (existingIndex >= 0) nextViews[existingIndex] = manifest;
-    else nextViews.push(manifest);
+    const portableManifest = toProjectAppViewManifest(manifest);
+    if (existingIndex >= 0) nextViews[existingIndex] = portableManifest;
+    else nextViews.push(portableManifest);
     const next = { ...record, appViews: nextViews };
 
     yield* Schema.decodeUnknownEffect(T3ProjectFile)(next).pipe(

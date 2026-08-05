@@ -12,6 +12,7 @@
 import {
   ModelSelection,
   NonNegativeInt,
+  ProjectId,
   ThreadId,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
@@ -23,6 +24,7 @@ import {
   type ProviderDriverKind,
   type ProviderRuntimeEvent,
   type ProviderSession,
+  type AppControlPrincipal,
 } from "@t3tools/contracts";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import * as DateTime from "effect/DateTime";
@@ -74,6 +76,18 @@ const ProviderRollbackConversationInput = Schema.Struct({
   threadId: ThreadId,
   numTurns: NonNegativeInt,
 });
+
+export function appControlPrincipalForThread(
+  threadId: ThreadId,
+  thread: {
+    readonly kind?: "project" | "assistant" | "quick" | undefined;
+    readonly projectId: ProjectId;
+  },
+): AppControlPrincipal {
+  return thread.kind === "assistant" || thread.kind === "quick"
+    ? { kind: "global-assistant", assistantThreadId: threadId }
+    : { kind: "thread-agent", threadId, projectId: thread.projectId };
+}
 
 function toValidationError(
   operation: string,
@@ -217,7 +231,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
   const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
     Effect.gen(function* () {
-      const instance = yield* registry.getInstanceInfo(providerInstanceId);
       const projectionSnapshotQuery = yield* Effect.serviceOption(
         ProjectionSnapshotQuery.ProjectionSnapshotQuery,
       );
@@ -226,16 +239,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         : yield* projectionSnapshotQuery.value
             .getThreadShellById(threadId)
             .pipe(Effect.orElseSucceed(() => Option.none()));
-      const principal =
-        instance.driverKind !== "codex" || Option.isNone(thread)
-          ? undefined
-          : thread.value.kind === "assistant" || thread.value.kind === "quick"
-            ? ({ kind: "global-assistant", assistantThreadId: threadId } as const)
-            : ({
-                kind: "thread-agent",
-                threadId,
-                projectId: thread.value.projectId,
-              } as const);
+      const principal = Option.isNone(thread)
+        ? undefined
+        : appControlPrincipalForThread(threadId, thread.value);
       return yield* McpSessionRegistry.issueActiveMcpCredential({
         threadId,
         providerInstanceId,

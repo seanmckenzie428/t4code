@@ -16,6 +16,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderSessionStartInput,
+  ProjectId,
   ThreadId,
   TurnId,
 } from "@t3tools/contracts";
@@ -46,7 +47,7 @@ import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.ts";
-import { makeProviderServiceLive } from "./ProviderService.ts";
+import { appControlPrincipalForThread, makeProviderServiceLive } from "./ProviderService.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -70,6 +71,20 @@ const claudeAgentInstanceId = ProviderInstanceId.make("claudeAgent");
 const CODEX_DRIVER = ProviderDriverKind.make("codex");
 const CLAUDE_AGENT_DRIVER = ProviderDriverKind.make("claudeAgent");
 const CURSOR_DRIVER = ProviderDriverKind.make("cursor");
+
+it("derives app-control authority independently of provider driver", () => {
+  const threadId = asThreadId("thread-provider-neutral");
+  const projectId = ProjectId.make("project-provider-neutral");
+  assert.deepStrictEqual(appControlPrincipalForThread(threadId, { kind: "project", projectId }), {
+    kind: "thread-agent",
+    threadId,
+    projectId,
+  });
+  assert.deepStrictEqual(appControlPrincipalForThread(threadId, { kind: "quick", projectId }), {
+    kind: "global-assistant",
+    assistantThreadId: threadId,
+  });
+});
 
 type LegacyProviderRuntimeEvent = {
   readonly type: string;
