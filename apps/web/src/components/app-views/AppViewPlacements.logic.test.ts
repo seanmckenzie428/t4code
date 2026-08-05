@@ -4,6 +4,7 @@ import * as Schema from "effect/Schema";
 
 import {
   activateAppViewPlacement,
+  manageAppViewPlacement,
   mergeContextAppViews,
   partitionRightPanelAppViewPlacements,
   resolveAppViewPlacements,
@@ -68,6 +69,29 @@ describe("app view placements", () => {
 
     expect(opened).toEqual([]);
     expect(actions).toEqual(["ui.preview.open"]);
+  });
+
+  it("opens a launcher view for management without running its action", () => {
+    const item = resolveAppViewPlacements(
+      [
+        decodeManifest({
+          ...manifest("docs", "Docs", 0),
+          placements: [
+            {
+              slot: "chat-topbar",
+              action: {
+                commandId: "ui.preview.open",
+                args: { url: "https://example.com/docs" },
+              },
+            },
+          ],
+        }),
+      ],
+      "chat-topbar",
+    )[0];
+    if (!item) throw new Error("Expected placement");
+    const managed = manageAppViewPlacement(item);
+    expect(managed.placement.action).toBeUndefined();
   });
 
   it("lets narrower scope replace a broader right-panel tile", () => {

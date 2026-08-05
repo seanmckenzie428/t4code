@@ -34,6 +34,7 @@ import { PreviewPanelShell, type PreviewPanelMode } from "./preview/PreviewPanel
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import {
   partitionRightPanelAppViewPlacements,
+  manageAppViewPlacement,
   type ResolvedAppViewPlacement,
 } from "./app-views/AppViewPlacements.logic";
 import { AppViewPlacementIcon } from "./app-views/AppViewPlacementIcon";
@@ -157,6 +158,9 @@ function RightPanelEmptyState(props: {
     available: true,
     disabledReason: null,
     onClick: () => props.onActivateAppViewPlacement(item),
+    ...(item.placement.action && "menu" in item.placement.action
+      ? { menu: item.placement.action.menu, placement: item }
+      : {}),
   });
   const actions = [
     ...builtInActions.map((action) => {
@@ -165,6 +169,22 @@ function RightPanelEmptyState(props: {
     }),
     ...appended.map(customAction),
   ];
+  const handleAppViewPlacementContextMenu = async (
+    event: ReactMouseEvent,
+    item: ResolvedAppViewPlacement,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const api = readLocalApi();
+    if (!api) return;
+    const action = await api.contextMenu.show(
+      [{ id: "manage", label: "Manage generated view…" }] satisfies ContextMenuItem<"manage">[],
+      { x: event.clientX, y: event.clientY },
+    );
+    if (action === "manage") {
+      props.onActivateAppViewPlacement(manageAppViewPlacement(item));
+    }
+  };
 
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center p-6">
@@ -177,6 +197,7 @@ function RightPanelEmptyState(props: {
         </div>
         <div className="grid grid-cols-2 gap-2">
           {actions.map((action) => {
+            const placement = "placement" in action ? action.placement : undefined;
             const content = (
               <>
                 {action.icon}
@@ -187,11 +208,54 @@ function RightPanelEmptyState(props: {
               </>
             );
             if (action.available) {
+              if ("menu" in action && placement) {
+                return (
+                  <Menu key={action.id}>
+                    <MenuTrigger
+                      render={
+                        <button
+                          type="button"
+                          onContextMenu={(event) =>
+                            void handleAppViewPlacementContextMenu(event, placement)
+                          }
+                          className="flex min-h-28 w-full flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left transition hover:border-border hover:bg-accent/60 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
+                        />
+                      }
+                    >
+                      {content}
+                    </MenuTrigger>
+                    <MenuPopup align="start" side="bottom">
+                      {action.menu.map((menuItem, index) => (
+                        <MenuItem
+                          key={`${action.id}:${index}`}
+                          onClick={() =>
+                            props.onActivateAppViewPlacement({
+                              ...placement,
+                              placement: {
+                                ...placement.placement,
+                                action: menuItem.action,
+                              },
+                            })
+                          }
+                        >
+                          {menuItem.label}
+                        </MenuItem>
+                      ))}
+                    </MenuPopup>
+                  </Menu>
+                );
+              }
               return (
                 <button
                   key={action.id}
                   type="button"
                   onClick={action.onClick}
+                  {...(placement
+                    ? {
+                        onContextMenu: (event: ReactMouseEvent) =>
+                          void handleAppViewPlacementContextMenu(event, placement),
+                      }
+                    : {})}
                   className="flex min-h-28 w-full flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left transition hover:border-border hover:bg-accent/60 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
                 >
                   {content}

@@ -56,7 +56,7 @@ export const AppViewRightPanelLauncherTarget = Schema.Literals(
 );
 export type AppViewRightPanelLauncherTarget = typeof AppViewRightPanelLauncherTarget.Type;
 
-export const AppViewPlacementAction = Schema.Union([
+export const AppViewPlacementActionItem = Schema.Union([
   Schema.Struct({
     commandId: Schema.Literal("ui.external-url.open"),
     args: Schema.Struct({ url: TrimmedNonEmptyString }),
@@ -65,9 +65,25 @@ export const AppViewPlacementAction = Schema.Union([
     commandId: Schema.Literal("ui.preview.open"),
     args: Schema.optionalKey(Schema.Struct({ url: TrimmedNonEmptyString })),
   }),
+]);
+export type AppViewPlacementActionItem = typeof AppViewPlacementActionItem.Type;
+
+export const AppViewPlacementMenuItem = Schema.Struct({
+  label: TrimmedNonEmptyString.check(Schema.isMaxLength(80)),
+  action: AppViewPlacementActionItem,
+});
+export type AppViewPlacementMenuItem = typeof AppViewPlacementMenuItem.Type;
+
+export const AppViewPlacementAction = Schema.Union([
+  AppViewPlacementActionItem,
+  Schema.Struct({
+    menu: Schema.Array(AppViewPlacementMenuItem)
+      .check(Schema.isMinLength(1))
+      .check(Schema.isMaxLength(12)),
+  }),
 ]).annotate({
   description:
-    "Optional launcher action. Open an HTTP(S) URL externally or in T3's dedicated browser; omit to open the generated view.",
+    "Optional launcher action or dropdown. Items open an HTTP(S) URL externally or in T3's dedicated browser; omit action to open generated view.",
 });
 export type AppViewPlacementAction = typeof AppViewPlacementAction.Type;
 
@@ -128,15 +144,27 @@ export const AppViewBinding = Schema.Struct({
 });
 export type AppViewBinding = typeof AppViewBinding.Type;
 
-export const AppViewAction = Schema.Struct({
+export const AppViewActionItem = Schema.Struct({
   id: TrimmedNonEmptyString,
   label: TrimmedNonEmptyString,
   commandId: AppCommandId,
   args: Schema.optional(Schema.Unknown),
   confirm: Schema.optional(Schema.Boolean),
-}).annotate({
+});
+export type AppViewActionItem = typeof AppViewActionItem.Type;
+
+export const AppViewAction = Schema.Union([
+  AppViewActionItem,
+  Schema.Struct({
+    id: TrimmedNonEmptyString,
+    label: TrimmedNonEmptyString,
+    menu: Schema.Array(AppViewActionItem)
+      .check(Schema.isMinLength(1))
+      .check(Schema.isMaxLength(12)),
+  }),
+]).annotate({
   description:
-    "A visible button rendered below its node. commandId must name a registered semantic T3 command; args are passed to that command.",
+    "A visible button or dropdown rendered below its node. Each commandId must name a registered semantic T3 command; args are passed to that command.",
 });
 export type AppViewAction = typeof AppViewAction.Type;
 
@@ -175,11 +203,20 @@ export interface NativeAppViewNodeEncodedType extends Omit<
   NativeAppViewNodeType,
   "actions" | "children"
 > {
-  readonly actions?: ReadonlyArray<
-    Omit<AppViewAction, "commandId"> & { readonly commandId: string }
-  >;
+  readonly actions?: ReadonlyArray<AppViewActionEncodedType>;
   readonly children?: ReadonlyArray<NativeAppViewNodeEncodedType>;
 }
+
+export type AppViewActionItemEncodedType = Omit<AppViewActionItem, "commandId"> & {
+  readonly commandId: string;
+};
+export type AppViewActionEncodedType =
+  | AppViewActionItemEncodedType
+  | {
+      readonly id: string;
+      readonly label: string;
+      readonly menu: ReadonlyArray<AppViewActionItemEncodedType>;
+    };
 
 const NativeAppViewNodeRef = Schema.suspend(
   (): Schema.Codec<NativeAppViewNodeType, NativeAppViewNodeEncodedType> => NativeAppViewNode,

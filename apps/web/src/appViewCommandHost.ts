@@ -122,8 +122,13 @@ function decodeManifest(args: unknown): AppViewManifest {
       const node = pending.pop();
       if (!node) continue;
       for (const action of node.actions ?? []) {
-        if (!isAppCommandId(action.commandId)) {
-          throw new Error(`Generated view action uses unregistered command ${action.commandId}.`);
+        const commands = "menu" in action ? action.menu : [action];
+        for (const command of commands) {
+          if (!isAppCommandId(command.commandId)) {
+            throw new Error(
+              `Generated view action uses unregistered command ${command.commandId}.`,
+            );
+          }
         }
       }
       pending.push(...(node.children ?? []));

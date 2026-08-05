@@ -37,7 +37,48 @@ const nativeManifest = {
 it.effect("decodes bounded native views with registered-command actions", () =>
   Effect.gen(function* () {
     const parsed = yield* Schema.decodeUnknownEffect(NativeAppViewManifest)(nativeManifest);
-    assert.strictEqual(parsed.root.children?.[0]?.actions?.[0]?.commandId, "source.refresh");
+    const action = parsed.root.children?.[0]?.actions?.[0];
+    assert.strictEqual(
+      action && "commandId" in action ? action.commandId : undefined,
+      "source.refresh",
+    );
+  }),
+);
+
+it.effect("decodes native action dropdowns including external and internal browser links", () =>
+  Effect.gen(function* () {
+    const parsed = yield* Schema.decodeUnknownEffect(NativeAppViewManifest)({
+      ...nativeManifest,
+      root: {
+        id: "root",
+        type: "section",
+        actions: [
+          {
+            id: "open-link",
+            label: "Open link",
+            menu: [
+              {
+                id: "external",
+                label: "Open externally",
+                commandId: "ui.external-url.open",
+                args: { url: "https://example.com" },
+              },
+              {
+                id: "internal",
+                label: "Open in T4",
+                commandId: "ui.preview.open",
+                args: { url: "https://example.com" },
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const action = parsed.root.actions?.[0];
+    assert.strictEqual(
+      action && "menu" in action ? action.menu[1]?.commandId : undefined,
+      "ui.preview.open",
+    );
   }),
 );
 
@@ -190,8 +231,22 @@ it.effect("decodes bounded chrome launcher placements", () =>
           label: "Cockpit",
           icon: "dashboard",
           action: {
-            commandId: "ui.external-url.open",
-            args: { url: "https://example.com/status" },
+            menu: [
+              {
+                label: "Open in T4",
+                action: {
+                  commandId: "ui.preview.open",
+                  args: { url: "https://example.com/status" },
+                },
+              },
+              {
+                label: "Open externally",
+                action: {
+                  commandId: "ui.external-url.open",
+                  args: { url: "https://example.com/status" },
+                },
+              },
+            ],
           },
         },
         {
@@ -202,7 +257,12 @@ it.effect("decodes bounded chrome launcher placements", () =>
         },
       ],
     });
-    assert.strictEqual(parsed.placements?.[0]?.action?.commandId, "ui.external-url.open");
+    assert.strictEqual(
+      parsed.placements?.[0]?.action && "menu" in parsed.placements[0].action
+        ? parsed.placements[0].action.menu[0]?.label
+        : undefined,
+      "Open in T4",
+    );
     assert.strictEqual(parsed.placements?.[1]?.targetId, "browser");
   }),
 );

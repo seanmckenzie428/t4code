@@ -185,6 +185,27 @@ describe("appViewCommandHost", () => {
     ).rejects.toThrow("unregistered command");
   });
 
+  it("rejects unregistered commands nested in native action dropdowns", async () => {
+    await expect(
+      invokeWebAppCommand("view.present" as AppCommandId, context, {
+        manifest: {
+          ...manifest,
+          root: {
+            id: "root",
+            type: "text",
+            actions: [
+              {
+                id: "menu",
+                label: "Menu",
+                menu: [{ id: "bad", label: "Bad", commandId: "approval.respond" }],
+              },
+            ],
+          },
+        },
+      }),
+    ).rejects.toThrow("unregistered command");
+  });
+
   it("opens only normalized HTTP(S) URLs through the semantic command", async () => {
     unregister?.();
     const open = vi.fn(async () => undefined);

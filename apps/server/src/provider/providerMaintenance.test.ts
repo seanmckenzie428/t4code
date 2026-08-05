@@ -235,6 +235,25 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
       }),
   );
 
+  it("pins a vite-plus update to the runtime that owns the provider binary", () => {
+    expect(
+      packageToolUpdate.resolve({
+        binaryPath: "/Users/example/.vite-plus/bin/package-tool",
+        resolvedCommandPath: "/Users/example/.vite-plus/bin/package-tool",
+        realCommandPath: "/Users/example/.vite-plus/js_runtime/node/24.18.1/bin/package-tool",
+      }),
+    ).toEqual({
+      provider: driver("packageTool"),
+      packageName: "@example/package-tool",
+      update: {
+        command: "vp i -g --node 24.18.1 @example/package-tool",
+        executable: "vp",
+        args: ["i", "-g", "--node", "24.18.1", "@example/package-tool"],
+        lockKey: "vite-plus-global",
+      },
+    });
+  });
+
   it.effect(
     "switches package-managed providers to bun updates when the resolved binary lives in bun's global bin",
     () =>

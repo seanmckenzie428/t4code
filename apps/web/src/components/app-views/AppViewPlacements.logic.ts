@@ -1,7 +1,7 @@
 import type {
   AppViewManifest,
   AppViewPlacement,
-  AppViewPlacementAction,
+  AppViewPlacementActionItem,
   AppViewPlacementSlot,
   AppViewRightPanelLauncherTarget,
 } from "@t3tools/contracts";
@@ -14,14 +14,20 @@ export interface ResolvedAppViewPlacement {
   readonly description: string;
 }
 
+/** Open the generated view itself, bypassing an optional launcher action. */
+export function manageAppViewPlacement(item: ResolvedAppViewPlacement): ResolvedAppViewPlacement {
+  const { action: _action, ...placement } = item.placement;
+  return { ...item, placement };
+}
+
 export function activateAppViewPlacement(
   item: ResolvedAppViewPlacement,
   handlers: {
     readonly openView: (manifest: AppViewManifest) => void;
-    readonly runAction: (action: AppViewPlacementAction) => void;
+    readonly runAction: (action: AppViewPlacementActionItem) => void;
   },
 ): void {
-  if (item.placement.action) {
+  if (item.placement.action && !("menu" in item.placement.action)) {
     handlers.runAction(item.placement.action);
     return;
   }

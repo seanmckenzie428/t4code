@@ -5,11 +5,13 @@ import type {
   NativeAppViewManifest,
   NativeAppViewNode,
 } from "@t3tools/contracts";
+import { ChevronDownIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { Button } from "~/components/ui/button";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/components/ui/menu";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { cn } from "~/lib/utils";
 
@@ -49,9 +51,52 @@ function NodeActions(props: {
   onAction: AppViewRendererProps["onAction"];
 }) {
   if (!props.actions?.length) return null;
+  const runAction = (action: Exclude<AppViewAction, { readonly menu: unknown }>) => {
+    if (!isAppCommandId(action.commandId)) return;
+    const baseArgs =
+      typeof action.args === "object" && action.args !== null && !Array.isArray(action.args)
+        ? action.args
+        : {};
+    const args =
+      Object.keys(props.inputs).length === 0 ? baseArgs : { ...baseArgs, input: props.inputs };
+    void props.onAction({ commandId: action.commandId, args });
+  };
   return (
     <div className="flex flex-wrap gap-2 pt-2">
       {props.actions.map((action) => {
+        if ("menu" in action) {
+          const hasRegisteredItem = action.menu.some((item) => isAppCommandId(item.commandId));
+          return (
+            <Menu key={action.id}>
+              <MenuTrigger
+                render={<Button size="sm" variant="outline" disabled={!hasRegisteredItem} />}
+                title={
+                  hasRegisteredItem ? undefined : "No menu command is registered by this T3 client."
+                }
+              >
+                {action.label}
+                <ChevronDownIcon className="size-3.5" />
+              </MenuTrigger>
+              <MenuPopup align="start" side="bottom">
+                {action.menu.map((item) => {
+                  const registered = isAppCommandId(item.commandId);
+                  return (
+                    <MenuItem
+                      key={item.id}
+                      disabled={!registered}
+                      title={
+                        registered ? undefined : "Command is not registered by this T3 client."
+                      }
+                      onClick={() => runAction(item)}
+                    >
+                      {item.label}
+                    </MenuItem>
+                  );
+                })}
+              </MenuPopup>
+            </Menu>
+          );
+        }
         const registered = isAppCommandId(action.commandId);
         return (
           <Button
@@ -60,23 +105,7 @@ function NodeActions(props: {
             variant="outline"
             disabled={!registered}
             title={registered ? undefined : "Command is not registered by this T3 client."}
-            onClick={() => {
-              if (!registered) return;
-              const baseArgs =
-                typeof action.args === "object" &&
-                action.args !== null &&
-                !Array.isArray(action.args)
-                  ? action.args
-                  : {};
-              const args =
-                Object.keys(props.inputs).length === 0
-                  ? baseArgs
-                  : { ...baseArgs, input: props.inputs };
-              void props.onAction({
-                commandId: action.commandId,
-                args,
-              });
-            }}
+            onClick={() => runAction(action)}
           >
             {action.label}
           </Button>

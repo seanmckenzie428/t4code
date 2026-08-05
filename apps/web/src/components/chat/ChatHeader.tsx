@@ -5,9 +5,10 @@ import {
   type ProjectCustomAction,
   type ResolvedKeybindingsConfig,
   type ThreadId,
+  type ContextMenuItem,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
-import { memo } from "react";
+import { memo, type MouseEvent as ReactMouseEvent } from "react";
 import GitActionsControl from "../GitActionsControl";
 import { type DraftId } from "~/composerDraftStore";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -23,9 +24,15 @@ import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { cn } from "~/lib/utils";
-import type { ResolvedAppViewPlacement } from "../app-views/AppViewPlacements.logic";
+import {
+  manageAppViewPlacement,
+  type ResolvedAppViewPlacement,
+} from "../app-views/AppViewPlacements.logic";
 import { AppViewPlacementIcon } from "../app-views/AppViewPlacementIcon";
 import { Button } from "../ui/button";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
+import { ChevronDownIcon } from "lucide-react";
+import { readLocalApi } from "~/localApi";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -108,6 +115,22 @@ export const ChatHeader = memo(function ChatHeader({
     activeThreadEnvironmentId,
     primaryEnvironmentId,
   });
+  const handleAppViewPlacementContextMenu = async (
+    event: ReactMouseEvent,
+    item: ResolvedAppViewPlacement,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const api = readLocalApi();
+    if (!api) return;
+    const action = await api.contextMenu.show(
+      [{ id: "manage", label: "Manage generated view…" }] satisfies ContextMenuItem<"manage">[],
+      { x: event.clientX, y: event.clientY },
+    );
+    if (action === "manage") {
+      onActivateAppViewPlacement(manageAppViewPlacement(item));
+    }
+  };
   return (
     <div className="@container/header-actions flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
       <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
@@ -162,26 +185,68 @@ export const ChatHeader = memo(function ChatHeader({
           rightPanelOpen ? "pr-0" : "pr-16",
         )}
       >
-        {appViewPlacements.map((item) => (
-          <Tooltip key={item.id}>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  aria-label={item.label}
-                  onClick={() => onActivateAppViewPlacement(item)}
-                  className="max-w-36"
-                />
-              }
-            >
-              <AppViewPlacementIcon icon={item.placement.icon} className="size-3.5 shrink-0" />
-              <span className="hidden truncate @5xl/header-actions:inline">{item.label}</span>
-            </TooltipTrigger>
-            <TooltipPopup side="top">{item.description}</TooltipPopup>
-          </Tooltip>
-        ))}
+        {appViewPlacements.map((item) => {
+          const action = item.placement.action;
+          if (action && "menu" in action) {
+            return (
+              <Menu key={item.id}>
+                <MenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      aria-label={item.label}
+                      className="max-w-36"
+                      onContextMenu={(event) => void handleAppViewPlacementContextMenu(event, item)}
+                    />
+                  }
+                  title={item.description}
+                >
+                  <AppViewPlacementIcon icon={item.placement.icon} className="size-3.5 shrink-0" />
+                  <span className="hidden truncate @5xl/header-actions:inline">{item.label}</span>
+                  <ChevronDownIcon className="size-3 shrink-0" />
+                </MenuTrigger>
+                <MenuPopup align="end" side="bottom">
+                  {action.menu.map((menuItem, index) => (
+                    <MenuItem
+                      key={`${item.id}:${index}`}
+                      onClick={() =>
+                        onActivateAppViewPlacement({
+                          ...item,
+                          placement: { ...item.placement, action: menuItem.action },
+                        })
+                      }
+                    >
+                      {menuItem.label}
+                    </MenuItem>
+                  ))}
+                </MenuPopup>
+              </Menu>
+            );
+          }
+          return (
+            <Tooltip key={item.id}>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    aria-label={item.label}
+                    onClick={() => onActivateAppViewPlacement(item)}
+                    onContextMenu={(event) => void handleAppViewPlacementContextMenu(event, item)}
+                    className="max-w-36"
+                  />
+                }
+              >
+                <AppViewPlacementIcon icon={item.placement.icon} className="size-3.5 shrink-0" />
+                <span className="hidden truncate @5xl/header-actions:inline">{item.label}</span>
+              </TooltipTrigger>
+              <TooltipPopup side="top">{item.description}</TooltipPopup>
+            </Tooltip>
+          );
+        })}
         {activeProjectCustomActions ? (
           <ProjectCustomActionsControl
             actions={activeProjectCustomActions}

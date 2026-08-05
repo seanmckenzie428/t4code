@@ -168,12 +168,19 @@ function makePnpmGlobalProviderMaintenanceCapabilities(
 
 function makeVitePlusGlobalProviderMaintenanceCapabilities(
   definition: PackageManagedProviderMaintenanceDefinition,
+  commandPath?: string,
 ): ProviderMaintenanceCapabilities {
+  const nodeVersion = commandPath ? vitePlusRuntimeNodeVersion(commandPath) : null;
   return makeProviderMaintenanceCapabilities({
     provider: definition.provider,
     packageName: definition.npmPackageName,
     updateExecutable: "vp",
-    updateArgs: ["i", "-g", definition.npmPackageName],
+    updateArgs: [
+      "i",
+      "-g",
+      ...(nodeVersion ? ["--node", nodeVersion] : []),
+      definition.npmPackageName,
+    ],
     updateLockKey: "vite-plus-global",
   });
 }
@@ -227,6 +234,13 @@ function isBunGlobalCommandPath(commandPath: string): boolean {
 
 function isVitePlusGlobalCommandPath(commandPath: string): boolean {
   return normalizeCommandPath(commandPath).includes("/.vite-plus/bin/");
+}
+
+function vitePlusRuntimeNodeVersion(commandPath: string): string | null {
+  const match = /\/\.vite-plus\/js_runtime\/node\/([^/]+)\/bin\//.exec(
+    normalizeCommandPath(commandPath),
+  );
+  return match?.[1] ?? null;
 }
 
 function isPnpmGlobalCommandPath(commandPath: string): boolean {
@@ -291,8 +305,15 @@ export function resolvePackageManagedProviderMaintenance(
         makeNpmGlobalProviderMaintenanceCapabilities(definition)
       );
     }
-    if (commandPaths.some(isVitePlusGlobalCommandPath)) {
-      return makeVitePlusGlobalProviderMaintenanceCapabilities(definition);
+    const vitePlusBinPath = commandPaths.find(isVitePlusGlobalCommandPath);
+    if (vitePlusBinPath) {
+      const vitePlusRuntimePath = commandPaths.find(
+        (commandPath) => vitePlusRuntimeNodeVersion(commandPath) !== null,
+      );
+      return makeVitePlusGlobalProviderMaintenanceCapabilities(
+        definition,
+        vitePlusRuntimePath ?? vitePlusBinPath,
+      );
     }
     if (commandPaths.some(isBunGlobalCommandPath)) {
       return makeBunGlobalProviderMaintenanceCapabilities(definition);
