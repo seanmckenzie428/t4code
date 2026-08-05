@@ -275,10 +275,20 @@ export function effectiveSettled(
 }
 
 const HOUR_MS = 60 * 60 * 1_000;
+const AFTERNOON_HOUR = 13;
 const EVENING_HOUR = 18;
 const MORNING_HOUR = 9;
 
-export type SnoozePresetId = "hour" | "evening" | "tomorrow" | "next-week";
+export type SnoozePresetId =
+  | "hour"
+  | "two-hours"
+  | "three-hours"
+  | "afternoon"
+  | "evening"
+  | "tomorrow"
+  | "two-days"
+  | "three-days"
+  | "next-week";
 
 export interface SnoozePreset {
   readonly id: SnoozePresetId;
@@ -310,20 +320,35 @@ function addSnoozeDays(base: Date, days: number): Date {
 }
 
 /**
- * Shared "snooze until" choices for every client. "This evening" only
- * appears while it is meaningfully before evening; after that the list
- * starts at "Tomorrow".
+ * Shared "snooze until" choices for every client. Same-day calendar choices
+ * only appear while they are meaningfully ahead; once one is near or past,
+ * it drops from the menu instead of offering a misleading wake time.
  */
 export function resolveSnoozePresets(now: Date): ReadonlyArray<SnoozePreset> {
-  const inAnHour = new Date(now.getTime() + HOUR_MS);
-  const presets: SnoozePreset[] = [
-    {
-      id: "hour",
-      label: "In 1 hour",
-      whenLabel: snoozeTimeOfDayLabel(inAnHour),
-      snoozedUntil: inAnHour.toISOString(),
-    },
-  ];
+  const relativeHourPresets = [
+    { id: "hour", label: "One hour", hours: 1 },
+    { id: "two-hours", label: "Two hours", hours: 2 },
+    { id: "three-hours", label: "Three hours", hours: 3 },
+  ] as const;
+  const presets: SnoozePreset[] = relativeHourPresets.map((preset) => {
+    const wakeAt = new Date(now.getTime() + preset.hours * HOUR_MS);
+    return {
+      id: preset.id,
+      label: preset.label,
+      whenLabel: snoozeTimeOfDayLabel(wakeAt),
+      snoozedUntil: wakeAt.toISOString(),
+    };
+  });
+
+  const afternoon = snoozeAtHour(now, AFTERNOON_HOUR);
+  if (afternoon.getTime() - now.getTime() > HOUR_MS) {
+    presets.push({
+      id: "afternoon",
+      label: "This afternoon",
+      whenLabel: snoozeTimeOfDayLabel(afternoon),
+      snoozedUntil: afternoon.toISOString(),
+    });
+  }
 
   const evening = snoozeAtHour(now, EVENING_HOUR);
   if (evening.getTime() - now.getTime() > HOUR_MS) {
@@ -342,6 +367,19 @@ export function resolveSnoozePresets(now: Date): ReadonlyArray<SnoozePreset> {
     whenLabel: snoozeTimeOfDayLabel(tomorrow),
     snoozedUntil: tomorrow.toISOString(),
   });
+
+  for (const { id, label, days } of [
+    { id: "two-days", label: "Two days", days: 2 },
+    { id: "three-days", label: "Three days", days: 3 },
+  ] as const) {
+    const wakeAt = snoozeAtHour(addSnoozeDays(now, days), MORNING_HOUR);
+    presets.push({
+      id,
+      label,
+      whenLabel: snoozeTimeOfDayLabel(wakeAt),
+      snoozedUntil: wakeAt.toISOString(),
+    });
+  }
 
   const daysUntilMonday = (1 - now.getDay() + 7) % 7 || 7;
   const nextWeek = snoozeAtHour(addSnoozeDays(now, daysUntilMonday), MORNING_HOUR);

@@ -8,15 +8,22 @@ function localDate(year: number, month: number, day: number, hour: number, minut
 }
 
 describe("resolveSnoozePresets", () => {
-  it("offers hour, evening, tomorrow, next week in the morning", () => {
+  it("offers relative, same-day, and future-day presets in the morning", () => {
     // Wednesday 2026-04-08 10:00 local.
     const presets = resolveSnoozePresets(localDate(2026, 4, 8, 10));
     expect(presets.map((preset) => preset.id)).toEqual([
       "hour",
+      "two-hours",
+      "three-hours",
+      "afternoon",
       "evening",
       "tomorrow",
+      "two-days",
+      "three-days",
       "next-week",
     ]);
+    const afternoon = presets.find((preset) => preset.id === "afternoon");
+    expect(new Date(afternoon!.snoozedUntil).getHours()).toBe(13);
     const evening = presets.find((preset) => preset.id === "evening");
     expect(new Date(evening!.snoozedUntil).getHours()).toBe(18);
     const tomorrow = presets.find((preset) => preset.id === "tomorrow");
@@ -45,12 +52,20 @@ describe("resolveSnoozePresets", () => {
   it("drops the evening preset once evening is near or past", () => {
     expect(resolveSnoozePresets(localDate(2026, 4, 8, 17, 30)).map((preset) => preset.id)).toEqual([
       "hour",
+      "two-hours",
+      "three-hours",
       "tomorrow",
+      "two-days",
+      "three-days",
       "next-week",
     ]);
     expect(resolveSnoozePresets(localDate(2026, 4, 8, 21)).map((preset) => preset.id)).toEqual([
       "hour",
+      "two-hours",
+      "three-hours",
       "tomorrow",
+      "two-days",
+      "three-days",
       "next-week",
     ]);
   });

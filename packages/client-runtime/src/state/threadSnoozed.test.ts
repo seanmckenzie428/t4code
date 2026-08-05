@@ -265,20 +265,53 @@ describe("resolveSnoozePresets", () => {
     const presets = resolveSnoozePresets(localDate(2026, 4, 8, 10));
     expect(presets.map((preset) => preset.id)).toEqual([
       "hour",
+      "two-hours",
+      "three-hours",
+      "afternoon",
       "evening",
       "tomorrow",
+      "two-days",
+      "three-days",
       "next-week",
     ]);
+    expect(presets.map((preset) => preset.label)).toEqual([
+      "One hour",
+      "Two hours",
+      "Three hours",
+      "This afternoon",
+      "This evening",
+      "Tomorrow",
+      "Two days",
+      "Three days",
+      "Next week",
+    ]);
+    expect(
+      new Date(presets.find((preset) => preset.id === "afternoon")!.snoozedUntil).getHours(),
+    ).toBe(13);
+    expect(
+      presets
+        .slice(0, 3)
+        .map((preset) => Date.parse(preset.snoozedUntil) - localDate(2026, 4, 8, 10).getTime()),
+    ).toEqual([1, 2, 3].map((hours) => hours * 60 * 60 * 1_000));
     expect(presets.find((preset) => preset.id === "evening")?.label).toBe("This evening");
     expect(
       new Date(presets.find((preset) => preset.id === "tomorrow")!.snoozedUntil).getHours(),
     ).toBe(9);
+    expect(
+      ["two-days", "three-days"].map((id) =>
+        new Date(presets.find((preset) => preset.id === id)!.snoozedUntil).getDate(),
+      ),
+    ).toEqual([10, 11]);
   });
 
   it("drops the evening choice once evening is near or past", () => {
     expect(resolveSnoozePresets(localDate(2026, 4, 8, 17, 30)).map((preset) => preset.id)).toEqual([
       "hour",
+      "two-hours",
+      "three-hours",
       "tomorrow",
+      "two-days",
+      "three-days",
       "next-week",
     ]);
   });
