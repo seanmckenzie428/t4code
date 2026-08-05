@@ -34,7 +34,7 @@ import {
   useSidebarVisibility,
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { AssistantDrawerLayout } from "./AssistantDrawer";
+import { QuickChatLayout } from "./QuickChatLayout";
 import { useActiveEnvironmentId } from "../state/entities";
 import {
   invokeKeybindingAppCommand,
@@ -225,7 +225,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         {useSidebarV2 ? <ThreadSidebarV2 /> : <ThreadSidebar />}
         <SidebarRail />
       </Sidebar>
-      <AssistantDrawerLayout>{children}</AssistantDrawerLayout>
+      <QuickChatLayout>{children}</QuickChatLayout>
       <SidebarControl />
     </SidebarProvider>
   );

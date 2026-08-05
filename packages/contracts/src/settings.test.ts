@@ -322,7 +322,7 @@ describe("ServerSettingsPatch string normalization", () => {
   });
 });
 
-describe("ServerSettings global assistant", () => {
+describe("ServerSettings Quick Chat compatibility", () => {
   it("defaults disabled without an implicit model selection", () => {
     expect(decodeServerSettings({}).globalAssistant).toEqual({
       enabled: false,

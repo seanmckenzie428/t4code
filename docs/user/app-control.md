@@ -3,14 +3,12 @@
 This fork exposes a semantic T3 control plane to Codex. The agent discovers typed commands and
 invokes them by command ID; it does not click or inspect T3's own DOM.
 
-The persistent T3 Assistant drawer opens from the bot button, the command palette, or
-`mod+shift+a`. Its open state is remembered per environment and survives project navigation. On
-small windows it opens as an overlay.
+Quick Chat opens from its floating button, the command palette, or `mod+shift+space`. It stays
+outside projects and the sidebar. Press Escape to save and close it; saved conversations live in
+**Settings** → **Archived** → **Quick Chat history**.
 
-The assistant is disabled until an environment has an explicit Codex model selection. This build
-also refuses to start the assistant when the installed Codex runtime cannot prove enforcement of
-the control-only filesystem and network profile. The drawer explains that refusal instead of
-starting with prompt-only restrictions.
+Quick Chat requires an explicit Codex model selection. It refuses to start when the installed
+Codex runtime cannot prove enforcement of the control-only filesystem and network profile.
 
 Agents can present generated views in the thread's right panel. Native views use bounded T3
 components and registered actions. Rich views run in an opaque-origin iframe with a default-deny
@@ -35,6 +33,6 @@ core T3 behavior. Lotus remains responsible for its worktrees, containers,
 routes, databases, and lifecycle. T3 marks observed runtime state as stale when
 appropriate.
 
-Current limitations: proactive assistant suggestions are unavailable, remote
+Current limitations: proactive Quick Chat suggestions are unavailable, remote
 rich-view resources and external origins stay blocked, and mobile hides the
-assistant and generated-view controls.
+Quick Chat and generated-view controls.

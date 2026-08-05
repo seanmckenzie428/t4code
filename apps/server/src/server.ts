@@ -107,7 +107,7 @@ import {
   persistServerRuntimeState,
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
-import { ensureConfiguredGlobalAssistant } from "./globalAssistant/GlobalAssistant.ts";
+import { watchConfiguredQuickChat } from "./quickChat/QuickChat.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -398,23 +398,11 @@ const RuntimeDependenciesLive = RuntimeCoreDependenciesLive.pipe(
   Layer.provide(NetService.layer),
 );
 
-const GlobalAssistantStartupLive = Layer.effectDiscard(
-  ensureConfiguredGlobalAssistant.pipe(
-    Effect.tap((result) =>
-      result.status === "unavailable"
-        ? Effect.logWarning("T3 Assistant startup refused", { reason: result.reason })
-        : Effect.void,
-    ),
-    Effect.catchCause((cause) =>
-      Effect.logWarning("T3 Assistant foundation check failed", { cause }),
-    ),
-  ),
-);
+const QuickChatStartupLive = Layer.effectDiscard(watchConfiguredQuickChat());
 
-const RuntimeServicesLive = Layer.mergeAll(
-  ServerRuntimeStartup.layer,
-  GlobalAssistantStartupLive,
-).pipe(Layer.provideMerge(RuntimeDependenciesLive));
+const RuntimeServicesLive = Layer.mergeAll(ServerRuntimeStartup.layer, QuickChatStartupLive).pipe(
+  Layer.provideMerge(RuntimeDependenciesLive),
+);
 
 export const makeRoutesLayer = Layer.mergeAll(
   Layer.mergeAll(

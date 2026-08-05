@@ -2,6 +2,7 @@ import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   EventId,
+  MessageId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
@@ -16,6 +17,8 @@ import { createEmptyReadModel, projectEvent } from "./projector.ts";
 
 const projectId = ProjectId.make("system-project");
 const threadId = ThreadId.make("assistant-thread");
+const quickProjectId = ProjectId.make("quick-system-project");
+const quickThreadId = ThreadId.make("quick-thread");
 const now = "2026-08-01T00:00:00.000Z";
 
 const seedSystemEntities = Effect.gen(function* () {
@@ -34,7 +37,7 @@ const seedSystemEntities = Effect.gen(function* () {
       projectId,
       kind: "system",
       systemRole: "global-assistant",
-      title: "T3 Assistant",
+      title: "Legacy Assistant",
       workspaceRoot: "/isolated/assistant",
       defaultModelSelection: null,
       scripts: [],
@@ -57,7 +60,7 @@ const seedSystemEntities = Effect.gen(function* () {
       threadId,
       projectId,
       kind: "assistant",
-      title: "T3 Assistant",
+      title: "Legacy Assistant",
       modelSelection: {
         instanceId: ProviderInstanceId.make("codex"),
         model: "gpt-5.6",
@@ -70,6 +73,30 @@ const seedSystemEntities = Effect.gen(function* () {
       updatedAt: now,
     },
   });
+});
+
+const seedQuickProject = projectEvent(createEmptyReadModel(now), {
+  sequence: 1,
+  eventId: EventId.make("quick-system-project-created"),
+  aggregateKind: "project",
+  aggregateId: quickProjectId,
+  type: "project.created",
+  occurredAt: now,
+  commandId: CommandId.make("create-quick-system-project"),
+  causationEventId: null,
+  correlationId: null,
+  metadata: {},
+  payload: {
+    projectId: quickProjectId,
+    kind: "system",
+    systemRole: "quick-chat",
+    title: "Quick Chat",
+    workspaceRoot: "/isolated/quick-chat",
+    defaultModelSelection: null,
+    scripts: [],
+    createdAt: now,
+    updatedAt: now,
+  },
 });
 
 it.layer(NodeServices.layer)("system entity invariants", (it) => {
@@ -115,6 +142,74 @@ it.layer(NodeServices.layer)("system entity invariants", (it) => {
         const error = yield* Effect.flip(decideOrchestrationCommand({ command, readModel }));
         expect(error.message).toContain("Assistant thread");
       }
+    }),
+  );
+
+  it.effect("allows assistant turns through the control-only provider profile", () =>
+    Effect.gen(function* () {
+      const readModel = yield* seedSystemEntities;
+      const result = yield* decideOrchestrationCommand({
+        readModel,
+        command: {
+          type: "thread.turn.start",
+          commandId: CommandId.make("start-assistant-turn"),
+          threadId,
+          message: {
+            messageId: MessageId.make("assistant-user-message"),
+            role: "user",
+            text: "Inspect the environment",
+            attachments: [],
+          },
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5.6",
+          },
+          runtimeMode: "approval-required",
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          createdAt: now,
+        },
+      });
+
+      const events = Array.isArray(result) ? result : [result];
+      expect(events.map((event) => event.type)).toEqual([
+        "thread.message-sent",
+        "thread.turn-start-requested",
+      ]);
+    }),
+  );
+
+  it.effect("allows disposable quick threads only in the quick-chat system project", () =>
+    Effect.gen(function* () {
+      const readModel = yield* seedQuickProject;
+      const command = {
+        type: "thread.create",
+        commandId: CommandId.make("create-quick-thread"),
+        threadId: quickThreadId,
+        projectId: quickProjectId,
+        kind: "quick",
+        title: "Quick Chat",
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5.6",
+        },
+        runtimeMode: "approval-required",
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        branch: null,
+        worktreePath: null,
+        createdAt: now,
+      } as const;
+
+      const event = yield* decideOrchestrationCommand({ command, readModel });
+      expect(Array.isArray(event)).toBe(false);
+      expect(event).toMatchObject({ type: "thread.created", payload: { kind: "quick" } });
+
+      const wrongProjectError = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: { ...command, commandId: CommandId.make("wrong-quick-project"), projectId },
+          readModel: yield* seedSystemEntities,
+        }),
+      );
+      expect(wrongProjectError.message).toContain("requires a quick-chat system project");
     }),
   );
 });

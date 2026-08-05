@@ -12,12 +12,14 @@ const context = { environmentId: "environment-1", source: "button" as const };
 describe("web app command registry", () => {
   it("routes client entry points through the registered semantic handler", async () => {
     const calls: unknown[] = [];
-    const dispose = registerWebAppCommandHandler("assistant.toggle", (invocation) => {
+    const dispose = registerWebAppCommandHandler("quick-chat.toggle", (invocation) => {
       calls.push(invocation.args);
       return { open: true };
     });
 
-    await expect(invokeWebAppCommand("assistant.toggle", context)).resolves.toEqual({ open: true });
+    await expect(invokeWebAppCommand("quick-chat.toggle", context)).resolves.toEqual({
+      open: true,
+    });
     expect(calls).toEqual([{}]);
     dispose();
   });
@@ -25,7 +27,7 @@ describe("web app command registry", () => {
   it("reports commands without a mounted host as unavailable", () => {
     const command = webAppCommandRegistry
       .list(context, { includeUnavailable: true })
-      .find(({ descriptor }) => descriptor.id === "assistant.focus");
+      .find(({ descriptor }) => descriptor.id === "quick-chat.focus");
     expect(command?.availability.available).toBe(false);
   });
 
@@ -45,16 +47,16 @@ describe("web app command registry", () => {
 
   it("hands a command to the newest matching host and restores the previous host", async () => {
     const calls: string[] = [];
-    const disposeFirst = registerWebAppCommandHandler("assistant.toggle", () =>
+    const disposeFirst = registerWebAppCommandHandler("quick-chat.toggle", () =>
       calls.push("first"),
     );
-    const disposeSecond = registerWebAppCommandHandler("assistant.toggle", () =>
+    const disposeSecond = registerWebAppCommandHandler("quick-chat.toggle", () =>
       calls.push("second"),
     );
 
-    await invokeWebAppCommand("assistant.toggle", context);
+    await invokeWebAppCommand("quick-chat.toggle", context);
     disposeSecond();
-    await invokeWebAppCommand("assistant.toggle", context);
+    await invokeWebAppCommand("quick-chat.toggle", context);
     expect(calls).toEqual(["second", "first"]);
     disposeFirst();
   });

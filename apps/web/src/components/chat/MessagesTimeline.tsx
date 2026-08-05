@@ -906,7 +906,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       <div className="relative max-w-[80%] rounded-2xl bg-accent p-3">
         {delegation !== undefined ? (
           <div className="mb-2 flex items-center justify-between gap-3 border-border/60 border-b pb-2 text-[11px] text-muted-foreground">
-            <span>Delegated by T3 Assistant</span>
+            <span>Delegated by Quick Chat</span>
             {canStopDelegatedTurn ? (
               <Button
                 type="button"

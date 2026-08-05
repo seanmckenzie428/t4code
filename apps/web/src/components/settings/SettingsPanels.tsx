@@ -3,9 +3,11 @@ import {
   ArchiveX,
   InfoIcon,
   LoaderIcon,
+  MessageCircleIcon,
   PlusIcon,
   RefreshCwIcon,
   SettingsIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
@@ -22,6 +24,7 @@ import {
   type ProviderInstanceId,
   type ScopedThreadRef,
   type SidebarProjectGroupingMode,
+  type ThreadId,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
@@ -82,7 +85,7 @@ import {
   primaryServerProvidersAtom,
   serverEnvironment,
 } from "../../state/server";
-import { usePrimaryEnvironment } from "../../state/environments";
+import { useEnvironments, usePrimaryEnvironment } from "../../state/environments";
 import { useProjects } from "../../state/entities";
 import { useArchivedThreadSnapshots } from "../../lib/archivedThreadsState";
 import { formatRelativeTimeLabel, getRelativeTimeState } from "../../timestampFormat";
@@ -138,6 +141,9 @@ import {
 } from "./settingsLayout";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { threadEnvironment } from "../../state/threads";
+import { useQuickChatStore } from "../../quickChatStore";
+import { invokeWebAppCommand } from "../../appCommandRegistry";
 
 const THEME_OPTIONS = [
   {
@@ -1137,7 +1143,7 @@ export function GeneralSettingsPanel() {
   const textGenerationModelInstanceEntries = sortProviderInstanceEntries(
     applyProviderInstanceSettings(deriveProviderInstanceEntries(serverProviders), settings),
   );
-  const assistantCodexOptions = textGenerationModelInstanceEntries
+  const quickChatCodexOptions = textGenerationModelInstanceEntries
     .filter((entry) => entry.driverKind === "codex" && entry.enabled && entry.installed)
     .flatMap((entry) =>
       entry.models.map((model) => ({
@@ -1147,7 +1153,7 @@ export function GeneralSettingsPanel() {
         label: `${entry.displayName} · ${model.name ?? model.slug}`,
       })),
     );
-  const assistantModelValue = settings.globalAssistant.modelSelection
+  const quickChatModelValue = settings.globalAssistant.modelSelection
     ? JSON.stringify([
         settings.globalAssistant.modelSelection.instanceId,
         settings.globalAssistant.modelSelection.model,
@@ -1184,54 +1190,40 @@ export function GeneralSettingsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="T3 Assistant">
-        <SettingsRow
-          title="Control-only assistant"
-          description="Keep one Codex assistant available across project navigation. Startup is refused unless T3 can prove the isolated filesystem, network, and tool profile."
-          control={
-            <Switch
-              checked={settings.globalAssistant.enabled}
-              disabled={settings.globalAssistant.modelSelection === null}
-              onCheckedChange={(checked) =>
-                updateSettings({
-                  globalAssistant: {
-                    ...settings.globalAssistant,
-                    enabled: Boolean(checked),
-                  },
-                })
-              }
-              aria-label="Enable T3 Assistant"
-            />
-          }
-        />
+      <SettingsSection title="Quick Chat">
         <SettingsRow
           title="Codex model"
-          description="Only configured Codex instances are eligible. Other providers remain unsupported for V1."
+          description="Quick Chat uses an isolated control-only Codex profile. Other providers are not supported."
           control={
             <Select
-              value={assistantModelValue}
+              value={quickChatModelValue}
               onValueChange={(value) => {
                 if (value === "unconfigured") {
                   updateSettings({
-                    globalAssistant: { enabled: false, modelSelection: null },
+                    globalAssistant: {
+                      ...settings.globalAssistant,
+                      enabled: false,
+                      modelSelection: null,
+                    },
                   });
                   return;
                 }
-                const option = assistantCodexOptions.find((candidate) => candidate.value === value);
+                const option = quickChatCodexOptions.find((candidate) => candidate.value === value);
                 if (!option) return;
                 updateSettings({
                   globalAssistant: {
-                    enabled: settings.globalAssistant.enabled,
+                    ...settings.globalAssistant,
+                    enabled: true,
                     modelSelection: createModelSelection(option.instanceId, option.model),
                   },
                 });
               }}
             >
-              <SelectTrigger className="w-full sm:w-64" aria-label="T3 Assistant Codex model">
+              <SelectTrigger className="w-full sm:w-64" aria-label="Quick Chat Codex model">
                 <SelectValue>
-                  {assistantModelValue === "unconfigured"
+                  {quickChatModelValue === "unconfigured"
                     ? "Not configured"
-                    : (assistantCodexOptions.find((option) => option.value === assistantModelValue)
+                    : (quickChatCodexOptions.find((option) => option.value === quickChatModelValue)
                         ?.label ?? "Unavailable Codex model")}
                 </SelectValue>
               </SelectTrigger>
@@ -1239,7 +1231,7 @@ export function GeneralSettingsPanel() {
                 <SelectItem hideIndicator value="unconfigured">
                   Not configured
                 </SelectItem>
-                {assistantCodexOptions.map((option) => (
+                {quickChatCodexOptions.map((option) => (
                   <SelectItem key={option.value} hideIndicator value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -1250,11 +1242,11 @@ export function GeneralSettingsPanel() {
         />
         <SettingsRow
           title="Project delegation"
-          description="Allow T3 Assistant to create project threads and start up to three project turns at once. Revoking this blocks new delegation without taking control away from you."
+          description="Allow Quick Chat to create project threads and start up to three project turns at once."
           control={
             <Switch
               checked={settings.globalAssistant.delegationEnabled}
-              disabled={!settings.globalAssistant.enabled}
+              disabled={settings.globalAssistant.modelSelection === null}
               onCheckedChange={(checked) =>
                 updateSettings({
                   globalAssistant: {
@@ -1263,7 +1255,7 @@ export function GeneralSettingsPanel() {
                   },
                 })
               }
-              aria-label="Allow T3 Assistant project delegation"
+              aria-label="Allow Quick Chat project delegation"
             />
           }
         />
@@ -2308,10 +2300,20 @@ export function ProviderSettingsPanel() {
 
 export function ArchivedThreadsPanel() {
   const projects = useProjects();
-  const { unarchiveThread, confirmAndDeleteThread } = useThreadActions();
+  const primaryEnvironment = usePrimaryEnvironment();
+  const { environments } = useEnvironments();
+  const { archiveThread, unarchiveThread, confirmAndDeleteThread } = useThreadActions();
+  const deleteQuickChat = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
+  const [quickChatDeleteCandidate, setQuickChatDeleteCandidate] = useState<ThreadId | null>(null);
   const environmentIds = useMemo(
-    () => [...new Set(projects.map((project) => project.environmentId))],
-    [projects],
+    () => [
+      ...new Set([
+        ...projects.map((project) => project.environmentId),
+        ...environments.map((environment) => environment.environmentId),
+        ...(primaryEnvironment ? [primaryEnvironment.environmentId] : []),
+      ]),
+    ],
+    [environments, primaryEnvironment, projects],
   );
   const {
     snapshots: archivedSnapshots,
@@ -2320,28 +2322,48 @@ export function ArchivedThreadsPanel() {
     refresh: refreshArchivedThreads,
   } = useArchivedThreadSnapshots(environmentIds);
 
+  const archivedQuickChats = useMemo(
+    () =>
+      archivedSnapshots
+        .flatMap(({ environmentId, snapshot }) =>
+          snapshot.threads
+            .filter((thread) => thread.kind === "quick")
+            .map((thread) => ({ ...thread, environmentId })),
+        )
+        .toSorted((left, right) => {
+          const leftKey = left.archivedAt ?? left.updatedAt;
+          const rightKey = right.archivedAt ?? right.updatedAt;
+          return rightKey.localeCompare(leftKey) || right.id.localeCompare(left.id);
+        }),
+    [archivedSnapshots],
+  );
+
   const archivedGroups = useMemo(() => {
     const projectsByEnvironmentAndId = new Map(
       archivedSnapshots.flatMap(({ environmentId, snapshot }) =>
-        snapshot.projects.map(
-          (project) =>
-            [
-              `${environmentId}:${project.id}`,
-              {
-                id: project.id,
-                environmentId,
-                name: project.title,
-                cwd: project.workspaceRoot,
-              },
-            ] as const,
-        ),
+        snapshot.projects
+          .filter((project) => project.kind !== "system")
+          .map(
+            (project) =>
+              [
+                `${environmentId}:${project.id}`,
+                {
+                  id: project.id,
+                  environmentId,
+                  name: project.title,
+                  cwd: project.workspaceRoot,
+                },
+              ] as const,
+          ),
       ),
     );
     const threads = archivedSnapshots.flatMap(({ environmentId, snapshot }) =>
-      snapshot.threads.map((thread) => ({
-        ...thread,
-        environmentId,
-      })),
+      snapshot.threads
+        .filter((thread) => thread.kind !== "quick")
+        .map((thread) => ({
+          ...thread,
+          environmentId,
+        })),
     );
 
     const archivedProjects = Array.from(projectsByEnvironmentAndId.values());
@@ -2420,6 +2442,117 @@ export function ArchivedThreadsPanel() {
 
   return (
     <SettingsPageContainer>
+      <SettingsSection title="Quick Chat history" icon={<MessageCircleIcon className="size-4" />}>
+        {archivedQuickChats.length === 0 ? (
+          <SettingsRow
+            title={isLoadingArchive ? "Loading Quick Chats" : "No saved Quick Chats"}
+            description={
+              isLoadingArchive
+                ? "Checking connected environments."
+                : "Closing a Quick Chat or starting a new one saves it here."
+            }
+          />
+        ) : (
+          archivedQuickChats.map((thread) => (
+            <SettingsRow
+              key={`${thread.environmentId}:${thread.id}`}
+              title={thread.title}
+              description={
+                <>
+                  Saved {formatRelativeTimeLabel(thread.archivedAt ?? thread.updatedAt)}
+                  {" \u00b7 Created "}
+                  {formatRelativeTimeLabel(thread.createdAt)}
+                </>
+              }
+              control={
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 shrink-0 cursor-pointer px-2.5"
+                    onClick={() => {
+                      void (async () => {
+                        const current =
+                          useQuickChatStore.getState().byEnvironment[String(thread.environmentId)];
+                        if (current && current.threadId !== thread.id) {
+                          await archiveThread(
+                            scopeThreadRef(thread.environmentId, current.threadId),
+                          );
+                        }
+                        const result = await unarchiveThread(
+                          scopeThreadRef(thread.environmentId, thread.id),
+                        );
+                        if (result._tag === "Success") {
+                          await invokeWebAppCommand(
+                            "quick-chat.open",
+                            { environmentId: thread.environmentId, source: "button" },
+                            { threadId: thread.id },
+                          );
+                          refreshArchivedThreads();
+                          return;
+                        }
+                        if (!isAtomCommandInterrupted(result)) {
+                          const error = squashAtomCommandFailure(result);
+                          toastManager.add(
+                            stackedThreadToast({
+                              type: "error",
+                              title: "Failed to open Quick Chat",
+                              description:
+                                error instanceof Error ? error.message : "An error occurred.",
+                            }),
+                          );
+                        }
+                      })();
+                    }}
+                  >
+                    Open
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={quickChatDeleteCandidate === thread.id ? "destructive" : "ghost"}
+                    size="sm"
+                    className="h-7 shrink-0 cursor-pointer gap-1.5 px-2.5"
+                    onClick={() => {
+                      if (quickChatDeleteCandidate !== thread.id) {
+                        setQuickChatDeleteCandidate(thread.id);
+                        return;
+                      }
+                      void (async () => {
+                        const result = await deleteQuickChat({
+                          environmentId: thread.environmentId,
+                          input: { threadId: thread.id },
+                        });
+                        if (result._tag === "Success") {
+                          useQuickChatStore
+                            .getState()
+                            .forgetThread(thread.environmentId, thread.id);
+                          setQuickChatDeleteCandidate(null);
+                          refreshArchivedThreads();
+                          return;
+                        }
+                        const error = squashAtomCommandFailure(result);
+                        toastManager.add(
+                          stackedThreadToast({
+                            type: "error",
+                            title: "Failed to delete Quick Chat",
+                            description:
+                              error instanceof Error ? error.message : "An error occurred.",
+                          }),
+                        );
+                      })();
+                    }}
+                  >
+                    <Trash2Icon className="size-3.5" />
+                    {quickChatDeleteCandidate === thread.id ? "Confirm" : "Delete"}
+                  </Button>
+                </>
+              }
+            />
+          ))
+        )}
+      </SettingsSection>
+
       {archivedGroups.length === 0 ? (
         <SettingsSection title="Archived threads">
           <SettingsRow

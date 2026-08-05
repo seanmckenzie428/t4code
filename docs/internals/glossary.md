@@ -133,19 +133,19 @@ server-owned app command may translate into orchestration commands.
 
 #### App-control principal
 
-The scope identity: either a project/thread agent or the environment's global
-assistant, further constrained by provider session, capabilities, and grants.
+The scope identity: either a project/thread agent or environment-wide Quick
+Chat, further constrained by provider session, capabilities, and grants.
 
 #### Focused-client lease
 
 The environment/provider-session assignment used to route client-owned commands
 to a live focused web or desktop host.
 
-#### Global assistant
+#### Quick Chat
 
-The environment-scoped Codex conversation in the persistent assistant drawer.
-Its system project/thread are immutable and its provider uses an isolated
-control-only permission profile.
+The environment-scoped Codex conversation in a floating popup. Its threads
+live in a hidden system project and its provider uses an isolated control-only
+permission profile.
 
 #### Generated view
 
@@ -169,7 +169,7 @@ and external workspace IDs.
 
 #### Delegated turn
 
-A project-thread turn started by the global assistant. It records origin,
+A project-thread turn started by Quick Chat. It records origin,
 cannot delegate again, and uses the target thread's permissions.
 
 ### Checkpointing

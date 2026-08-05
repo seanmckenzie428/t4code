@@ -1,4 +1,4 @@
-import { BotIcon, SettingsIcon } from "lucide-react";
+import { SettingsIcon } from "lucide-react";
 import { memo, useCallback } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 
@@ -22,9 +22,6 @@ import {
 } from "../ui/sidebar";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdatePill } from "./SidebarUpdatePill";
-import { selectAssistantDrawerOpen, useAssistantDrawerStore } from "../../assistantDrawerStore";
-import { useActiveEnvironmentId } from "../../state/entities";
-import { invokeWebAppCommand } from "../../appCommandRegistry";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -41,10 +38,6 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
     environmentIdentificationMode === "pill"
       ? resolveEnvironmentIdentificationPillLabel(stageLabel)
       : null;
-  const environmentId = useActiveEnvironmentId();
-  const assistantOpen = useAssistantDrawerStore((state) =>
-    selectAssistantDrawerOpen(state, environmentId),
-  );
 
   return (
     <SidebarHeader
@@ -72,27 +65,6 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
           {pillLabel}
         </Badge>
       ) : null}
-      <button
-        type="button"
-        aria-label="Toggle T3 Assistant"
-        aria-pressed={assistantOpen}
-        disabled={environmentId === null}
-        onClick={() => {
-          if (environmentId !== null) {
-            void invokeWebAppCommand("assistant.toggle", {
-              environmentId,
-              source: "button",
-            });
-          }
-        }}
-        className={cn(
-          "relative z-10 ml-auto mr-2 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:opacity-40",
-          assistantOpen && "bg-sidebar-accent text-sidebar-accent-foreground",
-          backdropVariant && "text-white/80 hover:bg-white/15 hover:text-white",
-        )}
-      >
-        <BotIcon className="size-4" />
-      </button>
     </SidebarHeader>
   );
 });

@@ -249,9 +249,7 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
         case "delegation.thread.create": {
           const args = yield* decode(DelegationCreateArgs);
           if (scope.principal.kind !== "global-assistant") {
-            return yield* Effect.fail(
-              controlError("forbidden", "Delegation requires T3 Assistant."),
-            );
+            return yield* Effect.fail(controlError("forbidden", "Delegation requires Quick Chat."));
           }
           if (Option.isNone(projections)) {
             return yield* Effect.fail(controlError("unavailable", "Project state is unavailable."));
@@ -278,7 +276,7 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
             threadId: ThreadId.make(`delegated:${invocation.actionId}`),
             projectId: args.projectId,
             kind: "project" as const,
-            title: args.title ?? "Delegated by T3 Assistant",
+            title: args.title ?? "Delegated by Quick Chat",
             modelSelection,
             runtimeMode: "full-access" as const,
             interactionMode: "default" as const,
@@ -290,9 +288,7 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
         case "delegation.turn.start": {
           const args = yield* decode(DelegationStartArgs);
           if (scope.principal.kind !== "global-assistant") {
-            return yield* Effect.fail(
-              controlError("forbidden", "Delegation requires T3 Assistant."),
-            );
+            return yield* Effect.fail(controlError("forbidden", "Delegation requires Quick Chat."));
           }
           if (Option.isNone(projections)) {
             return yield* Effect.fail(controlError("unavailable", "Thread state is unavailable."));
@@ -312,7 +308,7 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
             MAX_CONCURRENT_ASSISTANT_DELEGATIONS
           ) {
             return yield* Effect.fail(
-              controlError("conflict", "T3 Assistant already has three delegated turns running."),
+              controlError("conflict", "Quick Chat already has three delegated turns running."),
             );
           }
           return {
@@ -338,9 +334,7 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
         case "delegation.turn.stop": {
           const args = yield* decode(ThreadIdArgs);
           if (scope.principal.kind !== "global-assistant") {
-            return yield* Effect.fail(
-              controlError("forbidden", "Delegation requires T3 Assistant."),
-            );
+            return yield* Effect.fail(controlError("forbidden", "Delegation requires Quick Chat."));
           }
           if (Option.isNone(projections)) {
             return yield* Effect.fail(controlError("unavailable", "Thread state is unavailable."));
@@ -365,7 +359,7 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
             latestDelegated?.delegation?.assistantThreadId !== scope.principal.assistantThreadId
           ) {
             return yield* Effect.fail(
-              controlError("forbidden", "T3 Assistant may stop only turns it delegated."),
+              controlError("forbidden", "Quick Chat may stop only turns it delegated."),
             );
           }
           return {

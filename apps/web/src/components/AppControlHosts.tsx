@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { registerWebAppCommandHandler, webAppCommandRegistry } from "../appCommandRegistry";
 import { randomHex } from "../lib/utils";
 import { useUpdateClientSettings } from "../hooks/useSettings";
-import { useAssistantDrawerStore } from "../assistantDrawerStore";
+import { useQuickChatStore } from "../quickChatStore";
 import { selectThreadAppViews, useAppViewStore } from "../appViewStore";
 import { useEnvironments } from "../state/environments";
 import { useProjects, useThreadShells } from "../state/entities";
@@ -46,7 +46,7 @@ function AppControlHost({ environmentId }: { readonly environmentId: Environment
   const [clientId] = useState(() => AppControlClientId.make(`web-${randomHex(16)}`));
   const projects = useProjects().filter((project) => project.environmentId === environmentId);
   const threads = useThreadShells().filter((thread) => thread.environmentId === environmentId);
-  const assistantOpen = useAssistantDrawerStore(
+  const quickChatOpen = useQuickChatStore(
     (state) => state.byEnvironment[String(environmentId)]?.open ?? false,
   );
   const appViewsByThread = useAppViewStore((state) => state.byThreadKey);
@@ -137,7 +137,7 @@ function AppControlHost({ environmentId }: { readonly environmentId: Environment
               request.principal.kind === "thread-agent"
                 ? request.principal.threadId
                 : request.principal.assistantThreadId,
-            assistantOpen,
+            quickChatOpen,
             activePanel: null,
             revision: 0,
           },
@@ -202,7 +202,7 @@ function AppControlHost({ environmentId }: { readonly environmentId: Environment
         result: result ?? null,
       };
     },
-    [appViewsByThread, assistantOpen, clientId, environmentId, projects, threads],
+    [appViewsByThread, clientId, environmentId, projects, quickChatOpen, threads],
   );
   const [requestHandlerAtom] = useState(() => Atom.make({ handle: handleRequest }));
   const setRequestHandler = useAtomSet(requestHandlerAtom);

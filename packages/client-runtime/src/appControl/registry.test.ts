@@ -182,6 +182,7 @@ describe("APP_COMMAND_CATALOG", () => {
     const commands = [
       "sidebar.toggle",
       "assistant.toggle",
+      "quickChat.toggle",
       "terminal.toggle",
       "terminal.split",
       "terminal.splitVertical",
@@ -215,19 +216,30 @@ describe("APP_COMMAND_CATALOG", () => {
       expect(isAppCommandId(commandId ?? ""), keybinding).toBe(true);
     }
   });
+
+  it("allows Quick Chat to reopen an optional saved thread", () => {
+    const entry = APP_COMMAND_CATALOG.find(({ id }) => id === "quick-chat.open");
+    expect(entry?.descriptor.inputSchema).toMatchObject({
+      type: "object",
+      properties: { threadId: { type: "string" } },
+      additionalProperties: false,
+    });
+  });
 });
 
 it("keeps agent project-action proposals menu-only", () => {
   const entry = APP_COMMAND_CATALOG.find(({ id }) => id === "project.action.upsert");
   expect(entry?.descriptor).toMatchObject({ owner: "server", risk: "external" });
+  if (!entry) throw new Error("Expected project.action.upsert command");
   const actionSchema = (
-    entry?.descriptor.inputSchema as {
+    entry.descriptor.inputSchema as {
       properties?: { action?: { properties?: Record<string, unknown> } };
     }
   ).properties?.action?.properties;
   expect(actionSchema).toHaveProperty("commandId");
   expect(actionSchema).not.toHaveProperty("placement");
-  expect(actionSchema?.icon).toMatchObject({
+  const iconSchema = actionSchema?.icon;
+  expect(iconSchema).toMatchObject({
     type: "string",
     enum: expect.arrayContaining([
       "external-link",

@@ -1251,7 +1251,7 @@ export const makeCodexSessionRuntime = (
         });
         if (refusalReason) {
           return yield* CodexErrors.CodexAppServerRequestError.invalidParams(
-            `T3 Assistant startup refused: ${refusalReason}`,
+            `Quick Chat startup refused: ${refusalReason}`,
             { profile: options.controlOnlyProfile.profileName },
           );
         }

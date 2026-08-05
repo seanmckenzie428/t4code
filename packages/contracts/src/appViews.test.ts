@@ -115,9 +115,9 @@ it.effect("decodes sandboxed views with an explicit command bridge", () =>
       scope: { kind: "personal" },
       kind: "sandboxed",
       html: "<!doctype html><p>Hello</p>",
-      commandIds: ["assistant.toggle"],
+      commandIds: ["quick-chat.toggle"],
     });
-    assert.strictEqual(parsed.commandIds[0], "assistant.toggle");
+    assert.strictEqual(parsed.commandIds[0], "quick-chat.toggle");
   }),
 );
 

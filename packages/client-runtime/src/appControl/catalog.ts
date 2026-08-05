@@ -87,10 +87,18 @@ export const APP_COMMAND_CATALOG = [
     objectInput({ threadId: stringProperty }, ["threadId"]),
   ),
   command("ui.sidebar.toggle", "ui", "client", "navigate", "Toggle sidebar", null, emptyInput),
-  command("assistant.open", "ui", "client", "navigate", "Open assistant", null, emptyInput),
-  command("assistant.close", "ui", "client", "navigate", "Close assistant", null, emptyInput),
-  command("assistant.focus", "ui", "client", "navigate", "Focus assistant", null, emptyInput),
-  command("assistant.toggle", "ui", "client", "navigate", "Toggle assistant", null, emptyInput),
+  command(
+    "quick-chat.open",
+    "ui",
+    "client",
+    "navigate",
+    "Open quick chat",
+    null,
+    objectInput({ threadId: stringProperty }),
+  ),
+  command("quick-chat.close", "ui", "client", "navigate", "Close quick chat", null, emptyInput),
+  command("quick-chat.focus", "ui", "client", "navigate", "Focus quick chat", null, emptyInput),
+  command("quick-chat.toggle", "ui", "client", "navigate", "Toggle quick chat", null, emptyInput),
   command(
     "ui.palette.open",
     "ui",
@@ -768,7 +776,8 @@ export function isAppCommandId(value: string): value is AppCommandId {
 
 const KEYBINDING_APP_COMMAND_ALIASES = {
   "sidebar.toggle": "ui.sidebar.toggle",
-  "assistant.toggle": "assistant.toggle",
+  "assistant.toggle": "quick-chat.toggle",
+  "quickChat.toggle": "quick-chat.toggle",
   "terminal.toggle": "ui.terminal.toggle",
   "terminal.split": "terminal.split",
   "terminal.splitVertical": "terminal.split-vertical",
