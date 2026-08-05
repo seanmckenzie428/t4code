@@ -167,6 +167,30 @@ describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   });
 });
 
+describe("ServerSettings extensions", () => {
+  it("decodes legacy settings with no installed extensions", () => {
+    expect(decodeServerSettings({}).extensions).toEqual([]);
+    expect(DEFAULT_SERVER_SETTINGS.extensions).toEqual([]);
+  });
+
+  it("round-trips an explicitly disabled extension", () => {
+    const decoded = decodeServerSettings({
+      extensions: [
+        {
+          id: "example",
+          title: "Example",
+          transport: { kind: "stdio", executable: "example-mcp", args: ["serve"] },
+          requestedCapabilities: ["tools"],
+        },
+      ],
+    });
+    expect(encodeServerSettings(decoded).extensions?.[0]).toMatchObject({
+      enabled: false,
+      approval: null,
+    });
+  });
+});
+
 describe("ServerSettings worktree defaults", () => {
   it("defaults start-from-origin on for legacy configs", () => {
     expect(decodeServerSettings({}).newWorktreesStartFromOrigin).toBe(true);
@@ -295,5 +319,35 @@ describe("ServerSettingsPatch string normalization", () => {
     expect(encoded.addProjectBaseDirectory).toBe("~/Development");
     expect(encoded.providers?.codex?.binaryPath).toBe("/opt/homebrew/bin/codex");
     expect(encoded.providers?.codex?.launchArgs).toBe("--strict-config");
+  });
+});
+
+describe("ServerSettings global assistant", () => {
+  it("defaults disabled without an implicit model selection", () => {
+    expect(decodeServerSettings({}).globalAssistant).toEqual({
+      enabled: false,
+      delegationEnabled: false,
+      modelSelection: null,
+    });
+  });
+
+  it("decodes an explicit assistant model selection patch", () => {
+    expect(
+      decodeServerSettingsPatch({
+        globalAssistant: {
+          enabled: true,
+          modelSelection: {
+            instanceId: "codex",
+            model: "gpt-5.6",
+          },
+        },
+      }).globalAssistant,
+    ).toEqual({
+      enabled: true,
+      modelSelection: {
+        instanceId: "codex",
+        model: "gpt-5.6",
+      },
+    });
   });
 });

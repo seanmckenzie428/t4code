@@ -30,7 +30,8 @@ function createBrowserLocalApi(): LocalApi {
           return;
         }
 
-        window.open(url, "_blank", "noopener,noreferrer");
+        const opened = window.open(url, "_blank", "noopener,noreferrer");
+        if (!opened) throw new Error("Unable to open link. Allow popups for this T3 site.");
       },
     },
     contextMenu: {

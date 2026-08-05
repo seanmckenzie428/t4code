@@ -22,6 +22,7 @@ const invocation = {
   providerSessionId: "provider-session-mcp-test",
   providerInstanceId: ProviderInstanceId.make("codex"),
   capabilities: new Set(["preview"] as const),
+  grants: new Set<string>(),
   issuedAt: 1,
 };
 const client = McpSchema.McpServerClient.of({

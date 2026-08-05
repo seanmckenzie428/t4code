@@ -4,14 +4,12 @@ import { useEffect, useMemo } from "react";
 
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { useClientSettings, useSidebarV2Enabled } from "../hooks/useSettings";
-import { openCommandPalette } from "../commandPaletteBus";
 import { useProjects } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { selectProjectGroupingSettings } from "../logicalProject";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import { dispatchPreviewAction } from "../components/preview/previewActionBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { resolveShortcutCommand } from "../keybindings";
@@ -21,11 +19,16 @@ import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { primaryServerKeybindingsAtom } from "~/state/server";
+import {
+  invokeKeybindingAppCommand,
+  invokeWebAppCommand,
+  registerWebAppCommandHandler,
+} from "../appCommandRegistry";
 
 function ChatRouteGlobalShortcuts() {
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
   const selectedThreadKeysSize = useThreadSelectionStore((state) => state.selectedThreadKeys.size);
-  const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeThreadRef } =
+  const { activeDraftThread, activeThread, defaultProjectRef, routeThreadRef } =
     useHandleNewThread();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const sidebarV2Enabled = useSidebarV2Enabled();
@@ -56,6 +59,43 @@ function ChatRouteGlobalShortcuts() {
       : false,
   );
   useEffect(() => {
+    const matchesRoute = (context: { environmentId: string; threadId?: string }) => ({
+      available:
+        routeThreadRef !== null &&
+        context.environmentId === routeThreadRef.environmentId &&
+        (context.threadId === undefined || context.threadId === routeThreadRef.threadId),
+      reason: "No matching preview thread is active.",
+    });
+    const disposers = [
+      registerWebAppCommandHandler(
+        "ui.preview.refresh",
+        () => dispatchPreviewAction("refresh"),
+        matchesRoute,
+      ),
+      registerWebAppCommandHandler(
+        "ui.preview.focus-url",
+        () => dispatchPreviewAction("focus-url"),
+        matchesRoute,
+      ),
+      registerWebAppCommandHandler(
+        "ui.preview.zoom-in",
+        () => dispatchPreviewAction("zoom-in"),
+        matchesRoute,
+      ),
+      registerWebAppCommandHandler(
+        "ui.preview.zoom-out",
+        () => dispatchPreviewAction("zoom-out"),
+        matchesRoute,
+      ),
+      registerWebAppCommandHandler(
+        "ui.preview.reset-zoom",
+        () => dispatchPreviewAction("reset-zoom"),
+        matchesRoute,
+      ),
+    ];
+    return () => disposers.forEach((dispose) => dispose());
+  }, [routeThreadRef]);
+  useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       const command = resolveShortcutCommand(event, keybindings, {
@@ -80,12 +120,21 @@ function ChatRouteGlobalShortcuts() {
       if (command === "chat.newLocal") {
         event.preventDefault();
         event.stopPropagation();
-        void startNewThreadFromContext({
-          activeDraftThread,
-          activeThread: activeThread ?? undefined,
-          defaultProjectRef,
-          handleNewThread,
-        });
+        const projectRef = activeThread
+          ? { environmentId: activeThread.environmentId, projectId: activeThread.projectId }
+          : activeDraftThread
+            ? {
+                environmentId: activeDraftThread.environmentId,
+                projectId: activeDraftThread.projectId,
+              }
+            : defaultProjectRef;
+        if (projectRef) {
+          void invokeKeybindingAppCommand(
+            command,
+            { environmentId: projectRef.environmentId, projectId: projectRef.projectId },
+            { projectId: projectRef.projectId, local: true },
+          );
+        }
         return;
       }
 
@@ -96,15 +145,30 @@ function ChatRouteGlobalShortcuts() {
         // there is a real choice to make; v1 (and single-project setups)
         // keep the immediate contextual create.
         if (sidebarV2Enabled && projectGroupCount > 1) {
-          openCommandPalette({ open: "new-thread-in" });
+          if (primaryEnvironmentId !== null) {
+            void invokeWebAppCommand(
+              "ui.palette.open",
+              { environmentId: primaryEnvironmentId, source: "keybinding" },
+              { open: "new-thread-in" },
+            );
+          }
           return;
         }
-        void startNewThreadFromContext({
-          activeDraftThread,
-          activeThread: activeThread ?? undefined,
-          defaultProjectRef,
-          handleNewThread,
-        });
+        const projectRef = activeThread
+          ? { environmentId: activeThread.environmentId, projectId: activeThread.projectId }
+          : activeDraftThread
+            ? {
+                environmentId: activeDraftThread.environmentId,
+                projectId: activeDraftThread.projectId,
+              }
+            : defaultProjectRef;
+        if (projectRef) {
+          void invokeKeybindingAppCommand(
+            command,
+            { environmentId: projectRef.environmentId, projectId: projectRef.projectId },
+            { projectId: projectRef.projectId },
+          );
+        }
         return;
       }
 
@@ -122,7 +186,10 @@ function ChatRouteGlobalShortcuts() {
           );
           return;
         }
-        dispatchPreviewAction("toggle-panel");
+        void invokeKeybindingAppCommand(command, {
+          environmentId: routeThreadRef.environmentId,
+          threadId: routeThreadRef.threadId,
+        });
         return;
       }
 
@@ -138,17 +205,11 @@ function ChatRouteGlobalShortcuts() {
       ) {
         event.preventDefault();
         event.stopPropagation();
-        const action =
-          command === "preview.refresh"
-            ? "refresh"
-            : command === "preview.focusUrl"
-              ? "focus-url"
-              : command === "preview.zoomIn"
-                ? "zoom-in"
-                : command === "preview.zoomOut"
-                  ? "zoom-out"
-                  : "reset-zoom";
-        dispatchPreviewAction(action);
+        if (!routeThreadRef) return;
+        void invokeKeybindingAppCommand(command, {
+          environmentId: routeThreadRef.environmentId,
+          threadId: routeThreadRef.threadId,
+        });
       }
     };
 
@@ -160,11 +221,11 @@ function ChatRouteGlobalShortcuts() {
     activeDraftThread,
     activeThread,
     clearSelection,
-    handleNewThread,
     keybindings,
     defaultProjectRef,
     previewOpen,
     projectGroupCount,
+    primaryEnvironmentId,
     routeThreadRef,
     selectedThreadKeysSize,
     sidebarV2Enabled,

@@ -3,8 +3,10 @@ import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -37,6 +39,7 @@ import {
   type ProjectFileOperation,
   ProjectListEntriesError,
   ProjectReadFileError,
+  ProjectSaveAppViewError,
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
@@ -66,6 +69,7 @@ import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as ServerConfig from "./config.ts";
 import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
+import * as ProcessRunner from "./processRunner.ts";
 import {
   projectActivityEvent,
   projectThreadDetailSnapshot,
@@ -86,6 +90,12 @@ import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServerSettings from "./serverSettings.ts";
 import * as TerminalManager from "./terminal/Manager.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
+import * as AppControlBroker from "./mcp/AppControlBroker.ts";
+import * as AppControlAudit from "./mcp/AppControlAudit.ts";
+import * as AppControlPolicy from "./mcp/AppControlPolicy.ts";
+import * as AppControlServerExecutor from "./mcp/AppControlServerExecutor.ts";
+import * as AppControlTerminalCommandRunner from "./mcp/AppControlTerminalCommandRunner.ts";
+import { invokeServerCommandFromClient } from "./mcp/AppControlClientInvoker.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import { issueAssetUrl } from "./assets/AssetAccess.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
@@ -97,6 +107,7 @@ import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
+import { saveProjectAppView } from "./project/ProjectAppViewFile.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -341,6 +352,7 @@ function toAuthAccessStreamEvent(
 const makeWsRpcLayer = (
   currentSession: EnvironmentAuth.AuthenticatedSession,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
+  appControlBroker: AppControlBroker.AppControlBroker["Service"],
 ) =>
   WsRpcGroup.toLayer(
     Effect.gen(function* () {
@@ -367,8 +379,27 @@ const makeWsRpcLayer = (
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
       const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
+      const environmentId = yield* serverEnvironment.getEnvironmentId;
+      const appControlTerminalCommands = yield* AppControlTerminalCommandRunner.make;
+      const appControlServerExecutor = yield* AppControlServerExecutor.make.pipe(
+        Effect.provideService(
+          AppControlTerminalCommandRunner.AppControlTerminalCommandRunner,
+          appControlTerminalCommands,
+        ),
+      );
+      const appControlAudit = yield* AppControlAudit.make;
+      const appControlPolicy = yield* AppControlPolicy.make.pipe(
+        Effect.provideService(AppControlBroker.AppControlBroker, appControlBroker),
+        Effect.provideService(AppControlAudit.AppControlAudit, appControlAudit),
+        Effect.provideService(
+          AppControlServerExecutor.AppControlServerExecutor,
+          appControlServerExecutor,
+        ),
+      );
       const backgroundPolicy = yield* BackgroundPolicy.BackgroundPolicy;
       const rpcClientIds = yield* Ref.make(new Set<RpcClientId>());
       yield* Effect.addFinalizer(() =>
@@ -887,6 +918,7 @@ const makeWsRpcLayer = (
                 commandId: yield* serverCommandId("bootstrap-thread-create"),
                 threadId: command.threadId,
                 projectId: bootstrap.createThread.projectId,
+                kind: bootstrap.createThread.kind,
                 title: bootstrap.createThread.title,
                 modelSelection: bootstrap.createThread.modelSelection,
                 runtimeMode: bootstrap.createThread.runtimeMode,
@@ -1661,6 +1693,40 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "workspace" },
           ),
+        [WS_METHODS.projectsSaveAppView]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsSaveAppView,
+            Effect.gen(function* () {
+              const project = yield* projectionSnapshotQuery
+                .getProjectShellById(input.projectId)
+                .pipe(
+                  Effect.mapError(
+                    () =>
+                      new ProjectSaveAppViewError({
+                        projectId: input.projectId,
+                        failure: "project_lookup_failed",
+                        message: "The project could not be loaded.",
+                      }),
+                  ),
+                );
+              if (Option.isNone(project)) {
+                return yield* new ProjectSaveAppViewError({
+                  projectId: input.projectId,
+                  failure: "project_not_found",
+                  message: "The project no longer exists.",
+                });
+              }
+              return yield* saveProjectAppView({
+                workspaceRoot: project.value.workspaceRoot,
+                projectId: input.projectId,
+                manifest: input.manifest,
+                workspaceFileSystem,
+                fileSystem,
+                path,
+              });
+            }),
+            { "rpc.aggregate": "workspace" },
+          ),
         [WS_METHODS.shellOpenInEditor]: (input) =>
           observeRpcEffect(WS_METHODS.shellOpenInEditor, externalLauncher.launchEditor(input), {
             "rpc.aggregate": "workspace",
@@ -1938,6 +2004,18 @@ const makeWsRpcLayer = (
             previewAutomationBroker.focusHost(input),
             { "rpc.aggregate": "preview-automation" },
           ),
+        [WS_METHODS.appControlConnect]: (input) =>
+          observeRpcStreamEffect(WS_METHODS.appControlConnect, appControlBroker.connect(input), {
+            "rpc.aggregate": "app-control",
+          }),
+        [WS_METHODS.appControlRespond]: (input) =>
+          observeRpcEffect(WS_METHODS.appControlRespond, appControlBroker.respond(input), {
+            "rpc.aggregate": "app-control",
+          }),
+        [WS_METHODS.appControlFocusHost]: (input) =>
+          observeRpcEffect(WS_METHODS.appControlFocusHost, appControlBroker.focusHost(input), {
+            "rpc.aggregate": "app-control",
+          }),
         [WS_METHODS.subscribePreviewEvents]: (_input) =>
           observeRpcStream(WS_METHODS.subscribePreviewEvents, previewManager.events, {
             "rpc.aggregate": "preview",
@@ -1963,6 +2041,17 @@ const makeWsRpcLayer = (
               }),
             ),
             { "rpc.aggregate": "preview" },
+          ),
+        [WS_METHODS.appControlInvokeServer]: (input, metadata) =>
+          observeRpcEffect(
+            WS_METHODS.appControlInvokeServer,
+            invokeServerCommandFromClient(appControlPolicy, {
+              environmentId,
+              providerSessionId: `authenticated-client:${currentSessionId}:${metadata.client.id}`,
+              principal: input.principal,
+              invocation: input.invocation,
+            }),
+            { "rpc.aggregate": "app-control" },
           ),
         [WS_METHODS.subscribeServerConfig]: (_input) =>
           observeRpcStreamEffect(
@@ -2089,6 +2178,7 @@ const makeWsRpcLayer = (
 export const websocketRpcRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+    const appControlBroker = yield* AppControlBroker.AppControlBroker;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     return HttpRouter.add(
       "GET",
@@ -2109,8 +2199,9 @@ export const websocketRpcRouteLayer = Layer.unwrap(
           disableTracing: true,
         }).pipe(
           Effect.provide(
-            makeWsRpcLayer(session, previewAutomationBroker).pipe(
+            makeWsRpcLayer(session, previewAutomationBroker, appControlBroker).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
+              Layer.provide(ProcessRunner.layer),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
               Layer.provide(

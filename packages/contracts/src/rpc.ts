@@ -76,6 +76,9 @@ import {
   ProjectReadFileError,
   ProjectReadFileInput,
   ProjectReadFileResult,
+  ProjectSaveAppViewError,
+  ProjectSaveAppViewInput,
+  ProjectSaveAppViewResult,
   ProjectSearchContentsError,
   ProjectSearchContentsInput,
   ProjectSearchContentsResult,
@@ -161,6 +164,15 @@ import {
   SourceControlRepositoryLookupInput,
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
+import {
+  AppControlError,
+  AppControlHost,
+  AppControlHostFocus,
+  AppControlServerInvocation,
+  AppControlResponse,
+  AppControlStreamEvent,
+  AppCommandResult,
+} from "./appControl.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -172,6 +184,7 @@ export const WS_METHODS = {
   projectsSearchContents: "projects.searchContents",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
+  projectsSaveAppView: "projects.saveAppView",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
@@ -218,6 +231,12 @@ export const WS_METHODS = {
   previewAutomationConnect: "previewAutomation.connect",
   previewAutomationRespond: "previewAutomation.respond",
   previewAutomationFocusHost: "previewAutomation.focusHost",
+
+  // Semantic app-control host methods
+  appControlConnect: "appControl.connect",
+  appControlRespond: "appControl.respond",
+  appControlFocusHost: "appControl.focusHost",
+  appControlInvokeServer: "appControl.invokeServer",
 
   // Server meta
   serverProbe: "server.probe",
@@ -466,6 +485,12 @@ export const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   error: Schema.Union([ProjectWriteFileError, EnvironmentAuthorizationError]),
 });
 
+export const WsProjectsSaveAppViewRpc = Rpc.make(WS_METHODS.projectsSaveAppView, {
+  payload: ProjectSaveAppViewInput,
+  success: ProjectSaveAppViewResult,
+  error: Schema.Union([ProjectSaveAppViewError, EnvironmentAuthorizationError]),
+});
+
 export const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
   payload: LaunchEditorInput,
   error: Schema.Union([ExternalLauncherError, EnvironmentAuthorizationError]),
@@ -661,6 +686,29 @@ export const WsPreviewAutomationFocusHostRpc = Rpc.make(WS_METHODS.previewAutoma
   error: EnvironmentAuthorizationError,
 });
 
+export const WsAppControlConnectRpc = Rpc.make(WS_METHODS.appControlConnect, {
+  payload: AppControlHost,
+  success: AppControlStreamEvent,
+  error: Schema.Union([AppControlError, EnvironmentAuthorizationError]),
+  stream: true,
+});
+
+export const WsAppControlRespondRpc = Rpc.make(WS_METHODS.appControlRespond, {
+  payload: AppControlResponse,
+  error: Schema.Union([AppControlError, EnvironmentAuthorizationError]),
+});
+
+export const WsAppControlFocusHostRpc = Rpc.make(WS_METHODS.appControlFocusHost, {
+  payload: AppControlHostFocus,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsAppControlInvokeServerRpc = Rpc.make(WS_METHODS.appControlInvokeServer, {
+  payload: AppControlServerInvocation,
+  success: AppCommandResult,
+  error: EnvironmentAuthorizationError,
+});
+
 export const WsSubscribePreviewEventsRpc = Rpc.make(WS_METHODS.subscribePreviewEvents, {
   payload: Schema.Struct({}),
   success: PreviewEvent,
@@ -814,6 +862,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsSearchContentsRpc,
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
+  WsProjectsSaveAppViewRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,
   WsAssetsCreateUrlRpc,
@@ -849,6 +898,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsPreviewAutomationConnectRpc,
   WsPreviewAutomationRespondRpc,
   WsPreviewAutomationFocusHostRpc,
+  WsAppControlConnectRpc,
+  WsAppControlRespondRpc,
+  WsAppControlFocusHostRpc,
+  WsAppControlInvokeServerRpc,
   WsSubscribePreviewEventsRpc,
   WsSubscribeDiscoveredLocalServersRpc,
   WsSubscribeServerConfigRpc,

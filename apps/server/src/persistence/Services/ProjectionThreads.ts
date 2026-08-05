@@ -11,6 +11,8 @@ import {
   IsoDateTime,
   ModelSelection,
   NonNegativeInt,
+  OrchestrationThreadKind,
+  OrchestrationWorkspaceBinding,
   ProjectId,
   ProviderInteractionMode,
   RuntimeMode,
@@ -21,12 +23,19 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
+import * as RuntimeEffect from "effect/Effect";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
 
 export const ProjectionThread = Schema.Struct({
   threadId: ThreadId,
   projectId: ProjectId,
+  kind: OrchestrationThreadKind.pipe(
+    Schema.withDecodingDefault(RuntimeEffect.succeed("project" as const)),
+  ),
+  workspaceBinding: Schema.NullOr(OrchestrationWorkspaceBinding).pipe(
+    Schema.withDecodingDefault(RuntimeEffect.succeed(null)),
+  ),
   title: Schema.String,
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,

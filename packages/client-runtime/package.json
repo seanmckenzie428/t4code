@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./app-control": {
+      "types": "./src/appControl/index.ts",
+      "default": "./src/appControl/index.ts"
+    },
     "./connection": {
       "types": "./src/connection/index.ts",
       "default": "./src/connection/index.ts"
@@ -42,6 +46,10 @@
     "./state/auth": {
       "types": "./src/state/auth.ts",
       "default": "./src/state/auth.ts"
+    },
+    "./state/app-control": {
+      "types": "./src/state/appControl.ts",
+      "default": "./src/state/appControl.ts"
     },
     "./state/assets": {
       "types": "./src/state/assets.ts",

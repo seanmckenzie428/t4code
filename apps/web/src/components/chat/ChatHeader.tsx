@@ -1,7 +1,9 @@
 import {
+  type AppViewManifest,
   type EnvironmentId,
   type EditorId,
   type ProjectScript,
+  type ProjectCustomAction,
   type ResolvedKeybindingsConfig,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -14,11 +16,16 @@ import ProjectScriptsControl, {
   type NewProjectScriptInput,
   type ProjectScriptActionResult,
 } from "../ProjectScriptsControl";
+import ProjectCustomActionsControl, {
+  type ProjectCustomActionResult,
+} from "../ProjectCustomActionsControl";
 import { OpenInPicker } from "./OpenInPicker";
 import { usePrimaryEnvironmentId } from "../../state/environments";
 import { useT3ProjectFileScripts } from "~/hooks/useT3ProjectFileScripts";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { cn } from "~/lib/utils";
+import type { ResolvedAppViewPlacement } from "../app-views/AppViewPlacements.logic";
+import { AppViewPlacementIcon } from "../app-views/AppViewPlacementIcon";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -29,10 +36,12 @@ interface ChatHeaderProps {
   activeProjectCwd: string | null;
   openInCwd: string | null;
   activeProjectScripts: ReadonlyArray<ProjectScript> | undefined;
+  activeProjectCustomActions: ReadonlyArray<ProjectCustomAction> | undefined;
   preferredScriptId: string | null;
   keybindings: ResolvedKeybindingsConfig;
   availableEditors: ReadonlyArray<EditorId>;
   rightPanelOpen: boolean;
+  appViewPlacements: ReadonlyArray<ResolvedAppViewPlacement>;
   gitCwd: string | null;
   onNewThreadInProject: () => void;
   onRunProjectScript: (script: ProjectScript) => void;
@@ -42,6 +51,13 @@ interface ChatHeaderProps {
     input: NewProjectScriptInput,
   ) => Promise<ProjectScriptActionResult>;
   onDeleteProjectScript: (scriptId: string) => Promise<ProjectScriptActionResult>;
+  onRunProjectCustomAction: (action: ProjectCustomAction) => void;
+  onSetProjectCustomActionPlacement: (
+    actionId: string,
+    placement: "menu" | "toolbar",
+  ) => Promise<ProjectCustomActionResult>;
+  onDeleteProjectCustomAction: (actionId: string) => Promise<ProjectCustomActionResult>;
+  onOpenAppView: (manifest: AppViewManifest) => void;
 }
 
 export function shouldShowOpenInPicker(input: {
@@ -65,16 +81,22 @@ export const ChatHeader = memo(function ChatHeader({
   activeProjectCwd,
   openInCwd,
   activeProjectScripts,
+  activeProjectCustomActions,
   preferredScriptId,
   keybindings,
   availableEditors,
   rightPanelOpen,
+  appViewPlacements,
   gitCwd,
   onNewThreadInProject,
   onRunProjectScript,
   onAddProjectScript,
   onUpdateProjectScript,
   onDeleteProjectScript,
+  onRunProjectCustomAction,
+  onSetProjectCustomActionPlacement,
+  onDeleteProjectCustomAction,
+  onOpenAppView,
 }: ChatHeaderProps) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const fileScripts = useT3ProjectFileScripts(
@@ -140,6 +162,32 @@ export const ChatHeader = memo(function ChatHeader({
           rightPanelOpen ? "pr-0" : "pr-16",
         )}
       >
+        {appViewPlacements.map((item) => (
+          <Tooltip key={item.id}>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={item.label}
+                  onClick={() => onOpenAppView(item.manifest)}
+                  className="inline-flex h-7 max-w-36 items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              }
+            >
+              <AppViewPlacementIcon icon={item.placement.icon} className="size-3.5 shrink-0" />
+              <span className="hidden truncate @5xl/header-actions:inline">{item.label}</span>
+            </TooltipTrigger>
+            <TooltipPopup side="top">{item.description}</TooltipPopup>
+          </Tooltip>
+        ))}
+        {activeProjectCustomActions ? (
+          <ProjectCustomActionsControl
+            actions={activeProjectCustomActions}
+            onRun={onRunProjectCustomAction}
+            onSetPlacement={onSetProjectCustomActionPlacement}
+            onDelete={onDeleteProjectCustomAction}
+          />
+        ) : null}
         {activeProjectScripts && (
           <ProjectScriptsControl
             scripts={activeProjectScripts}

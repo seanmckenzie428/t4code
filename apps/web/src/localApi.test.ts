@@ -77,6 +77,21 @@ describe("LocalApi", () => {
     expect(showContextMenuFallbackMock).toHaveBeenCalledWith(items, { x: 4, y: 5 });
   });
 
+  it("opens browser links without an opener and reports blocked popups", async () => {
+    const open = vi.fn().mockReturnValue({});
+    Object.defineProperty(testWindow(), "open", { configurable: true, value: open });
+    const { createLocalApi } = await import("./localApi");
+    const api = createLocalApi();
+
+    await expect(api.shell.openExternal("https://example.com/path")).resolves.toBeUndefined();
+    expect(open).toHaveBeenCalledWith("https://example.com/path", "_blank", "noopener,noreferrer");
+
+    open.mockReturnValue(null);
+    await expect(api.shell.openExternal("https://example.com/blocked")).rejects.toThrow(
+      "Allow popups",
+    );
+  });
+
   it("delegates host capabilities and persistence to the desktop bridge", async () => {
     const showContextMenu = vi.fn().mockResolvedValue("delete");
     const pickFolder = vi.fn().mockResolvedValue("/tmp/project");

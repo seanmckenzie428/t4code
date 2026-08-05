@@ -477,6 +477,7 @@ const projectAddCommand = Command.make("add", {
           type: "project.create",
           commandId: CommandId.make(yield* projectCommandUuid),
           projectId,
+          kind: "workspace",
           title,
           workspaceRoot,
           defaultModelSelection: ServerRuntimeStartup.getAutoBootstrapDefaultModelSelection(),

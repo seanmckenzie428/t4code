@@ -5,7 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 
-import { ModelSelection, ProjectScript } from "@t3tools/contracts";
+import { ModelSelection, ProjectCustomAction, ProjectScript } from "@t3tools/contracts";
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
   DeleteProjectionProjectInput,
@@ -19,6 +19,7 @@ const ProjectionProjectDbRow = ProjectionProject.mapFields(
   Struct.assign({
     defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
     scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
+    customActions: Schema.fromJsonString(Schema.Array(ProjectCustomAction)),
   }),
 );
 type ProjectionProjectDbRow = typeof ProjectionProjectDbRow.Type;
@@ -32,20 +33,26 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
       sql`
         INSERT INTO projection_projects (
           project_id,
+          kind,
+          system_role,
           title,
           workspace_root,
           default_model_selection_json,
           scripts_json,
+          custom_actions_json,
           created_at,
           updated_at,
           deleted_at
         )
         VALUES (
           ${row.projectId},
+          ${row.kind ?? "workspace"},
+          ${row.systemRole ?? null},
           ${row.title},
           ${row.workspaceRoot},
           ${row.defaultModelSelection !== null ? JSON.stringify(row.defaultModelSelection) : null},
           ${JSON.stringify(row.scripts)},
+          ${JSON.stringify(row.customActions)},
           ${row.createdAt},
           ${row.updatedAt},
           ${row.deletedAt}
@@ -53,9 +60,12 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
         ON CONFLICT (project_id)
         DO UPDATE SET
           title = excluded.title,
+          kind = excluded.kind,
+          system_role = excluded.system_role,
           workspace_root = excluded.workspace_root,
           default_model_selection_json = excluded.default_model_selection_json,
           scripts_json = excluded.scripts_json,
+          custom_actions_json = excluded.custom_actions_json,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at,
           deleted_at = excluded.deleted_at
@@ -69,10 +79,13 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
       sql`
         SELECT
           project_id AS "projectId",
+          kind,
+          system_role AS "systemRole",
           title,
           workspace_root AS "workspaceRoot",
           default_model_selection_json AS "defaultModelSelection",
           scripts_json AS "scripts",
+          custom_actions_json AS "customActions",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -88,10 +101,13 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
       sql`
         SELECT
           project_id AS "projectId",
+          kind,
+          system_role AS "systemRole",
           title,
           workspace_root AS "workspaceRoot",
           default_model_selection_json AS "defaultModelSelection",
           scripts_json AS "scripts",
+          custom_actions_json AS "customActions",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"

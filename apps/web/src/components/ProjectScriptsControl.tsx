@@ -155,11 +155,12 @@ export default function ProjectScriptsControl({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const primaryScript = useMemo(() => {
+    const toolbarScripts = scripts.filter((script) => script.showInToolbar !== false);
     if (preferredScriptId) {
-      const preferred = scripts.find((script) => script.id === preferredScriptId);
+      const preferred = toolbarScripts.find((script) => script.id === preferredScriptId);
       if (preferred) return preferred;
     }
-    return primaryProjectScript(scripts);
+    return primaryProjectScript(toolbarScripts);
   }, [preferredScriptId, scripts]);
   const importableScripts = useMemo(
     () =>

@@ -259,6 +259,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       assert.deepEqual(snapshot.projects, [
         {
           id: asProjectId("project-1"),
+          kind: "workspace",
           title: "Project 1",
           workspaceRoot: "/tmp/project-1",
           repositoryIdentity: null,
@@ -284,6 +285,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         {
           id: ThreadId.make("thread-1"),
           projectId: asProjectId("project-1"),
+          kind: "project",
           title: "Thread 1",
           modelSelection: {
             instanceId: ProviderInstanceId.make("codex"),
@@ -375,6 +377,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       assert.deepEqual(shellSnapshot.projects, [
         {
           id: asProjectId("project-1"),
+          kind: "workspace",
           title: "Project 1",
           workspaceRoot: "/tmp/project-1",
           repositoryIdentity: null,
@@ -399,6 +402,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         {
           id: ThreadId.make("thread-1"),
           projectId: asProjectId("project-1"),
+          kind: "project",
           title: "Thread 1",
           modelSelection: {
             instanceId: ProviderInstanceId.make("codex"),

@@ -218,6 +218,7 @@ export function buildProjectCreateCommand(input: {
     type: "project.create",
     commandId: input.commandId,
     projectId: input.projectId,
+    kind: "workspace",
     title: inferProjectTitleFromPath(input.workspaceRoot),
     workspaceRoot: input.workspaceRoot,
     createWorkspaceRootIfMissing: true,

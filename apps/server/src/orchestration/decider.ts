@@ -13,6 +13,8 @@ import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import {
   listThreadsByProjectId,
   requireActiveProjectWorkspaceRootAbsent,
+  requireMutableProject,
+  requireMutableThread,
   requireProject,
   requireProjectAbsent,
   requireThread,
@@ -236,6 +238,27 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         workspaceRoot: command.workspaceRoot,
         exceptProjectId: command.projectId,
       });
+      const projectKind = command.kind ?? "workspace";
+      if (
+        (projectKind === "system" && command.systemRole !== "global-assistant") ||
+        (projectKind === "workspace" && command.systemRole !== undefined)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Only a system project may hold the global-assistant system role.",
+        });
+      }
+      if (
+        command.systemRole === "global-assistant" &&
+        readModel.projects.some(
+          (project) => project.deletedAt === null && project.systemRole === "global-assistant",
+        )
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "An active global-assistant system project already exists.",
+        });
+      }
 
       return {
         ...(yield* withEventBase({
@@ -247,10 +270,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         type: "project.created",
         payload: {
           projectId: command.projectId,
+          kind: projectKind,
+          ...(command.systemRole !== undefined ? { systemRole: command.systemRole } : {}),
           title: command.title,
           workspaceRoot: command.workspaceRoot,
           defaultModelSelection: command.defaultModelSelection ?? null,
           scripts: [],
+          customActions: [],
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
         },
@@ -258,11 +284,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "project.meta.update": {
-      yield* requireProject({
+      const project = yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+      yield* requireMutableProject({ command, project });
       if (command.workspaceRoot !== undefined) {
         yield* requireActiveProjectWorkspaceRootAbsent({
           readModel,
@@ -288,17 +315,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             ? { defaultModelSelection: command.defaultModelSelection }
             : {}),
           ...(command.scripts !== undefined ? { scripts: command.scripts } : {}),
+          ...(command.customActions !== undefined ? { customActions: command.customActions } : {}),
           updatedAt: occurredAt,
         },
       };
     }
 
     case "project.delete": {
-      yield* requireProject({
+      const project = yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+      yield* requireMutableProject({ command, project });
       const activeThreads = listThreadsByProjectId(readModel, command.projectId).filter(
         (thread) => thread.deletedAt === null,
       );
@@ -345,11 +374,35 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.create": {
-      yield* requireProject({
+      const project = yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+      const threadKind = command.kind ?? "project";
+      if (threadKind === "assistant" && project.systemRole !== "global-assistant") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Assistant thread '${command.threadId}' requires a global-assistant system project.`,
+        });
+      }
+      if (threadKind === "project" && project.kind === "system") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Project thread '${command.threadId}' cannot belong to system project '${project.id}'.`,
+        });
+      }
+      if (
+        threadKind === "assistant" &&
+        listThreadsByProjectId(readModel, command.projectId).some(
+          (thread) => thread.deletedAt === null && thread.kind === "assistant",
+        )
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `System project '${project.id}' already has an active assistant thread.`,
+        });
+      }
       yield* requireThreadAbsent({
         readModel,
         command,
@@ -366,6 +419,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           projectId: command.projectId,
+          kind: threadKind,
+          ...(command.workspaceBinding !== undefined
+            ? { workspaceBinding: command.workspaceBinding }
+            : {}),
           title: command.title,
           modelSelection: command.modelSelection,
           runtimeMode: command.runtimeMode,
@@ -379,11 +436,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.delete": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+      yield* requireMutableThread({ command, thread });
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -455,33 +513,27 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       // or raced client must not settle a thread whose session is coming
       // alive or working.
       if (thread.session?.status === "starting" || thread.session?.status === "running") {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `thread ${command.threadId} has an active session and cannot be settled`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has an active session and cannot be settled`,
+        });
       }
       // Pending approval / user-input requests are blocked-on-you work: a
       // raced or stale client must not park them behind a settled override
       // that would surface only after the request resolves.
       if (hasOpenBlockingRequest(thread)) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `thread ${command.threadId} has a pending approval or user-input request and cannot be settled`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has a pending approval or user-input request and cannot be settled`,
+        });
       }
       const occurredAt = yield* nowIso;
       // Settling inside the adoption window would hide just-requested work.
       if (threadHasQueuedTurnStart(thread, occurredAt)) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `thread ${command.threadId} has a queued turn start and cannot be settled`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has a queued turn start and cannot be settled`,
+        });
       }
       // Settling an already-settled thread re-emits with the original
       // settledAt: the engine rejects zero-event commands, and bulk-settle /
@@ -547,36 +599,30 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       // structurally just a string): NaN fails every comparison, and an
       // unparseable snoozedUntil must never persist.
       if (!(Date.parse(command.snoozedUntil) > Date.parse(occurredAt))) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `thread ${command.threadId} snooze wake time ${command.snoozedUntil} is not in the future`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} snooze wake time ${command.snoozedUntil} is not in the future`,
+        });
       }
       // Blocked-on-you work must not be snoozed away: a pending approval or
       // user-input request is the agent waiting on the user, and hiding it
       // defeats the request. (A running session IS snoozable — snooze only
       // affects visibility, never the agent.)
       if (hasOpenBlockingRequest(thread)) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `thread ${command.threadId} has a pending approval or user-input request and cannot be snoozed`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has a pending approval or user-input request and cannot be snoozed`,
+        });
       }
       // A queued turn start — a user message no turn has adopted yet — is
       // invisible pending work: no session, no pending flags. Snoozing in
       // that window would hide a just-requested turn exactly the way settle
       // would.
       if (threadHasQueuedTurnStart(thread, occurredAt)) {
-        return yield* Effect.fail(
-          new OrchestrationCommandInvariantError({
-            commandType: command.type,
-            detail: `thread ${command.threadId} has a queued turn start and cannot be snoozed`,
-          }),
-        );
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has a queued turn start and cannot be snoozed`,
+        });
       }
       // Re-snoozing an already-snoozed thread to the SAME wake time is a
       // duplicate (double-click, raced clients): re-emit with the original
@@ -636,6 +682,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      yield* requireMutableThread({ command, thread });
       const branch =
         command.branch !== undefined &&
         command.expectedBranch !== undefined &&
@@ -754,6 +801,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      if (targetThread.kind === "assistant") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail:
+            "T3 Assistant cannot start because this build does not enforce the required control-only Codex permission profile.",
+        });
+      }
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({
@@ -792,6 +846,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           role: "user",
           text: command.message.text,
           attachments: command.message.attachments,
+          ...(command.delegation !== undefined ? { delegation: command.delegation } : {}),
           turnId: null,
           streaming: false,
           createdAt: command.createdAt,
@@ -817,6 +872,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           runtimeMode: targetThread.runtimeMode,
           interactionMode: targetThread.interactionMode,
           ...(sourceProposedPlan !== undefined ? { sourceProposedPlan } : {}),
+          ...(command.delegation !== undefined ? { delegation: command.delegation } : {}),
           createdAt: command.createdAt,
         },
       };

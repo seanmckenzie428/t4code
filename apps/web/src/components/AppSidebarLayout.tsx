@@ -34,6 +34,13 @@ import {
   useSidebarVisibility,
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { AssistantDrawerLayout } from "./AssistantDrawer";
+import { useActiveEnvironmentId } from "../state/entities";
+import {
+  invokeKeybindingAppCommand,
+  invokeWebAppCommand,
+  registerWebAppCommandHandler,
+} from "../appCommandRegistry";
 
 const MACOS_TRAFFIC_LIGHTS_LEFT_INSET = "90px";
 
@@ -61,12 +68,18 @@ function readInitialThreadSidebarWidth(): number {
 function SidebarControl() {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { toggleSidebar } = useSidebar();
+  const environmentId = useActiveEnvironmentId();
   const isSidebarVisible = useSidebarVisibility();
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const stageBackdropVariant = useSidebarStageBackdropVariant(
     environmentIdentificationMode === "artwork",
   );
   const shortcutLabel = shortcutLabelForCommand(keybindings, "sidebar.toggle");
+
+  useEffect(
+    () => registerWebAppCommandHandler("ui.sidebar.toggle", toggleSidebar),
+    [toggleSidebar],
+  );
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -81,13 +94,14 @@ function SidebarControl() {
 
       event.preventDefault();
       event.stopPropagation();
-      toggleSidebar();
+      if (environmentId === null) return;
+      void invokeKeybindingAppCommand("sidebar.toggle", { environmentId });
     };
 
     // Capture before focused editors consume commands such as Mod+B for rich-text formatting.
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [keybindings, toggleSidebar]);
+  }, [environmentId, keybindings]);
 
   return (
     <div
@@ -105,6 +119,14 @@ function SidebarControl() {
                   "[:hover,[data-pressed]]:bg-white/15 focus-visible:ring-white/90 focus-visible:ring-offset-blue-700 [&_svg]:stroke-white/90! [&_svg]:opacity-100! [&_svg]:hover:stroke-white!",
               )}
               aria-label="Toggle main sidebar"
+              onClick={(event) => {
+                if (environmentId === null) return;
+                event.preventDefault();
+                void invokeWebAppCommand("ui.sidebar.toggle", {
+                  environmentId,
+                  source: "button",
+                });
+              }}
             />
           }
         />
@@ -203,7 +225,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
         {useSidebarV2 ? <ThreadSidebarV2 /> : <ThreadSidebar />}
         <SidebarRail />
       </Sidebar>
-      {children}
+      <AssistantDrawerLayout>{children}</AssistantDrawerLayout>
       <SidebarControl />
     </SidebarProvider>
   );

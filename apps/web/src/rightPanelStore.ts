@@ -14,7 +14,15 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
 
-export const RIGHT_PANEL_KINDS = ["plan", "diff", "files", "file", "preview", "terminal"] as const;
+export const RIGHT_PANEL_KINDS = [
+  "plan",
+  "diff",
+  "files",
+  "file",
+  "preview",
+  "terminal",
+  "app-view",
+] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
 export type RightPanelSurface =
@@ -37,7 +45,8 @@ export type RightPanelSurface =
       revealLine: number | null;
       revealRequestId: number;
     }
-  | { id: "plan"; kind: "plan" };
+  | { id: "plan"; kind: "plan" }
+  | { id: `app-view:${string}`; kind: "app-view"; viewId: string };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
 const RIGHT_PANEL_STORAGE_VERSION = 7;
@@ -50,10 +59,14 @@ export interface ThreadRightPanelState {
 
 interface RightPanelStoreState {
   byThreadKey: Record<string, ThreadRightPanelState>;
-  open: (ref: ScopedThreadRef, kind: Exclude<RightPanelKind, "file" | "terminal">) => void;
+  open: (
+    ref: ScopedThreadRef,
+    kind: Exclude<RightPanelKind, "file" | "terminal" | "app-view">,
+  ) => void;
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
   openFile: (ref: ScopedThreadRef, relativePath: string, line?: number) => void;
   openTerminal: (ref: ScopedThreadRef, terminalId: string) => void;
+  openAppView: (ref: ScopedThreadRef, viewId: string) => void;
   splitTerminal: (
     ref: ScopedThreadRef,
     surfaceId: string,
@@ -72,7 +85,10 @@ interface RightPanelStoreState {
   show: (ref: ScopedThreadRef) => void;
   close: (ref: ScopedThreadRef) => void;
   toggleVisibility: (ref: ScopedThreadRef) => void;
-  toggle: (ref: ScopedThreadRef, kind: Exclude<RightPanelKind, "file" | "terminal">) => void;
+  toggle: (
+    ref: ScopedThreadRef,
+    kind: Exclude<RightPanelKind, "file" | "terminal" | "app-view">,
+  ) => void;
   removeThread: (ref: ScopedThreadRef) => void;
 }
 
@@ -83,7 +99,7 @@ const EMPTY_THREAD_STATE: ThreadRightPanelState = {
 };
 
 const singletonSurface = (
-  kind: Exclude<RightPanelKind, "file" | "preview" | "terminal">,
+  kind: Exclude<RightPanelKind, "file" | "preview" | "terminal" | "app-view">,
 ): RightPanelSurface => {
   switch (kind) {
     case "diff":
@@ -118,6 +134,12 @@ const terminalSurface = (terminalId: string): RightPanelSurface => ({
   resourceId: terminalId,
   terminalIds: [terminalId],
   activeTerminalId: terminalId,
+});
+
+const appViewSurface = (viewId: string): RightPanelSurface => ({
+  id: `app-view:${viewId}`,
+  kind: "app-view",
+  viewId,
 });
 
 const upsertSurface = (
@@ -290,6 +312,12 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
         set((state) => ({
           byThreadKey: updateThread(state.byThreadKey, scopedThreadKey(ref), (current) =>
             upsertSurface(current, terminalSurface(terminalId)),
+          ),
+        })),
+      openAppView: (ref, viewId) =>
+        set((state) => ({
+          byThreadKey: updateThread(state.byThreadKey, scopedThreadKey(ref), (current) =>
+            upsertSurface(current, appViewSurface(viewId)),
           ),
         })),
       splitTerminal: (ref, surfaceId, terminalId, direction = "horizontal") =>

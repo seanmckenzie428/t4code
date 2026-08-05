@@ -331,7 +331,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
       aria-pressed={isOpen}
       onClick={(event) => {
         onClick?.(event);
-        toggleSidebar();
+        if (!event.defaultPrevented) toggleSidebar();
       }}
       size="icon"
       variant="ghost"

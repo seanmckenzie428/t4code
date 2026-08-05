@@ -307,6 +307,21 @@ describe("T3 browser developer instructions", () => {
   });
 });
 
+describe("T3 generated-view developer instructions", () => {
+  it("teaches both collaboration modes how to interpret in-app UI requests", () => {
+    for (const instructions of [
+      CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
+      CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
+    ]) {
+      NodeAssert.match(instructions, /add this to T4/);
+      NodeAssert.match(instructions, /app_status/);
+      NodeAssert.match(instructions, /app_view_present/);
+      NodeAssert.match(instructions, /app_view_update/);
+      NodeAssert.match(instructions, /Do not edit the T3 Code source tree/);
+    }
+  });
+});
+
 describe("hasConfiguredMcpServer", () => {
   it("detects inline Codex MCP configuration arguments", () => {
     NodeAssert.equal(hasConfiguredMcpServer(undefined), false);
@@ -316,6 +331,29 @@ describe("hasConfiguredMcpServer", () => {
       true,
     );
   });
+});
+
+describe("control-only Codex launch", () => {
+  it("places profile selection before the app-server subcommand", () => {
+    NodeAssert.deepStrictEqual(
+      codexSessionAppServerArgs(["--strict-config"], undefined, ["--profile", "t3-control-only"]),
+      ["--profile", "t3-control-only", "app-server", "--strict-config"],
+    );
+  });
+
+  it.effect("omits legacy approval and sandbox overrides from assistant turns", () =>
+    Effect.gen(function* () {
+      const params = yield* buildTurnStartParams({
+        threadId: "assistant-thread",
+        runtimeMode: "approval-required",
+        prompt: "status",
+        useConfiguredPermissionProfile: true,
+      });
+      NodeAssert.equal("approvalPolicy" in params, false);
+      NodeAssert.equal("approvalsReviewer" in params, false);
+      NodeAssert.equal("sandboxPolicy" in params, false);
+    }),
+  );
 });
 
 describe("codexSessionAppServerArgs", () => {

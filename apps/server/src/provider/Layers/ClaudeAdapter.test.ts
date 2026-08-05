@@ -356,6 +356,34 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
+  it.effect("appends T3 generated-view guidance to the Claude Code prompt", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+
+      const systemPrompt = harness.getLastCreateQueryInput()?.options.systemPrompt;
+      assert.isObject(systemPrompt);
+      if (
+        typeof systemPrompt === "object" &&
+        systemPrompt !== null &&
+        !Array.isArray(systemPrompt)
+      ) {
+        assert.equal(systemPrompt.type, "preset");
+        assert.equal(systemPrompt.preset, "claude_code");
+        assert.match(systemPrompt.append ?? "", /add this to T4/);
+        assert.match(systemPrompt.append ?? "", /app_view_present/);
+      }
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
   it.effect("derives auto permission mode from auto runtime policy without skip flag", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {

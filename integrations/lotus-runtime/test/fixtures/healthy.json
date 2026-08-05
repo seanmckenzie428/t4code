@@ -1,0 +1,21 @@
+{
+  "workspaces": [
+    {
+      "slug": "lotus-228",
+      "title": "Lotus 228",
+      "worktree_path": "/worktrees/lotus-228",
+      "branch": "feature/LOTUS-228",
+      "status": "up",
+      "health": "healthy",
+      "checks": [{ "code": "backend_reachable", "status": "pass" }],
+      "commands": ["lotus logs lotus-228"],
+      "urls": {
+        "admin": "https://lotus-228.admin.lotus.localhost",
+        "api": "https://lotus-228.api.lotus.localhost",
+        "dashboard": "https://lotus-228.api.lotus.localhost/local/dashboard",
+        "storefront": "https://lotus-228.store.lotus.localhost",
+        "mail": "https://lotus-228.mail.lotus.localhost"
+      }
+    }
+  ]
+}

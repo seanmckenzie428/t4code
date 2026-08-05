@@ -2,6 +2,8 @@ import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { ProjectScriptIcon } from "./orchestration.ts";
+import { T3ProjectExtensionRequest } from "./extensions.ts";
+import { ProjectAppViewManifest } from "./appViews.ts";
 
 /** File name of the checked-in T3 project file, resolved at the workspace root. */
 export const T3_PROJECT_FILE_NAME = "t3.json";
@@ -11,6 +13,8 @@ export const T3_PROJECT_FILE_SCHEMA_URL = "https://t3.codes/schema/t3.json";
 
 const T3_PROJECT_FILE_PATH_MAX_LENGTH = 512;
 const T3_PROJECT_FILE_MAX_SCRIPTS = 50;
+const T3_PROJECT_FILE_MAX_EXTENSIONS = 20;
+const T3_PROJECT_FILE_MAX_APP_VIEWS = 50;
 
 // Annotations go on the encoded (string) side so they survive into the
 // published JSON Schema; decoding still trims and re-validates non-emptiness.
@@ -79,6 +83,22 @@ export const T3ProjectFile = Schema.Struct({
         description: "Project scripts shared with everyone who opens this repository in T3 Code.",
       })
       .check(Schema.isMaxLength(T3_PROJECT_FILE_MAX_SCRIPTS)),
+  ),
+  extensions: Schema.optionalKey(
+    Schema.Array(T3ProjectExtensionRequest)
+      .annotate({
+        description:
+          "Extensions requested by this project. Requests cannot install, enable, or declare executable commands.",
+      })
+      .check(Schema.isMaxLength(T3_PROJECT_FILE_MAX_EXTENSIONS)),
+  ),
+  appViews: Schema.optionalKey(
+    Schema.Array(ProjectAppViewManifest)
+      .annotate({
+        description:
+          "Generated views shared with everyone who opens this repository. T3 Code writes these only after an explicit user save.",
+      })
+      .check(Schema.isMaxLength(T3_PROJECT_FILE_MAX_APP_VIEWS)),
   ),
 }).annotate({
   title: "T3 project file",

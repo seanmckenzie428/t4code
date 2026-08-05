@@ -188,11 +188,13 @@ import {
 } from "./Sidebar.logic";
 import { sortThreads } from "../lib/threadSort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { ProjectSidebarAppViewLaunchers } from "./app-views/ProjectSidebarAppViewLaunchers";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { CommandDialogTrigger } from "./ui/command";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { primaryServerKeybindingsAtom } from "../state/server";
+import { invokeWebAppCommand, registerWebAppCommandHandler } from "../appCommandRegistry";
 import {
   derivePhysicalProjectKey,
   deriveProjectGroupingOverrideKey,
@@ -1101,12 +1103,71 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     (settings) => settings.confirmThreadArchive,
   );
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
-  const deleteProject = useAtomCommand(projectEnvironment.delete, {
+  const performDeleteProject = useAtomCommand(projectEnvironment.delete, {
     reportFailure: false,
   });
-  const updateProject = useAtomCommand(projectEnvironment.update, {
+  const performUpdateProject = useAtomCommand(projectEnvironment.update, {
     reportFailure: false,
   });
+  useEffect(() => {
+    const disposers = [
+      registerWebAppCommandHandler("project.rename", (invocation, context) => {
+        const { projectId, title } = invocation.args as { projectId: string; title: string };
+        return performUpdateProject({
+          environmentId: context.environmentId as Parameters<
+            typeof performUpdateProject
+          >[0]["environmentId"],
+          input: {
+            projectId: projectId as Parameters<
+              typeof performUpdateProject
+            >[0]["input"]["projectId"],
+            title,
+          },
+        });
+      }),
+      registerWebAppCommandHandler("project.delete", (invocation, context) => {
+        const { projectId, force } = invocation.args as { projectId: string; force?: boolean };
+        return performDeleteProject({
+          environmentId: context.environmentId as Parameters<
+            typeof performDeleteProject
+          >[0]["environmentId"],
+          input: {
+            projectId: projectId as Parameters<
+              typeof performDeleteProject
+            >[0]["input"]["projectId"],
+            ...(force ? { force: true } : {}),
+          },
+        });
+      }),
+    ];
+    return () => disposers.forEach((dispose) => dispose());
+  }, [performDeleteProject, performUpdateProject]);
+  const deleteProject = useCallback(
+    async (request: Parameters<typeof performDeleteProject>[0]) =>
+      (await invokeWebAppCommand(
+        "project.delete",
+        {
+          environmentId: request.environmentId,
+          projectId: request.input.projectId,
+          source: "button",
+        },
+        request.input,
+      )) as Awaited<ReturnType<typeof performDeleteProject>>,
+    [performDeleteProject],
+  );
+  const updateProject = useCallback(
+    async (request: Parameters<typeof performUpdateProject>[0]) =>
+      (await invokeWebAppCommand(
+        "project.rename",
+        {
+          environmentId: request.environmentId,
+          projectId: request.input.projectId,
+          source: "button",
+        },
+        { projectId: request.input.projectId, title: request.input.title },
+      )) as Awaited<ReturnType<typeof performUpdateProject>>,
+    [performUpdateProject],
+  );
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -1879,7 +1940,15 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         // No options: branch, worktree, and env mode come from the user's
         // configured defaults, never from the currently viewed thread.
         const result = await settlePromise(() =>
-          handleNewThread(scopeProjectRef(member.environmentId, member.id)),
+          invokeWebAppCommand(
+            "thread.create",
+            {
+              environmentId: member.environmentId,
+              projectId: member.id,
+              source: "button",
+            },
+            { projectId: member.id },
+          ),
         );
         if (result._tag === "Failure") {
           const error = squashAtomCommandFailure(result);
@@ -1893,7 +1962,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         }
       })();
     },
-    [handleNewThread, isMobile, setOpenMobile],
+    [isMobile, setOpenMobile],
   );
 
   const handleCreateThreadClick = useCallback(
@@ -3000,7 +3069,7 @@ export default function Sidebar() {
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const sidebarThreadPreviewCount = useClientSettings((s) => s.sidebarThreadPreviewCount);
-  const updateSettings = useUpdateClientSettings();
+  const persistSettings = useUpdateClientSettings();
   const handleNewThread = useNewThreadHandler();
   const { archiveThread, deleteThread } = useThreadActions();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -3040,6 +3109,20 @@ export default function Sidebar() {
   const shortcutModifiers = useShortcutModifierState();
   const { environments } = useEnvironments();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const updateSettings = useCallback(
+    (changes: Parameters<typeof persistSettings>[0]) => {
+      if (primaryEnvironmentId === null) {
+        persistSettings(changes);
+        return;
+      }
+      void invokeWebAppCommand(
+        "settings.ux.update",
+        { environmentId: primaryEnvironmentId, source: "button" },
+        { changes },
+      );
+    },
+    [persistSettings, primaryEnvironmentId],
+  );
   const environmentLabelById = useMemo(
     () =>
       new Map(
@@ -3595,6 +3678,9 @@ export default function Sidebar() {
         <SettingsSidebarNav pathname={pathname} />
       ) : (
         <>
+          <div className="px-2 pt-2">
+            <ProjectSidebarAppViewLaunchers threadRef={routeThreadRef} />
+          </div>
           <SidebarProjectsContent
             showArm64IntelBuildWarning={showArm64IntelBuildWarning}
             arm64IntelBuildWarningDescription={arm64IntelBuildWarningDescription}

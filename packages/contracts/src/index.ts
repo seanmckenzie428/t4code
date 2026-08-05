@@ -27,5 +27,8 @@ export * from "./assets.ts";
 export * from "./review.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
+export * from "./appControl.ts";
+export * from "./appViews.ts";
+export * from "./extensions.ts";
 export * from "./resourceTelemetry.ts";
 export * from "./rpc.ts";

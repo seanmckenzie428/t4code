@@ -29,6 +29,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
+  BotIcon,
   CornerLeftUpIcon,
   FileSearchIcon,
   FolderIcon,
@@ -138,6 +139,11 @@ import {
   buildSidebarProjectPickerEntries,
   buildSidebarProjectSnapshots,
 } from "../sidebarProjectGrouping";
+import {
+  invokeKeybindingAppCommand,
+  invokeWebAppCommand,
+  registerWebAppCommandHandler,
+} from "../appCommandRegistry";
 
 const EMPTY_BROWSE_ENTRIES: FilesystemBrowseResult["entries"] = [];
 
@@ -375,6 +381,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   const openNewThreadIn = useCallback(() => dispatch({ _tag: "OpenNewThreadIn" }), []);
   const clearOpenIntent = useCallback(() => dispatch({ _tag: "ClearOpenIntent" }), []);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const composerHandleRef = useRef<ChatComposerHandle | null>(null);
   const routeTarget = useParams({
     strict: false,
@@ -391,6 +398,22 @@ export function CommandPalette({ children }: { children: ReactNode }) {
       ? selectActiveRightPanel(state.byThreadKey, routeThreadRef) === "preview"
       : false,
   );
+
+  useEffect(() => {
+    const disposers = [
+      registerWebAppCommandHandler("ui.palette.open", (invocation) => {
+        const detail = invocation.args as { open?: "add-project" | "new-thread-in" };
+        if (detail.open === "new-thread-in") openNewThreadIn();
+        else if (detail.open === "add-project") openAddProject();
+        else setOpen(true);
+      }),
+      registerWebAppCommandHandler("ui.palette.close", () => setOpen(false)),
+      registerWebAppCommandHandler("ui.palette.toggle", () => toggleMode("command")),
+      registerWebAppCommandHandler("ui.files.toggle", () => toggleMode("files")),
+      registerWebAppCommandHandler("ui.project-search.toggle", () => toggleMode("content")),
+    ];
+    return () => disposers.forEach((dispose) => dispose());
+  }, [openAddProject, openNewThreadIn, setOpen, toggleMode]);
 
   useEffect(() => {
     if (!state.open || state.mode === "command") return;
@@ -418,29 +441,28 @@ export function CommandPalette({ children }: { children: ReactNode }) {
         },
       });
       const mode = overlayModeForCommand(command);
-      if (mode === null) {
+      if (mode === null || command === null || primaryEnvironmentId === null) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
-      toggleMode(mode);
+      void invokeKeybindingAppCommand(command, { environmentId: primaryEnvironmentId });
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [keybindings, previewOpen, terminalOpen, toggleMode]);
+  }, [keybindings, previewOpen, primaryEnvironmentId, terminalOpen]);
 
   useEffect(
     () =>
       onOpenCommandPalette((detail) => {
-        if (detail.open === "new-thread-in") {
-          openNewThreadIn();
-        } else if (detail.open === "add-project") {
-          openAddProject();
-        } else {
-          setOpen(true);
-        }
+        if (primaryEnvironmentId === null) return;
+        void invokeWebAppCommand(
+          "ui.palette.open",
+          { environmentId: primaryEnvironmentId, source: "button" },
+          detail.open ? { open: detail.open } : {},
+        );
       }),
-    [openAddProject, openNewThreadIn, setOpen],
+    [primaryEnvironmentId],
   );
 
   return (
@@ -913,6 +935,89 @@ function OpenCommandPaletteDialog(props: {
     ],
   );
 
+  useEffect(() => {
+    const disposers = [
+      registerWebAppCommandHandler("ui.project.select", async (invocation, context) => {
+        const { projectId } = invocation.args as { projectId: string };
+        const project = projects.find(
+          (candidate) =>
+            candidate.environmentId === context.environmentId && candidate.id === projectId,
+        );
+        if (!project) throw new Error("The selected project is no longer available.");
+        await openProjectFromSearch(project);
+      }),
+      registerWebAppCommandHandler("ui.thread.select", async (invocation, context) => {
+        const { threadId } = invocation.args as { threadId: string };
+        const thread = threads.find(
+          (candidate) =>
+            candidate.environmentId === context.environmentId && candidate.id === threadId,
+        );
+        if (!thread) throw new Error("The selected thread is no longer available.");
+        await navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
+        });
+      }),
+      registerWebAppCommandHandler("thread.create", async (invocation, context) => {
+        const { projectId, local } = invocation.args as { projectId?: string; local?: boolean };
+        const targetProjectId = projectId ?? context.projectId;
+        if (!targetProjectId) throw new Error("Select a project before creating a thread.");
+        await handleNewThread(
+          scopeProjectRef(context.environmentId as EnvironmentId, targetProjectId as ProjectId),
+          local ? { envMode: "local" } : undefined,
+        );
+      }),
+      registerWebAppCommandHandler("project.add", async (invocation, context) => {
+        const { workspaceRoot, title } = invocation.args as {
+          workspaceRoot: string;
+          title?: string;
+        };
+        const projectId = newProjectId();
+        const targetEnvironmentProviders =
+          environments.find((environment) => environment.environmentId === context.environmentId)
+            ?.serverConfig?.providers ??
+          (context.environmentId === primaryEnvironmentId ? providers : []);
+        const commandResult = await createProject({
+          environmentId: context.environmentId as EnvironmentId,
+          input: {
+            projectId,
+            kind: "workspace",
+            title: title?.trim() || inferProjectTitleFromPath(workspaceRoot),
+            workspaceRoot,
+            createWorkspaceRootIfMissing: true,
+            defaultModelSelection: resolveDefaultProviderModelSelection(
+              targetEnvironmentProviders,
+              null,
+            ),
+          },
+        });
+        return { projectId, commandResult };
+      }),
+      registerWebAppCommandHandler("project.clone", (invocation, context) => {
+        const { remoteUrl, destinationPath } = invocation.args as {
+          remoteUrl: string;
+          destinationPath: string;
+        };
+        return cloneRepository({
+          environmentId: context.environmentId as EnvironmentId,
+          input: { remoteUrl, destinationPath },
+        });
+      }),
+    ];
+    return () => disposers.forEach((dispose) => dispose());
+  }, [
+    cloneRepository,
+    createProject,
+    environments,
+    handleNewThread,
+    navigate,
+    openProjectFromSearch,
+    primaryEnvironmentId,
+    projects,
+    providers,
+    threads,
+  ]);
+
   const projectSearchItems = useMemo(
     () =>
       buildProjectActionItems({
@@ -931,7 +1036,16 @@ function OpenCommandPaletteDialog(props: {
             className={ITEM_ICON_CLASS}
           />
         ),
-        runProject: openProjectFromSearch,
+        runProject: (project) =>
+          invokeWebAppCommand(
+            "ui.project.select",
+            {
+              environmentId: project.environmentId,
+              projectId: project.id,
+              source: "palette",
+            },
+            { projectId: project.id },
+          ).then(() => undefined),
       }),
     [openProjectFromSearch, pickerProjects, projectGroupByTargetKey],
   );
@@ -964,10 +1078,17 @@ function OpenCommandPaletteDialog(props: {
                   projectRef.environmentId === contextualProjectRef.environmentId &&
                   projectRef.projectId === contextualProjectRef.projectId,
               );
-            await handleNewThread(
-              contextualRefBelongsToGroup
-                ? contextualProjectRef
-                : scopeProjectRef(project.environmentId, project.id),
+            const projectRef = contextualRefBelongsToGroup
+              ? contextualProjectRef
+              : scopeProjectRef(project.environmentId, project.id);
+            await invokeWebAppCommand(
+              "thread.create",
+              {
+                environmentId: projectRef.environmentId,
+                projectId: projectRef.projectId,
+                source: "palette",
+              },
+              { projectId: projectRef.projectId },
             );
           },
         }),
@@ -1000,12 +1121,12 @@ function OpenCommandPaletteDialog(props: {
               }
             : undefined;
         },
-        runThread: async (thread) => {
-          await navigate({
-            to: "/$environmentId/$threadId",
-            params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
-          });
-        },
+        runThread: (thread) =>
+          invokeWebAppCommand(
+            "ui.thread.select",
+            { environmentId: thread.environmentId, threadId: thread.id, source: "palette" },
+            { threadId: thread.id },
+          ).then(() => undefined),
       }),
     [
       activeThreadId,
@@ -1372,12 +1493,19 @@ function OpenCommandPaletteDialog(props: {
         icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
         shortcutCommand: "chat.new",
         run: async () => {
-          await startNewThreadFromContext({
-            activeDraftThread,
-            activeThread: activeThread ?? undefined,
-            defaultProjectRef,
-            handleNewThread,
-          });
+          const projectRef = activeThread
+            ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
+            : defaultProjectRef;
+          if (!projectRef) return;
+          await invokeWebAppCommand(
+            "thread.create",
+            {
+              environmentId: projectRef.environmentId,
+              projectId: projectRef.projectId,
+              source: "palette",
+            },
+            { projectId: projectRef.projectId },
+          );
         },
       });
     }
@@ -1402,7 +1530,11 @@ function OpenCommandPaletteDialog(props: {
     keepOpen: true,
     shortcutCommand: "filePicker.toggle",
     run: async () => {
-      openOverlayMode("files");
+      if (assistantEnvironmentId === null) return;
+      await invokeWebAppCommand("ui.files.toggle", {
+        environmentId: assistantEnvironmentId,
+        source: "palette",
+      });
     },
   });
 
@@ -1415,7 +1547,11 @@ function OpenCommandPaletteDialog(props: {
     keepOpen: true,
     shortcutCommand: "projectSearch.toggle",
     run: async () => {
-      openOverlayMode("content");
+      if (assistantEnvironmentId === null) return;
+      await invokeWebAppCommand("ui.project-search.toggle", {
+        environmentId: assistantEnvironmentId,
+        source: "palette",
+      });
     },
   });
 
@@ -1463,6 +1599,25 @@ function OpenCommandPaletteDialog(props: {
       },
     });
   }
+
+  const assistantEnvironmentId = currentProjectEnvironmentId ?? primaryEnvironmentId;
+  actionItems.push({
+    kind: "action",
+    value: "action:assistant-toggle",
+    searchTerms: ["assistant", "ai", "codex", "control", "drawer"],
+    title: "Toggle T3 Assistant",
+    disabled: assistantEnvironmentId === null,
+    icon: <BotIcon className={ITEM_ICON_CLASS} />,
+    shortcutCommand: "assistant.toggle",
+    run: async () => {
+      if (assistantEnvironmentId === null) return;
+      await invokeWebAppCommand("assistant.toggle", {
+        environmentId: assistantEnvironmentId,
+        ...(currentProjectId ? { projectId: currentProjectId } : {}),
+        source: "palette",
+      });
+    },
+  });
 
   actionItems.push({
     kind: "action",
@@ -1580,24 +1735,17 @@ function OpenCommandPaletteDialog(props: {
         return;
       }
 
-      const projectId = newProjectId();
-      const targetEnvironmentProviders =
-        environments.find((environment) => environment.environmentId === input.environmentId)
-          ?.serverConfig?.providers ??
-        (input.environmentId === primaryEnvironmentId ? providers : []);
-      const createResult = await createProject({
-        environmentId: input.environmentId,
-        input: {
-          projectId,
-          title: inferProjectTitleFromPath(cwd),
-          workspaceRoot: cwd,
-          createWorkspaceRootIfMissing: true,
-          defaultModelSelection: resolveDefaultProviderModelSelection(
-            targetEnvironmentProviders,
-            null,
-          ),
+      const { projectId, commandResult: createResult } = (await invokeWebAppCommand(
+        "project.add",
+        {
+          environmentId: input.environmentId,
+          source: "palette",
         },
-      });
+        { workspaceRoot: cwd, title: inferProjectTitleFromPath(cwd) },
+      )) as {
+        projectId: ProjectId;
+        commandResult: Awaited<ReturnType<typeof createProject>>;
+      };
       if (createResult._tag === "Failure") {
         if (!isAtomCommandInterrupted(createResult)) {
           const error = squashAtomCommandFailure(createResult);
@@ -1630,12 +1778,9 @@ function OpenCommandPaletteDialog(props: {
     },
     [
       handleNewThread,
-      createProject,
       environments,
       navigate,
-      primaryEnvironmentId,
       projects,
-      providers,
       setOpen,
       clientSettings.sidebarThreadSortOrder,
       threads,
@@ -1775,13 +1920,17 @@ function OpenCommandPaletteDialog(props: {
     }
 
     setIsRemoteProjectCloning(true);
-    const cloneResult = await cloneRepository({
-      environmentId: addProjectCloneFlow.environmentId,
-      input: {
+    const cloneResult = (await invokeWebAppCommand(
+      "project.clone",
+      {
+        environmentId: addProjectCloneFlow.environmentId,
+        source: "palette",
+      },
+      {
         remoteUrl: addProjectCloneFlow.remoteUrl,
         destinationPath,
       },
-    });
+    )) as Awaited<ReturnType<typeof cloneRepository>>;
     setIsRemoteProjectCloning(false);
     if (cloneResult._tag === "Failure") {
       if (!isAtomCommandInterrupted(cloneResult)) {

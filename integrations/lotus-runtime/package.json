@@ -1,0 +1,26 @@
+{
+  "name": "@t3tools/lotus-runtime-extension",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "t3-lotus-runtime-extension": "./dist/server.mjs"
+  },
+  "files": [
+    "dist",
+    "extension.json",
+    "README.md"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "vp pack",
+    "typecheck": "tsgo --noEmit",
+    "test": "vp test run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}

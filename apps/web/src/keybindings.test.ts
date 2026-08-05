@@ -86,6 +86,7 @@ function compile(bindings: TestBinding[]): ResolvedKeybindingsConfig {
 
 const DEFAULT_BINDINGS = compile([
   { shortcut: modShortcut("b"), command: "sidebar.toggle" },
+  { shortcut: modShortcut("a", { shiftKey: true }), command: "assistant.toggle" },
   { shortcut: modShortcut("j"), command: "terminal.toggle" },
   { shortcut: modShortcut("b", { altKey: true }), command: "rightPanel.toggle" },
   {

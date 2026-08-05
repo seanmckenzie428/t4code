@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "ENOENT",
+    "message": "spawn lotus ENOENT"
+  }
+}
