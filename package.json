@@ -21,6 +21,7 @@
     "build:marketing": "vp run --filter @t3tools/marketing build",
     "build:desktop": "vp run --filter @t3tools/desktop --filter t3 build",
     "build:desktop:nightly": "node scripts/build-desktop-nightly.ts",
+    "install:desktop:nightly": "node scripts/install-desktop-nightly.ts",
     "build:resource-monitor": "cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml",
     "typecheck": "vp run -r --concurrency-limit 2 typecheck",
     "tc": "vp run -r --concurrency-limit 2 typecheck",

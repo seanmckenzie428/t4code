@@ -16,6 +16,7 @@ import {
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
   resolveSidebarStageBadgeLabel,
+  resolveSidebarThreadLocationLabel,
   resolveThreadRowClassName,
   resolveSidebarV2Status,
   resolveThreadStatusPill,
@@ -46,6 +47,30 @@ import {
 } from "../types";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
+
+describe("resolveSidebarThreadLocationLabel", () => {
+  it("shows the worktree directory instead of its branch", () => {
+    expect(
+      resolveSidebarThreadLocationLabel({
+        branch: "feature/lotus-156-clean-up-order-list-page",
+        worktreePath: "/Users/seanm/tukios/orderlist",
+      }),
+    ).toBe("orderlist");
+  });
+
+  it("shows the branch for a main checkout", () => {
+    expect(
+      resolveSidebarThreadLocationLabel({
+        branch: "dev",
+        worktreePath: null,
+      }),
+    ).toBe("dev");
+  });
+
+  it("stays empty when a main checkout has no branch", () => {
+    expect(resolveSidebarThreadLocationLabel({ branch: null, worktreePath: null })).toBeNull();
+  });
+});
 
 describe("shouldNavigateAfterProjectRemoval", () => {
   const projectThreads = [{ environmentId: "environment-local", id: "thread-1" }];

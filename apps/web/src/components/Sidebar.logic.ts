@@ -12,12 +12,22 @@ import type { ThreadRouteTarget } from "../threadRoutes";
 import { cn } from "../lib/utils";
 import { isLatestTurnSettled } from "../session-logic";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
+import { formatWorktreePathForDisplay } from "../worktreeCleanup";
 
 export const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
 export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 100;
 // Visible sidebar rows are prewarmed into the thread-detail cache so opening a
 // nearby thread usually reuses an already-hot subscription.
 export const SIDEBAR_THREAD_PREWARM_LIMIT = 10;
+
+export function resolveSidebarThreadLocationLabel(input: {
+  branch: string | null;
+  worktreePath: string | null;
+}): string | null {
+  return input.worktreePath === null
+    ? input.branch
+    : formatWorktreePathForDisplay(input.worktreePath);
+}
 
 type SidebarProject = {
   id: string;

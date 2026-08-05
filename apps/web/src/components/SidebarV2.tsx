@@ -117,6 +117,7 @@ import {
   orderItemsByPreferredIds,
   resolveAdjacentThreadId,
   resolveSettledTimestamp,
+  resolveSidebarThreadLocationLabel,
   resolveSidebarV2Status,
   resolveWorkingStartedAt,
   shouldNavigateAfterProjectRemoval,
@@ -899,6 +900,7 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
   }
 
   const diff = latestTurnDiff(thread);
+  const locationLabel = resolveSidebarThreadLocationLabel(thread);
 
   return (
     <li
@@ -1020,8 +1022,8 @@ const SidebarV2Row = memo(function SidebarV2Row(props: {
               ) : null}
             </div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground/75">
-              {thread.branch ? (
-                <span className="min-w-0 flex-1 truncate whitespace-nowrap">{thread.branch}</span>
+              {locationLabel ? (
+                <span className="min-w-0 flex-1 truncate whitespace-nowrap">{locationLabel}</span>
               ) : (
                 <span className="flex-1" />
               )}

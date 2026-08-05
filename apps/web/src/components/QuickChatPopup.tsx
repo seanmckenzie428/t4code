@@ -1,25 +1,32 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { ProjectId, type EnvironmentId, type ThreadId } from "@t3tools/contracts";
+import { createModelSelection } from "@t3tools/shared/model";
 import { useAtomValue } from "@effect/atom-react";
 import { MessageCircleIcon, PlusIcon, SendIcon, XIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   invokeKeybindingAppCommand,
   invokeWebAppCommand,
   registerWebAppCommandHandler,
 } from "../appCommandRegistry";
-import { useEnvironmentSettings } from "../hooks/useSettings";
+import { useEnvironmentSettings, useUpdateEnvironmentSettings } from "../hooks/useSettings";
 import { resolveShortcutCommand } from "../keybindings";
 import { cn, newMessageId } from "../lib/utils";
 import { refreshArchivedThreadsForEnvironment } from "../lib/archivedThreadsState";
+import {
+  applyProviderInstanceSettings,
+  deriveProviderInstanceEntries,
+  sortProviderInstanceEntries,
+} from "../providerInstances";
 import { selectQuickChat, useQuickChatStore } from "../quickChatStore";
 import { isQuickChatCloseEvent } from "../quickChatKeyboard";
 import { useThread } from "../state/entities";
-import { primaryServerKeybindingsAtom } from "../state/server";
+import { primaryServerKeybindingsAtom, serverEnvironment } from "../state/server";
 import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
 import { Button } from "./ui/button";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "./ui/select";
 import { Textarea } from "./ui/textarea";
 
 export function QuickChatPopup({ environmentId }: { environmentId: EnvironmentId }) {
@@ -115,7 +122,7 @@ export function QuickChatPopup({ environmentId }: { environmentId: EnvironmentId
         <section
           aria-label="Quick Chat"
           data-quick-chat-floating=""
-          className="pointer-events-auto flex h-[min(520px,calc(100dvh-88px))] min-h-80 w-[min(360px,calc(100vw-24px))] flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl"
+          className="pointer-events-auto flex h-[min(520px,calc(100dvh-88px))] max-h-[calc(100dvh-88px)] min-h-80 w-[min(360px,calc(100vw-24px))] max-w-[calc(100vw-24px)] min-w-64 resize flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl"
         >
           <QuickChatContent environmentId={environmentId} threadId={quickChat.threadId} />
         </section>
@@ -151,10 +158,29 @@ function QuickChatContent({
   const startTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const archiveThread = useAtomCommand(threadEnvironment.archive, { reportFailure: false });
   const stopSession = useAtomCommand(threadEnvironment.stopSession, { reportFailure: false });
-  const modelSelection = useEnvironmentSettings(
-    environmentId,
-    (settings) => settings.globalAssistant.modelSelection,
+  const settings = useEnvironmentSettings(environmentId);
+  const updateSettings = useUpdateEnvironmentSettings(environmentId);
+  const providers = useAtomValue(serverEnvironment.configValueAtom(environmentId))?.providers ?? [];
+  const modelSelection = settings.globalAssistant.modelSelection;
+  const modelOptions = useMemo(
+    () =>
+      sortProviderInstanceEntries(
+        applyProviderInstanceSettings(deriveProviderInstanceEntries(providers), settings),
+      )
+        .filter((entry) => entry.driverKind === "codex" && entry.enabled && entry.installed)
+        .flatMap((entry) =>
+          entry.models.map((model) => ({
+            value: JSON.stringify([entry.instanceId, model.slug]),
+            instanceId: entry.instanceId,
+            model: model.slug,
+            label: `${entry.displayName} · ${model.name ?? model.slug}`,
+          })),
+        ),
+    [providers, settings],
   );
+  const modelValue = modelSelection
+    ? JSON.stringify([modelSelection.instanceId, modelSelection.model])
+    : "unconfigured";
   const running = thread?.latestTurn?.state === "running";
   const canSend = modelSelection !== null && !running;
 
@@ -165,7 +191,11 @@ function QuickChatContent({
 
   const send = async () => {
     const text = draft.trim();
-    if (!canSend || !text || modelSelection === null) return;
+    if (!text || running) return;
+    if (modelSelection === null) {
+      setSendError("Choose a Quick Chat model before sending.");
+      return;
+    }
     setSendError(null);
     const createdAt = new Date().toISOString();
     const title = text.replaceAll(/\s+/g, " ").slice(0, 60) || "Quick Chat";
@@ -291,6 +321,46 @@ function QuickChatContent({
           void send();
         }}
       >
+        <div className="mb-2 flex items-center gap-2">
+          <span className="shrink-0 text-[10px] text-muted-foreground">Model</span>
+          <Select
+            value={modelValue}
+            onValueChange={(value) => {
+              const option = modelOptions.find((candidate) => candidate.value === value);
+              if (!option) return;
+              setSendError(null);
+              updateSettings({
+                globalAssistant: {
+                  ...settings.globalAssistant,
+                  enabled: true,
+                  modelSelection: createModelSelection(option.instanceId, option.model),
+                },
+              });
+            }}
+          >
+            <SelectTrigger size="xs" className="min-w-0 flex-1" aria-label="Quick Chat model">
+              <SelectValue>
+                {modelValue === "unconfigured"
+                  ? "Choose model"
+                  : (modelOptions.find((option) => option.value === modelValue)?.label ??
+                    "Unavailable Codex model")}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectPopup align="start" alignItemWithTrigger={false}>
+              {modelOptions.length > 0 ? (
+                modelOptions.map((option) => (
+                  <SelectItem key={option.value} hideIndicator value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem disabled hideIndicator value="unavailable">
+                  No Codex models available
+                </SelectItem>
+              )}
+            </SelectPopup>
+          </Select>
+        </div>
         <div className="flex items-end gap-2 rounded-lg border border-border bg-card p-2">
           <Textarea
             ref={composerRef}
@@ -306,7 +376,7 @@ function QuickChatContent({
             placeholder={
               modelSelection === null ? "Select a Quick Chat model first…" : "Ask anything…"
             }
-            disabled={!canSend}
+            disabled={running}
             className="min-h-9 resize-none border-0 bg-transparent p-1 shadow-none focus-visible:ring-0"
           />
           <Button
