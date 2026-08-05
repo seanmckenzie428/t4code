@@ -177,6 +177,18 @@ export const AppControlViewPlacementSummary = Schema.Struct({
     ]),
   ),
   order: Schema.optional(Schema.Int),
+  action: Schema.optional(
+    Schema.Union([
+      Schema.Struct({
+        commandId: Schema.Literal("ui.external-url.open"),
+        args: Schema.Struct({ url: TrimmedNonEmptyString }),
+      }),
+      Schema.Struct({
+        commandId: Schema.Literal("ui.preview.open"),
+        args: Schema.optional(Schema.Struct({ url: TrimmedNonEmptyString })),
+      }),
+    ]),
+  ),
 });
 export type AppControlViewPlacementSummary = typeof AppControlViewPlacementSummary.Type;
 

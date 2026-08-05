@@ -36,6 +36,29 @@ describe("fitPictureInPictureContentSize", () => {
   });
 });
 
+describe("isForwardedAppShortcut", () => {
+  it("forwards the browser shortcut from preview content on macOS and Windows/Linux", () => {
+    expect(
+      PreviewManager.isForwardedAppShortcut({
+        type: "keyDown",
+        key: "b",
+        meta: true,
+        shift: true,
+        control: false,
+      }),
+    ).toBe(true);
+    expect(
+      PreviewManager.isForwardedAppShortcut({
+        type: "keyDown",
+        key: "b",
+        meta: false,
+        shift: true,
+        control: true,
+      }),
+    ).toBe(true);
+  });
+});
+
 const {
   browserWindowConstructor,
   createFromPath,

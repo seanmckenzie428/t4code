@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import * as Schema from "effect/Schema";
 
 import {
+  activateAppViewPlacement,
   mergeContextAppViews,
   partitionRightPanelAppViewPlacements,
   resolveAppViewPlacements,
@@ -40,6 +41,33 @@ describe("app view placements", () => {
       "chat-topbar",
     );
     expect(resolved.map((item) => item.label)).toEqual(["First", "Later"]);
+  });
+
+  it("runs an explicit launcher action instead of opening the view", () => {
+    const actionManifest = decodeManifest({
+      ...manifest("docs", "Docs", 0),
+      placements: [
+        {
+          slot: "chat-topbar",
+          action: {
+            commandId: "ui.preview.open",
+            args: { url: "https://example.com/docs" },
+          },
+        },
+      ],
+    });
+    const item = resolveAppViewPlacements([actionManifest], "chat-topbar")[0];
+    const opened: string[] = [];
+    const actions: string[] = [];
+    if (!item) throw new Error("Expected placement");
+
+    activateAppViewPlacement(item, {
+      openView: (view) => opened.push(view.id),
+      runAction: (action) => actions.push(action.commandId),
+    });
+
+    expect(opened).toEqual([]);
+    expect(actions).toEqual(["ui.preview.open"]);
   });
 
   it("lets narrower scope replace a broader right-panel tile", () => {

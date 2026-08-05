@@ -49,4 +49,20 @@ describe("addBrowserSurface", () => {
       ).surfaces.map((surface) => surface.id),
     ).toEqual(["browser:tab-1", "browser:tab-2"]);
   });
+
+  it("opens a URL in the new browser session", async () => {
+    const opened = snapshot("tab-url");
+    const openPreview = vi.fn(async (_input: PreviewOpenInput) => AsyncResult.success(opened));
+
+    await addBrowserSurface({
+      threadRef,
+      openPreview: ({ input }) => openPreview(input),
+      url: "https://example.com/docs",
+    });
+
+    expect(openPreview).toHaveBeenCalledWith({
+      threadId: "thread-1",
+      url: "https://example.com/docs",
+    });
+  });
 });

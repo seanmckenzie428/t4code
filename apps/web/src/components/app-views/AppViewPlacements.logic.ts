@@ -1,6 +1,7 @@
 import type {
   AppViewManifest,
   AppViewPlacement,
+  AppViewPlacementAction,
   AppViewPlacementSlot,
   AppViewRightPanelLauncherTarget,
 } from "@t3tools/contracts";
@@ -11,6 +12,20 @@ export interface ResolvedAppViewPlacement {
   readonly placement: AppViewPlacement;
   readonly label: string;
   readonly description: string;
+}
+
+export function activateAppViewPlacement(
+  item: ResolvedAppViewPlacement,
+  handlers: {
+    readonly openView: (manifest: AppViewManifest) => void;
+    readonly runAction: (action: AppViewPlacementAction) => void;
+  },
+): void {
+  if (item.placement.action) {
+    handlers.runAction(item.placement.action);
+    return;
+  }
+  handlers.openView(item.manifest);
 }
 
 export function mergeContextAppViews(input: {

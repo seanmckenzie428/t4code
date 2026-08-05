@@ -1,4 +1,4 @@
-import type { AppViewManifest, ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
+import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
 import {
   ClipboardList,
@@ -59,7 +59,7 @@ interface RightPanelTabsProps {
   onAddTerminal: () => void;
   onAddFiles: () => void;
   onManageAppViews: () => void;
-  onOpenAppView: (manifest: AppViewManifest) => void;
+  onActivateAppViewPlacement: (placement: ResolvedAppViewPlacement) => void;
   browserAvailable: boolean;
   filesAvailable: boolean;
   children: ReactNode;
@@ -105,7 +105,7 @@ function RightPanelEmptyState(props: {
   onAddTerminal: () => void;
   onAddFiles: () => void;
   onManageAppViews: () => void;
-  onOpenAppView: (manifest: AppViewManifest) => void;
+  onActivateAppViewPlacement: (placement: ResolvedAppViewPlacement) => void;
   appViewPlacements: ReadonlyArray<ResolvedAppViewPlacement>;
   browserAvailable: boolean;
   filesAvailable: boolean;
@@ -156,7 +156,7 @@ function RightPanelEmptyState(props: {
     icon: <AppViewPlacementIcon icon={item.placement.icon} className="mb-3 size-5" />,
     available: true,
     disabledReason: null,
-    onClick: () => props.onOpenAppView(item.manifest),
+    onClick: () => props.onActivateAppViewPlacement(item),
   });
   const actions = [
     ...builtInActions.map((action) => {
@@ -523,7 +523,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddTerminal={props.onAddTerminal}
             onAddFiles={props.onAddFiles}
             onManageAppViews={props.onManageAppViews}
-            onOpenAppView={props.onOpenAppView}
+            onActivateAppViewPlacement={props.onActivateAppViewPlacement}
             appViewPlacements={props.appViewPlacements}
             browserAvailable={props.browserAvailable}
             filesAvailable={props.filesAvailable}

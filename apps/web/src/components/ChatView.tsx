@@ -151,8 +151,10 @@ import { AppViewRenderer } from "./app-views/AppViewRenderer";
 import { GeneratedViewLibrary, GeneratedViewToolbar } from "./app-views/GeneratedViewLibrary";
 import { selectPersonalAppViews, selectThreadAppViews, useAppViewStore } from "../appViewStore";
 import {
+  activateAppViewPlacement,
   mergeContextAppViews,
   resolveAppViewPlacements,
+  type ResolvedAppViewPlacement,
 } from "./app-views/AppViewPlacements.logic";
 import { useT3ProjectFileAppViews } from "~/hooks/useT3ProjectFileAppViews";
 import {
@@ -160,7 +162,11 @@ import {
   invokeWebAppCommand,
   registerWebAppCommandHandler,
 } from "../appCommandRegistry";
-import { invokeGeneratedViewAction, registerAppViewCommandHost } from "../appViewCommandHost";
+import {
+  invokeGeneratedViewAction,
+  parseOptionalExternalHttpUrl,
+  registerAppViewCommandHost,
+} from "../appViewCommandHost";
 import { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
@@ -1773,12 +1779,6 @@ function ChatViewContent(props: ChatViewProps) {
     () => resolveAppViewPlacements(contextualAppViews, "right-panel-launcher"),
     [contextualAppViews],
   );
-  const openPlacedAppView = useCallback(
-    (manifest: AppViewManifest) => {
-      if (activeThreadRef) useAppViewStore.getState().openManifest(activeThreadRef, manifest);
-    },
-    [activeThreadRef],
-  );
   const handleNewThreadInActiveProject = useCallback(() => {
     startNewThreadForProject(activeProjectRef, handleNewThread);
   }, [activeProjectRef, handleNewThread]);
@@ -3372,10 +3372,25 @@ function ChatViewContent(props: ChatViewProps) {
     useRightPanelStore.getState().close(activeThreadRef);
     dismissPlanSidebarForCurrentTurn();
   }, [activeThreadRef, dismissPlanSidebarForCurrentTurn]);
-  const createBrowserSurface = useCallback(() => {
-    if (!activeThreadRef) return;
-    void addBrowserSurface({ threadRef: activeThreadRef, openPreview });
-  }, [activeThreadRef, openPreview]);
+  const createBrowserSurface = useCallback(
+    (url?: string) => {
+      if (!activeThreadRef) return;
+      if (!isPreviewSupportedInRuntime()) {
+        toastManager.add({
+          type: "info",
+          title: "Browser is desktop-only",
+          description: "Open T4 Code in the desktop app to use the built-in browser.",
+        });
+        return;
+      }
+      void addBrowserSurface({
+        threadRef: activeThreadRef,
+        openPreview,
+        ...(url === undefined ? {} : { url }),
+      });
+    },
+    [activeThreadRef, openPreview],
+  );
   const addFilesSurface = useCallback(() => {
     if (!activeThreadRef || !activeProject) return;
     useRightPanelStore.getState().open(activeThreadRef, "files");
@@ -3575,7 +3590,11 @@ function ChatViewContent(props: ChatViewProps) {
       ),
       registerWebAppCommandHandler("ui.diff.toggle", onToggleDiff, matchesActiveThread),
       registerWebAppCommandHandler("ui.files.open", addFilesSurface, matchesActiveThread),
-      registerWebAppCommandHandler("ui.preview.open", createBrowserSurface, matchesActiveThread),
+      registerWebAppCommandHandler(
+        "ui.preview.open",
+        (invocation) => createBrowserSurface(parseOptionalExternalHttpUrl(invocation.args)),
+        matchesActiveThread,
+      ),
       registerWebAppCommandHandler("ui.preview.toggle", togglePreviewPanel, matchesActiveThread),
       registerWebAppCommandHandler(
         "ui.terminal.open",
@@ -6193,6 +6212,21 @@ function ChatViewContent(props: ChatViewProps) {
     },
     [activeProject?.id, activeThread, activeThreadRef, invokeServerAppCommand],
   );
+  const activatePlacedAppView = useCallback(
+    (item: ResolvedAppViewPlacement) => {
+      activateAppViewPlacement(item, {
+        openView: (manifest) => {
+          if (activeThreadRef) {
+            useAppViewStore.getState().openManifest(activeThreadRef, manifest);
+          }
+        },
+        runAction: (action) => {
+          void invokeAppViewAction({ commandId: action.commandId, args: action.args ?? {} });
+        },
+      });
+    },
+    [activeThreadRef, invokeAppViewAction],
+  );
   const rightPanelContent = activeThreadRef ? (
     activeRightPanelSurface?.kind === "preview" ? (
       <Suspense fallback={null}>
@@ -6322,7 +6356,7 @@ function ChatViewContent(props: ChatViewProps) {
             onRunProjectCustomAction={runProjectCustomAction}
             onSetProjectCustomActionPlacement={updateProjectCustomActionPlacement}
             onDeleteProjectCustomAction={deleteProjectCustomAction}
-            onOpenAppView={openPlacedAppView}
+            onActivateAppViewPlacement={activatePlacedAppView}
           />
         </header>
 
@@ -6731,7 +6765,7 @@ function ChatViewContent(props: ChatViewProps) {
           onAddTerminal={addTerminalSurface}
           onAddFiles={addFilesSurface}
           onManageAppViews={() => setGeneratedViewLibraryOpen(true)}
-          onOpenAppView={openPlacedAppView}
+          onActivateAppViewPlacement={activatePlacedAppView}
           browserAvailable={isPreviewSupportedInRuntime()}
           filesAvailable={activeProject !== null}
         >
@@ -6760,7 +6794,7 @@ function ChatViewContent(props: ChatViewProps) {
             onAddTerminal={addTerminalSurface}
             onAddFiles={addFilesSurface}
             onManageAppViews={() => setGeneratedViewLibraryOpen(true)}
-            onOpenAppView={openPlacedAppView}
+            onActivateAppViewPlacement={activatePlacedAppView}
             browserAvailable={isPreviewSupportedInRuntime()}
             filesAvailable={activeProject !== null}
           >

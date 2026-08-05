@@ -23,8 +23,11 @@ blocked until separately approved.
 
 Generated views may also add compact launchers to the chat top bar, the active project's sidebar,
 and the right-panel launcher grid. A right-panel launcher may replace a visible built-in tile, but
-the built-in surface remains available from the panel's add menu. Launchers open the full generated
-view; they do not inject arbitrary code into app chrome.
+the built-in surface remains available from the panel's add menu. Launchers use native T3 controls.
+They can open the full generated view, an approved HTTP(S) URL in the system browser, or a URL in
+T3's dedicated browser; they do not inject arbitrary code into app chrome.
+
+The dedicated browser is also available from Global Search and opens with `mod+shift+b`.
 
 Destructive and publication commands do not execute without a per-call human confirmation host.
 Approval responses, user-input responses, credentials, pairing, grant changes, raw internal

@@ -33,6 +33,7 @@ import {
   FileSearchIcon,
   FolderIcon,
   FolderPlusIcon,
+  Globe2Icon,
   LinkIcon,
   MessageSquareIcon,
   SettingsIcon,
@@ -84,6 +85,7 @@ import { onOpenCommandPalette } from "../commandPaletteBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
+import { isPreviewSupportedInRuntime } from "../previewStateStore";
 import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
 import { cn, isMacPlatform, isWindowsPlatform, newProjectId } from "../lib/utils";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
@@ -1549,6 +1551,26 @@ function OpenCommandPaletteDialog(props: {
       if (assistantEnvironmentId === null) return;
       await invokeWebAppCommand("ui.project-search.toggle", {
         environmentId: assistantEnvironmentId,
+        source: "palette",
+      });
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:open-browser",
+    searchTerms: ["browser", "preview", "web", "url", "open"],
+    title: "Open browser",
+    description: "Open a new tab in the built-in browser.",
+    disabled: !activeThread || !isPreviewSupportedInRuntime(),
+    icon: <Globe2Icon className={ITEM_ICON_CLASS} />,
+    shortcutCommand: "preview.open",
+    run: async () => {
+      if (!activeThread) return;
+      await invokeWebAppCommand("ui.preview.open", {
+        environmentId: activeThread.environmentId,
+        projectId: activeThread.projectId,
+        threadId: activeThread.id,
         source: "palette",
       });
     },

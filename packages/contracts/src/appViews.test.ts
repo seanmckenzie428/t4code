@@ -185,7 +185,15 @@ it.effect("decodes bounded chrome launcher placements", () =>
     const parsed = yield* Schema.decodeUnknownEffect(NativeAppViewManifest)({
       ...nativeManifest,
       placements: [
-        { slot: "chat-topbar", label: "Cockpit", icon: "dashboard" },
+        {
+          slot: "chat-topbar",
+          label: "Cockpit",
+          icon: "dashboard",
+          action: {
+            commandId: "ui.external-url.open",
+            args: { url: "https://example.com/status" },
+          },
+        },
         {
           slot: "right-panel-launcher",
           mode: "replace",
@@ -194,7 +202,25 @@ it.effect("decodes bounded chrome launcher placements", () =>
         },
       ],
     });
+    assert.strictEqual(parsed.placements?.[0]?.action?.commandId, "ui.external-url.open");
     assert.strictEqual(parsed.placements?.[1]?.targetId, "browser");
+  }),
+);
+
+it.effect("rejects unsupported chrome launcher commands", () =>
+  Effect.gen(function* () {
+    const exit = yield* Effect.exit(
+      Schema.decodeUnknownEffect(NativeAppViewManifest)({
+        ...nativeManifest,
+        placements: [
+          {
+            slot: "chat-topbar",
+            action: { commandId: "terminal.command.run", args: { command: "pwd" } },
+          },
+        ],
+      }),
+    );
+    assert.strictEqual(exit._tag, "Failure");
   }),
 );
 

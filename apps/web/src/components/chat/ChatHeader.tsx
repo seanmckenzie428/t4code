@@ -1,5 +1,4 @@
 import {
-  type AppViewManifest,
   type EnvironmentId,
   type EditorId,
   type ProjectScript,
@@ -26,6 +25,7 @@ import { ProjectFavicon } from "../ProjectFavicon";
 import { cn } from "~/lib/utils";
 import type { ResolvedAppViewPlacement } from "../app-views/AppViewPlacements.logic";
 import { AppViewPlacementIcon } from "../app-views/AppViewPlacementIcon";
+import { Button } from "../ui/button";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
@@ -57,7 +57,7 @@ interface ChatHeaderProps {
     placement: "menu" | "toolbar",
   ) => Promise<ProjectCustomActionResult>;
   onDeleteProjectCustomAction: (actionId: string) => Promise<ProjectCustomActionResult>;
-  onOpenAppView: (manifest: AppViewManifest) => void;
+  onActivateAppViewPlacement: (placement: ResolvedAppViewPlacement) => void;
 }
 
 export function shouldShowOpenInPicker(input: {
@@ -96,7 +96,7 @@ export const ChatHeader = memo(function ChatHeader({
   onRunProjectCustomAction,
   onSetProjectCustomActionPlacement,
   onDeleteProjectCustomAction,
-  onOpenAppView,
+  onActivateAppViewPlacement,
 }: ChatHeaderProps) {
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const fileScripts = useT3ProjectFileScripts(
@@ -166,11 +166,13 @@ export const ChatHeader = memo(function ChatHeader({
           <Tooltip key={item.id}>
             <TooltipTrigger
               render={
-                <button
+                <Button
                   type="button"
+                  size="xs"
+                  variant="outline"
                   aria-label={item.label}
-                  onClick={() => onOpenAppView(item.manifest)}
-                  className="inline-flex h-7 max-w-36 items-center gap-1.5 rounded-md border border-border/70 bg-background px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                  onClick={() => onActivateAppViewPlacement(item)}
+                  className="max-w-36"
                 />
               }
             >

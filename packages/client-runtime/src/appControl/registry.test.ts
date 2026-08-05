@@ -190,6 +190,7 @@ describe("APP_COMMAND_CATALOG", () => {
       "terminal.close",
       "rightPanel.toggle",
       "diff.toggle",
+      "preview.open",
       "preview.toggle",
       "preview.refresh",
       "preview.focusUrl",

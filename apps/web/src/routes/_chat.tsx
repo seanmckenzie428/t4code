@@ -172,7 +172,7 @@ function ChatRouteGlobalShortcuts() {
         return;
       }
 
-      if (command === "preview.toggle") {
+      if (command === "preview.open" || command === "preview.toggle") {
         event.preventDefault();
         event.stopPropagation();
         if (!routeThreadRef) return;

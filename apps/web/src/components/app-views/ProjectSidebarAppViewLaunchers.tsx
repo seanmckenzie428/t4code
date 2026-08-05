@@ -7,7 +7,13 @@ import { useT3ProjectFileAppViews } from "~/hooks/useT3ProjectFileAppViews";
 import { useProject, useThreadShell } from "~/state/entities";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar";
 import { AppViewPlacementIcon } from "./AppViewPlacementIcon";
-import { mergeContextAppViews, resolveAppViewPlacements } from "./AppViewPlacements.logic";
+import {
+  activateAppViewPlacement,
+  mergeContextAppViews,
+  resolveAppViewPlacements,
+} from "./AppViewPlacements.logic";
+import { invokeWebAppCommand } from "~/appCommandRegistry";
+import { toastManager } from "../ui/toast";
 
 function ActiveProjectSidebarAppViewLaunchers(props: { readonly threadRef: ScopedThreadRef }) {
   const thread = useThreadShell(props.threadRef);
@@ -45,7 +51,31 @@ function ActiveProjectSidebarAppViewLaunchers(props: { readonly threadRef: Scope
           <SidebarMenuButton
             type="button"
             title={item.description}
-            onClick={() => useAppViewStore.getState().openManifest(props.threadRef, item.manifest)}
+            onClick={() =>
+              activateAppViewPlacement(item, {
+                openView: (manifest) =>
+                  useAppViewStore.getState().openManifest(props.threadRef, manifest),
+                runAction: (action) => {
+                  void invokeWebAppCommand(
+                    action.commandId,
+                    {
+                      environmentId: props.threadRef.environmentId,
+                      ...(thread ? { projectId: thread.projectId } : {}),
+                      threadId: props.threadRef.threadId,
+                      source: "view",
+                    },
+                    action.args ?? {},
+                  ).catch((error: unknown) => {
+                    toastManager.add({
+                      type: "error",
+                      title: "Generated view action failed",
+                      description:
+                        error instanceof Error ? error.message : "The command could not be run.",
+                    });
+                  });
+                },
+              })
+            }
           >
             <AppViewPlacementIcon icon={item.placement.icon} />
             <span className="truncate">{item.label}</span>

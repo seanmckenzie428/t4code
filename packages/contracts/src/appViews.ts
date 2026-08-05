@@ -56,6 +56,21 @@ export const AppViewRightPanelLauncherTarget = Schema.Literals(
 );
 export type AppViewRightPanelLauncherTarget = typeof AppViewRightPanelLauncherTarget.Type;
 
+export const AppViewPlacementAction = Schema.Union([
+  Schema.Struct({
+    commandId: Schema.Literal("ui.external-url.open"),
+    args: Schema.Struct({ url: TrimmedNonEmptyString }),
+  }),
+  Schema.Struct({
+    commandId: Schema.Literal("ui.preview.open"),
+    args: Schema.optionalKey(Schema.Struct({ url: TrimmedNonEmptyString })),
+  }),
+]).annotate({
+  description:
+    "Optional launcher action. Open an HTTP(S) URL externally or in T3's dedicated browser; omit to open the generated view.",
+});
+export type AppViewPlacementAction = typeof AppViewPlacementAction.Type;
+
 export const AppViewPlacement = Schema.Struct({
   slot: AppViewPlacementSlot,
   mode: Schema.optionalKey(Schema.Literals(["append", "replace"])),
@@ -64,6 +79,7 @@ export const AppViewPlacement = Schema.Struct({
   description: Schema.optionalKey(TrimmedNonEmptyString.check(Schema.isMaxLength(200))),
   icon: Schema.optionalKey(AppViewPlacementIcon),
   order: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: -100, maximum: 100 }))),
+  action: Schema.optionalKey(AppViewPlacementAction),
 }).check(
   Schema.makeFilter((placement) => {
     const mode = placement.mode ?? "append";

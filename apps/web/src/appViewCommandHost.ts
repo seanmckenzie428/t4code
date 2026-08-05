@@ -89,6 +89,11 @@ export function parseExternalHttpUrl(args: unknown): string {
   return parsed.href;
 }
 
+export function parseOptionalExternalHttpUrl(args: unknown): string | undefined {
+  if (objectArgs(args).url === undefined) return undefined;
+  return parseExternalHttpUrl(args);
+}
+
 function threadRef(context: { environmentId: string; threadId?: string }): ScopedThreadRef {
   if (!context.threadId) throw new Error("Generated views require a thread-scoped command.");
   return {

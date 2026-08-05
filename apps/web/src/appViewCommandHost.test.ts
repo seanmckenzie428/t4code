@@ -12,7 +12,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { invokeWebAppCommand } from "./appCommandRegistry";
-import { invokeGeneratedViewAction, registerAppViewCommandHost } from "./appViewCommandHost";
+import {
+  invokeGeneratedViewAction,
+  parseOptionalExternalHttpUrl,
+  registerAppViewCommandHost,
+} from "./appViewCommandHost";
 import { selectAppView, selectThreadAppViews, useAppViewStore } from "./appViewStore";
 import { createExternalUrlApprovalStore } from "./externalUrlApprovals";
 import { createMemoryStorage } from "./lib/storage";
@@ -52,6 +56,16 @@ afterEach(() => {
 });
 
 describe("appViewCommandHost", () => {
+  it("accepts an optional normalized browser URL", () => {
+    expect(parseOptionalExternalHttpUrl({})).toBeUndefined();
+    expect(parseOptionalExternalHttpUrl({ url: "HTTPS://EXAMPLE.COM:443/docs" })).toBe(
+      "https://example.com/docs",
+    );
+    expect(() => parseOptionalExternalHttpUrl({ url: "file:///etc/passwd" })).toThrow(
+      "HTTP or HTTPS",
+    );
+  });
+
   it("presents through the semantic registry and opens the dock", async () => {
     const first = await invokeWebAppCommand("view.present" as AppCommandId, context, {
       manifest,

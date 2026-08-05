@@ -398,6 +398,9 @@ const APP_FORWARDED_SHORTCUTS: ReadonlyArray<{
 }> = Object.freeze([
   // mod+shift+J → preview.toggle
   { key: "j", meta: true, shift: true, control: false },
+  // mod+shift+B → preview.open (macOS and Windows/Linux variants)
+  { key: "b", meta: true, shift: true, control: false },
+  { key: "b", meta: false, shift: true, control: true },
   // mod+K → command palette
   { key: "k", meta: true, shift: false, control: false },
   // mod+, → settings (macOS convention)
@@ -405,6 +408,18 @@ const APP_FORWARDED_SHORTCUTS: ReadonlyArray<{
   // mod+W → close tab/panel
   { key: "w", meta: true, shift: false, control: false },
 ]);
+
+export const isForwardedAppShortcut = (
+  input: Pick<Electron.Input, "type" | "key" | "meta" | "shift" | "control">,
+): boolean =>
+  input.type === "keyDown" &&
+  APP_FORWARDED_SHORTCUTS.some(
+    (shortcut) =>
+      shortcut.key.toLowerCase() === input.key.toLowerCase() &&
+      shortcut.meta === input.meta &&
+      shortcut.shift === input.shift &&
+      shortcut.control === input.control,
+  );
 
 const isPreviewInputSignal = (value: unknown): value is PreviewInputSignal => {
   if (typeof value !== "object" || value === null || !("kind" in value)) return false;
@@ -1199,16 +1214,6 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     if (managed) yield* Scope.close(managed.scope, Exit.void).pipe(Effect.ignore);
   });
 
-  const isAppShortcut = (input: Electron.Input): boolean =>
-    input.type === "keyDown" &&
-    APP_FORWARDED_SHORTCUTS.some(
-      (shortcut) =>
-        shortcut.key.toLowerCase() === input.key.toLowerCase() &&
-        shortcut.meta === input.meta &&
-        shortcut.shift === input.shift &&
-        shortcut.control === input.control,
-    );
-
   const computeNavStatus = (wc: Electron.WebContents): PreviewNavStatus => {
     const url = wc.getURL();
     const title = wc.getTitle();
@@ -1349,7 +1354,11 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       input: Electron.Input,
     ) {
       const mainWindow = yield* Ref.get(mainWindowRef);
-      if (!isAppShortcut(input) || Option.isNone(mainWindow) || mainWindow.value.isDestroyed()) {
+      if (
+        !isForwardedAppShortcut(input) ||
+        Option.isNone(mainWindow) ||
+        mainWindow.value.isDestroyed()
+      ) {
         return;
       }
       event.preventDefault();
