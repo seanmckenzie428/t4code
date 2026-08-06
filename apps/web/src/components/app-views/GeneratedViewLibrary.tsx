@@ -1,11 +1,9 @@
-import type { AppViewManifest, ProjectId, ScopedThreadRef } from "@t3tools/contracts";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { ExternalLink, FolderGit2, Pin, PinOff, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import type { AppViewManifest, ScopedThreadRef } from "@t3tools/contracts";
+import { ExternalLink, Pin, PinOff, Trash2 } from "lucide-react";
+import { useMemo } from "react";
 
 import { selectPersonalAppViews, selectThreadAppViews, useAppViewStore } from "~/appViewStore";
 import { selectThreadRightPanelState, useRightPanelStore } from "~/rightPanelStore";
-import { useMainViewStore } from "~/mainViewStore";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import {
@@ -17,51 +15,15 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { toastManager } from "~/components/ui/toast";
-import { projectEnvironment } from "~/state/projects";
-import { useAtomCommand } from "~/state/use-atom-command";
 
 import {
   generatedViewDeleteConfirmation,
   generatedViewLibraryEntries,
-  projectAppViewSaveInput,
 } from "./GeneratedViewLibrary.logic";
-
-function useSaveProjectAppView(ref: ScopedThreadRef, projectId: ProjectId | null) {
-  const runSave = useAtomCommand(projectEnvironment.saveAppView, { reportFailure: false });
-  const [savingViewId, setSavingViewId] = useState<string | null>(null);
-
-  const save = async (manifest: AppViewManifest) => {
-    if (!projectId || savingViewId !== null) return;
-    setSavingViewId(manifest.id);
-    const result = await runSave({
-      environmentId: ref.environmentId,
-      input: projectAppViewSaveInput(projectId, manifest),
-    });
-    setSavingViewId(null);
-    if (result._tag === "Failure") {
-      const error = squashAtomCommandFailure(result);
-      toastManager.add({
-        type: "error",
-        title: "Could not save generated view",
-        description: error instanceof Error ? error.message : "t3.json could not be updated.",
-      });
-      return;
-    }
-    toastManager.add({
-      type: "success",
-      title: result.value.change === "created" ? "Saved to project" : "Project view updated",
-      description: "t3.json changed. Review the tracked change in Changes.",
-    });
-    useMainViewStore.getState().select(ref, "review");
-  };
-
-  return { save, savingViewId };
-}
 
 export function GeneratedViewToolbar(props: {
   ref: ScopedThreadRef;
   manifest: AppViewManifest;
-  projectId: ProjectId | null;
   onManage: () => void;
 }) {
   const isPersonal = useAppViewStore(
@@ -70,8 +32,6 @@ export function GeneratedViewToolbar(props: {
   );
   const pinPersonal = useAppViewStore((state) => state.pinPersonal);
   const unpinPersonal = useAppViewStore((state) => state.unpinPersonal);
-  const projectSave = useSaveProjectAppView(props.ref, props.projectId);
-
   return (
     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
       <span className="text-xs text-muted-foreground">Generated view</span>
@@ -92,18 +52,6 @@ export function GeneratedViewToolbar(props: {
           {isPersonal ? <PinOff /> : <Pin />}
           {isPersonal ? "Remove personal save" : "Save personally"}
         </Button>
-        {props.projectId ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={projectSave.savingViewId !== null}
-            onClick={() => void projectSave.save(props.manifest)}
-            title="Write or update this generated view in the project's tracked t3.json"
-          >
-            <FolderGit2 />
-            {projectSave.savingViewId === props.manifest.id ? "Saving…" : "Save to project"}
-          </Button>
-        ) : null}
         <Button size="sm" variant="outline" onClick={props.onManage}>
           Manage
         </Button>
@@ -116,7 +64,6 @@ export function GeneratedViewLibrary(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   ref: ScopedThreadRef;
-  projectId: ProjectId | null;
 }) {
   const threadViews = useAppViewStore(
     (state) => selectThreadAppViews(state.byThreadKey, props.ref).manifests,
@@ -127,7 +74,6 @@ export function GeneratedViewLibrary(props: {
   const pinPersonal = useAppViewStore((state) => state.pinPersonal);
   const unpinPersonal = useAppViewStore((state) => state.unpinPersonal);
   const openPersonal = useAppViewStore((state) => state.openPersonal);
-  const projectSave = useSaveProjectAppView(props.ref, props.projectId);
   const removeView = useAppViewStore((state) => state.remove);
   const rightPanel = useRightPanelStore((state) =>
     selectThreadRightPanelState(state.byThreadKey, props.ref),
@@ -151,8 +97,7 @@ export function GeneratedViewLibrary(props: {
         <DialogHeader>
           <DialogTitle>Generated views</DialogTitle>
           <DialogDescription>
-            Reopen closed views, save a personal copy across threads, or save a shared view to the
-            project.
+            Reopen closed views or save a personal copy on this device across project threads.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="space-y-5">
@@ -224,18 +169,6 @@ export function GeneratedViewLibrary(props: {
                       {entry.isPersonal ? <PinOff /> : <Pin />}
                       {entry.isPersonal ? "Remove personal save" : "Save personally"}
                     </Button>
-                    {props.projectId && entry.isThreadView ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={projectSave.savingViewId !== null}
-                        onClick={() => void projectSave.save(entry.manifest)}
-                        title="Write or update this generated view in the project's tracked t3.json"
-                      >
-                        <FolderGit2 />
-                        {projectSave.savingViewId === entry.id ? "Saving…" : "Save to project"}
-                      </Button>
-                    ) : null}
                     <Button
                       size="sm"
                       variant="ghost"
@@ -246,7 +179,6 @@ export function GeneratedViewLibrary(props: {
                             title: entry.manifest.title,
                             isThreadView: entry.isThreadView,
                             isPersonal: entry.isPersonal,
-                            hasProjectProposal: false,
                           }),
                         );
                         if (!confirmed) return;

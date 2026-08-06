@@ -1,4 +1,4 @@
-import type { AppViewManifest, ProjectId, ProjectSaveAppViewInput } from "@t3tools/contracts";
+import type { AppViewManifest } from "@t3tools/contracts";
 
 export interface GeneratedViewLibraryEntry {
   readonly id: string;
@@ -25,26 +25,14 @@ export function generatedViewLibraryEntries(input: {
     .sort((left, right) => left.manifest.title.localeCompare(right.manifest.title));
 }
 
-export function projectAppViewSaveInput(
-  projectId: ProjectId,
-  manifest: AppViewManifest,
-): ProjectSaveAppViewInput {
-  return {
-    projectId,
-    manifest: { ...manifest, scope: { kind: "project", projectId } },
-  };
-}
-
 export function generatedViewDeleteConfirmation(input: {
   readonly title: string;
   readonly isThreadView: boolean;
   readonly isPersonal: boolean;
-  readonly hasProjectProposal: boolean;
 }): string {
   const effects: string[] = [];
   if (input.isThreadView) effects.push("its thread copy");
   if (input.isPersonal) effects.push("its saved personal copy");
-  if (input.hasProjectProposal) effects.push("its pending project-save proposal");
   if (effects.length === 0) effects.push("the view");
-  return `Delete “${input.title}”?\n\nThis permanently removes ${effects.join(", ")}. A view already saved in t3.json must be removed from that file separately.`;
+  return `Delete “${input.title}”?\n\nThis permanently removes ${effects.join(", ")}.`;
 }

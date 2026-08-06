@@ -39,7 +39,6 @@ import {
   type ProjectFileOperation,
   ProjectListEntriesError,
   ProjectReadFileError,
-  ProjectSaveAppViewError,
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
@@ -107,7 +106,6 @@ import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
-import { saveProjectAppView } from "./project/ProjectAppViewFile.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
@@ -1697,40 +1695,6 @@ const makeWsRpcLayer = (
                   }),
               ),
             ),
-            { "rpc.aggregate": "workspace" },
-          ),
-        [WS_METHODS.projectsSaveAppView]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.projectsSaveAppView,
-            Effect.gen(function* () {
-              const project = yield* projectionSnapshotQuery
-                .getProjectShellById(input.projectId)
-                .pipe(
-                  Effect.mapError(
-                    () =>
-                      new ProjectSaveAppViewError({
-                        projectId: input.projectId,
-                        failure: "project_lookup_failed",
-                        message: "The project could not be loaded.",
-                      }),
-                  ),
-                );
-              if (Option.isNone(project)) {
-                return yield* new ProjectSaveAppViewError({
-                  projectId: input.projectId,
-                  failure: "project_not_found",
-                  message: "The project no longer exists.",
-                });
-              }
-              return yield* saveProjectAppView({
-                workspaceRoot: project.value.workspaceRoot,
-                projectId: input.projectId,
-                manifest: input.manifest,
-                workspaceFileSystem,
-                fileSystem,
-                path,
-              });
-            }),
             { "rpc.aggregate": "workspace" },
           ),
         [WS_METHODS.shellOpenInEditor]: (input) =>

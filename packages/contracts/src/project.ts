@@ -6,7 +6,6 @@ import {
   TrimmedNonEmptyString,
   TrimmedString,
 } from "./baseSchemas.ts";
-import { AppViewManifest } from "./appViews.ts";
 
 const PROJECT_SEARCH_ENTRIES_MAX_LIMIT = 200;
 const PROJECT_SEARCH_CONTENTS_MAX_LIMIT = 500;
@@ -274,38 +273,6 @@ export const ProjectWriteFileResult = Schema.Struct({
   relativePath: TrimmedNonEmptyString,
 });
 export type ProjectWriteFileResult = typeof ProjectWriteFileResult.Type;
-
-export const ProjectSaveAppViewInput = Schema.Struct({
-  projectId: ProjectId,
-  manifest: AppViewManifest,
-});
-export type ProjectSaveAppViewInput = typeof ProjectSaveAppViewInput.Type;
-
-export const ProjectSaveAppViewResult = Schema.Struct({
-  relativePath: Schema.Literal("t3.json"),
-  viewId: TrimmedNonEmptyString,
-  change: Schema.Literals(["created", "updated"]),
-});
-export type ProjectSaveAppViewResult = typeof ProjectSaveAppViewResult.Type;
-
-export const ProjectSaveAppViewFailure = Schema.Literals([
-  "project_not_found",
-  "project_lookup_failed",
-  "manifest_scope_mismatch",
-  "invalid_project_file",
-  "read_failed",
-  "write_failed",
-]);
-export type ProjectSaveAppViewFailure = typeof ProjectSaveAppViewFailure.Type;
-
-export class ProjectSaveAppViewError extends Schema.TaggedErrorClass<ProjectSaveAppViewError>()(
-  "ProjectSaveAppViewError",
-  {
-    projectId: ProjectId,
-    failure: ProjectSaveAppViewFailure,
-    message: TrimmedNonEmptyString,
-  },
-) {}
 
 export class ProjectWriteFileError extends Schema.TaggedErrorClass<ProjectWriteFileError>()(
   "ProjectWriteFileError",

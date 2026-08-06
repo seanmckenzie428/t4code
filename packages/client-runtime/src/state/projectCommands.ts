@@ -102,15 +102,5 @@ export function createProjectEnvironmentAtoms<R, E>(
           JSON.stringify([environmentId, input.cwd, input.relativePath]),
       },
     }),
-    saveAppView: createEnvironmentRpcCommand(runtime, {
-      label: "environment-data:projects:save-app-view",
-      tag: WS_METHODS.projectsSaveAppView,
-      scheduler: fileScheduler,
-      concurrency: {
-        mode: "serial",
-        key: ({ environmentId, input }) =>
-          JSON.stringify([environmentId, input.projectId, input.manifest.id]),
-      },
-    }),
   };
 }

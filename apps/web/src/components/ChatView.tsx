@@ -6261,7 +6261,6 @@ function ChatViewContent(props: ChatViewProps) {
         <GeneratedViewToolbar
           ref={activeThreadRef}
           manifest={activeAppViewManifest}
-          projectId={activeProject?.id ?? null}
           onManage={() => setGeneratedViewLibraryOpen(true)}
         />
         <AppViewRenderer manifest={activeAppViewManifest} onAction={invokeAppViewAction} />
@@ -6807,7 +6806,6 @@ function ChatViewContent(props: ChatViewProps) {
           open={generatedViewLibraryOpen}
           onOpenChange={setGeneratedViewLibraryOpen}
           ref={activeThreadRef}
-          projectId={activeProject?.id ?? null}
         />
       ) : null}
 

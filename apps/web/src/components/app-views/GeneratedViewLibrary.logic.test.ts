@@ -1,7 +1,6 @@
 import {
   AppViewId,
   AppViewRevision,
-  ProjectId,
   ThreadId,
   type NativeAppViewManifest,
 } from "@t3tools/contracts";
@@ -10,7 +9,6 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   generatedViewDeleteConfirmation,
   generatedViewLibraryEntries,
-  projectAppViewSaveInput,
 } from "./GeneratedViewLibrary.logic";
 
 const manifest = (id: string, title: string): NativeAppViewManifest => ({
@@ -38,21 +36,12 @@ describe("generated view library", () => {
     ]);
   });
 
-  it("builds a project-scoped direct-save request", () => {
-    const projectId = ProjectId.make("project-1");
-    expect(projectAppViewSaveInput(projectId, manifest("health", "Health"))).toMatchObject({
-      projectId,
-      manifest: { id: "health", scope: { kind: "project", projectId } },
-    });
-  });
-
   it("describes every durable copy before deleting a view", () => {
     expect(
       generatedViewDeleteConfirmation({
         title: "Project Cockpit",
         isThreadView: true,
         isPersonal: true,
-        hasProjectProposal: true,
       }),
     ).toContain("saved personal copy");
     expect(
@@ -60,8 +49,7 @@ describe("generated view library", () => {
         title: "Project Cockpit",
         isThreadView: true,
         isPersonal: true,
-        hasProjectProposal: true,
       }),
-    ).toContain("pending project-save proposal");
+    ).not.toContain("t3.json");
   });
 });
