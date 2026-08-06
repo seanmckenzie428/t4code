@@ -317,6 +317,8 @@ describe("T3 generated-view developer instructions", () => {
       NodeAssert.match(instructions, /app_status/);
       NodeAssert.match(instructions, /app_view_present/);
       NodeAssert.match(instructions, /app_view_update/);
+      NodeAssert.match(instructions, /action: \{ primary:/);
+      NodeAssert.match(instructions, /separate chevron opens options/);
       NodeAssert.match(instructions, /Do not edit the T4 Code source tree/);
     }
   });

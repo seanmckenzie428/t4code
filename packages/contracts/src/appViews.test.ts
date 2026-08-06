@@ -284,6 +284,65 @@ it.effect("rejects unsupported chrome launcher commands", () =>
   }),
 );
 
+it.effect("decodes top-bar split-button placements", () =>
+  Effect.gen(function* () {
+    const parsed = yield* Schema.decodeUnknownEffect(NativeAppViewManifest)({
+      ...nativeManifest,
+      placements: [
+        {
+          slot: "chat-topbar",
+          label: "Open",
+          action: {
+            primary: {
+              commandId: "ui.preview.open",
+              args: { url: "https://example.com" },
+            },
+            menu: [
+              {
+                label: "Open externally",
+                action: {
+                  commandId: "ui.external-url.open",
+                  args: { url: "https://example.com" },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const action = parsed.placements?.[0]?.action;
+    assert.strictEqual(
+      action && "menu" in action ? action.primary?.commandId : undefined,
+      "ui.preview.open",
+    );
+  }),
+);
+
+it.effect("rejects split-button placements outside the top bar", () =>
+  Effect.gen(function* () {
+    const exit = yield* Effect.exit(
+      Schema.decodeUnknownEffect(NativeAppViewManifest)({
+        ...nativeManifest,
+        placements: [
+          {
+            slot: "project-sidebar",
+            action: {
+              primary: { commandId: "ui.preview.open" },
+              menu: [
+                {
+                  label: "Open",
+                  action: { commandId: "ui.preview.open" },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+    assert.strictEqual(exit._tag, "Failure");
+  }),
+);
+
 it.effect("rejects replacement placements outside the right-panel launcher", () =>
   Effect.gen(function* () {
     const exit = yield* Effect.exit(

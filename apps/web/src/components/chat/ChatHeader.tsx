@@ -30,6 +30,7 @@ import {
 } from "../app-views/AppViewPlacements.logic";
 import { AppViewPlacementIcon } from "../app-views/AppViewPlacementIcon";
 import { Button } from "../ui/button";
+import { Group, GroupSeparator } from "../ui/group";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { ChevronDownIcon } from "lucide-react";
 import { readLocalApi } from "~/localApi";
@@ -188,6 +189,66 @@ export const ChatHeader = memo(function ChatHeader({
         {appViewPlacements.map((item) => {
           const action = item.placement.action;
           if (action && "menu" in action) {
+            const primaryAction = action.primary;
+            if (primaryAction) {
+              return (
+                <Group key={item.id} aria-label={item.label} className="shrink-0">
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    className="max-w-36"
+                    title={item.description}
+                    onClick={() =>
+                      onActivateAppViewPlacement({
+                        ...item,
+                        placement: { ...item.placement, action: primaryAction },
+                      })
+                    }
+                    onContextMenu={(event) => void handleAppViewPlacementContextMenu(event, item)}
+                  >
+                    <AppViewPlacementIcon
+                      icon={item.placement.icon}
+                      className="size-3.5 shrink-0"
+                    />
+                    <span className="hidden truncate @5xl/header-actions:inline">{item.label}</span>
+                  </Button>
+                  <GroupSeparator className="hidden @3xl/header-actions:block" />
+                  <Menu>
+                    <MenuTrigger
+                      render={
+                        <Button
+                          type="button"
+                          size="icon-xs"
+                          variant="outline"
+                          aria-label={`${item.label} options`}
+                          onContextMenu={(event) =>
+                            void handleAppViewPlacementContextMenu(event, item)
+                          }
+                        />
+                      }
+                    >
+                      <ChevronDownIcon aria-hidden className="size-4" />
+                    </MenuTrigger>
+                    <MenuPopup align="end" side="bottom">
+                      {action.menu.map((menuItem, index) => (
+                        <MenuItem
+                          key={`${item.id}:${index}`}
+                          onClick={() =>
+                            onActivateAppViewPlacement({
+                              ...item,
+                              placement: { ...item.placement, action: menuItem.action },
+                            })
+                          }
+                        >
+                          {menuItem.label}
+                        </MenuItem>
+                      ))}
+                    </MenuPopup>
+                  </Menu>
+                </Group>
+              );
+            }
             return (
               <Menu key={item.id}>
                 <MenuTrigger

@@ -77,13 +77,14 @@ export type AppViewPlacementMenuItem = typeof AppViewPlacementMenuItem.Type;
 export const AppViewPlacementAction = Schema.Union([
   AppViewPlacementActionItem,
   Schema.Struct({
+    primary: Schema.optionalKey(AppViewPlacementActionItem),
     menu: Schema.Array(AppViewPlacementMenuItem)
       .check(Schema.isMinLength(1))
       .check(Schema.isMaxLength(12)),
   }),
 ]).annotate({
   description:
-    "Optional launcher action or dropdown. Items open an HTTP(S) URL externally or in T3's dedicated browser; omit action to open generated view.",
+    "Optional launcher action, dropdown, or top-bar split button. Add primary beside menu for a split button. Items open an HTTP(S) URL externally or in T4's dedicated browser; omit action to open generated view.",
 });
 export type AppViewPlacementAction = typeof AppViewPlacementAction.Type;
 
@@ -97,6 +98,16 @@ export const AppViewPlacement = Schema.Struct({
   order: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: -100, maximum: 100 }))),
   action: Schema.optionalKey(AppViewPlacementAction),
 }).check(
+  Schema.makeFilter((placement) => {
+    const action = placement.action;
+    return (
+      !action ||
+      !("menu" in action) ||
+      action.primary === undefined ||
+      placement.slot === "chat-topbar" ||
+      "Split-button placements are only supported in the chat top bar."
+    );
+  }),
   Schema.makeFilter((placement) => {
     const mode = placement.mode ?? "append";
     if (mode === "replace") {
