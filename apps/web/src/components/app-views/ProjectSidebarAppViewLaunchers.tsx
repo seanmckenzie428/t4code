@@ -32,6 +32,7 @@ function ActiveProjectSidebarAppViewLaunchers(props: { readonly threadRef: Scope
     props.threadRef.environmentId,
     project?.workspaceRoot ?? null,
     project?.id ?? null,
+    thread?.worktreePath ?? null,
   );
   const placements = useMemo(
     () =>
