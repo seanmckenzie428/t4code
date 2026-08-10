@@ -3,7 +3,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useMemo } from "react";
 
 import { isCommandPaletteOpen } from "../commandPaletteBus";
-import { useClientSettings, useSidebarV2Enabled } from "../hooks/useSettings";
+import { useClientSettings, useLegacySidebarEnabled } from "../hooks/useSettings";
 import { useProjects } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
 import { selectProjectGroupingSettings } from "../logicalProject";
@@ -31,7 +31,7 @@ function ChatRouteGlobalShortcuts() {
   const { activeDraftThread, activeThread, defaultProjectRef, routeThreadRef } =
     useHandleNewThread();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
-  const sidebarV2Enabled = useSidebarV2Enabled();
+  const legacySidebarEnabled = useLegacySidebarEnabled();
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
@@ -144,7 +144,7 @@ function ChatRouteGlobalShortcuts() {
         // Sidebar v2 routes creation through the command palette whenever
         // there is a real choice to make; v1 (and single-project setups)
         // keep the immediate contextual create.
-        if (sidebarV2Enabled && projectGroupCount > 1) {
+        if (!legacySidebarEnabled && projectGroupCount > 1) {
           if (primaryEnvironmentId !== null) {
             void invokeWebAppCommand(
               "ui.palette.open",
@@ -228,7 +228,7 @@ function ChatRouteGlobalShortcuts() {
     primaryEnvironmentId,
     routeThreadRef,
     selectedThreadKeysSize,
-    sidebarV2Enabled,
+    legacySidebarEnabled,
     terminalOpen,
   ]);
 

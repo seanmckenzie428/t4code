@@ -45,6 +45,8 @@ import {
   VcsStatusStreamEvent,
 } from "./git.ts";
 import {
+  ReviewDiffFileContentsInput,
+  ReviewDiffFileContentsResult,
   ReviewDiffPreviewError,
   ReviewDiffPreviewInput,
   ReviewDiffPreviewResult,
@@ -65,6 +67,7 @@ import {
   OrchestrationGetTurnDiffError,
   OrchestrationGetTurnDiffInput,
   OrchestrationRpcSchemas,
+  OrchestrationGetWorkflowScriptError,
 } from "./orchestration.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 import {
@@ -152,6 +155,7 @@ import {
   ResourceTelemetryRetryResult,
   ResourceTelemetrySnapshot,
 } from "./resourceTelemetry.ts";
+import { UsageReadError, UsageSummary, UsageSummaryInput } from "./usage.ts";
 import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.ts";
 import {
   SourceControlCloneRepositoryInput,
@@ -210,6 +214,7 @@ export const WS_METHODS = {
   // Review methods
   reviewGetDiffPreview: "review.getDiffPreview",
   reviewGetWorkingTreeFileContents: "review.getWorkingTreeFileContents",
+  reviewGetDiffFileContents: "review.getDiffFileContents",
 
   // Terminal methods
   terminalOpen: "terminal.open",
@@ -259,6 +264,7 @@ export const WS_METHODS = {
   serverReportClientActivity: "server.reportClientActivity",
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
+  serverGetUsageSummary: "server.getUsageSummary",
 
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
@@ -394,6 +400,12 @@ export const WsServerRetryResourceTelemetryRpc = Rpc.make(WS_METHODS.serverRetry
   payload: Schema.Struct({}),
   success: ResourceTelemetryRetryResult,
   error: EnvironmentAuthorizationError,
+});
+
+export const WsServerGetUsageSummaryRpc = Rpc.make(WS_METHODS.serverGetUsageSummary, {
+  payload: UsageSummaryInput,
+  success: UsageSummary,
+  error: Schema.Union([EnvironmentAuthorizationError, UsageReadError]),
 });
 
 export const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
@@ -594,6 +606,12 @@ export const WsReviewGetWorkingTreeFileContentsRpc = Rpc.make(
   },
 );
 
+export const WsReviewGetDiffFileContentsRpc = Rpc.make(WS_METHODS.reviewGetDiffFileContents, {
+  payload: ReviewDiffFileContentsInput,
+  success: ReviewDiffFileContentsResult,
+  error: Schema.Union([ReviewDiffPreviewError, EnvironmentAuthorizationError]),
+});
+
 export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
   payload: TerminalOpenInput,
   success: TerminalSessionSnapshot,
@@ -738,6 +756,15 @@ export const WsOrchestrationDispatchCommandRpc = Rpc.make(
   },
 );
 
+export const WsOrchestrationGetWorkflowScriptRpc = Rpc.make(
+  ORCHESTRATION_WS_METHODS.getWorkflowScript,
+  {
+    payload: OrchestrationRpcSchemas.getWorkflowScript.input,
+    success: OrchestrationRpcSchemas.getWorkflowScript.output,
+    error: Schema.Union([OrchestrationGetWorkflowScriptError, EnvironmentAuthorizationError]),
+  },
+);
+
 export const WsOrchestrationGetTurnDiffRpc = Rpc.make(ORCHESTRATION_WS_METHODS.getTurnDiff, {
   payload: OrchestrationGetTurnDiffInput,
   success: OrchestrationRpcSchemas.getTurnDiff.output,
@@ -851,6 +878,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetProcessResourceHistoryRpc,
   WsServerGetResourceTelemetryHistoryRpc,
   WsServerRetryResourceTelemetryRpc,
+  WsServerGetUsageSummaryRpc,
   WsServerSignalProcessRpc,
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
@@ -882,6 +910,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsVcsInitRpc,
   WsReviewGetDiffPreviewRpc,
   WsReviewGetWorkingTreeFileContentsRpc,
+  WsReviewGetDiffFileContentsRpc,
   WsTerminalOpenRpc,
   WsTerminalAttachRpc,
   WsTerminalWriteRpc,
@@ -913,6 +942,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscribeBackgroundPolicyRpc,
   WsSubscribeResourceTelemetryRpc,
   WsOrchestrationDispatchCommandRpc,
+  WsOrchestrationGetWorkflowScriptRpc,
   WsOrchestrationGetTurnDiffRpc,
   WsOrchestrationGetFullThreadDiffRpc,
   WsOrchestrationSearchThreadsRpc,

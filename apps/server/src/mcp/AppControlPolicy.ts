@@ -385,7 +385,7 @@ export const make = Effect.gen(function* AppControlPolicyMake() {
         }
       }
       const actionKey = `${input.scope.providerSessionId}\u0000${invocation.actionId}`;
-      const argsKey = yield* Schema.encodeEffect(Schema.UnknownFromJsonString)(
+      const argsKey = yield* Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(
         invocation.args,
       ).pipe(Effect.orElseSucceed(() => "<invalid-json>"));
       const deferred = yield* Deferred.make<AppCommandResult, never>();

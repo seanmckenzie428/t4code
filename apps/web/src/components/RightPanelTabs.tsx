@@ -1,14 +1,6 @@
 import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
-import {
-  ClipboardList,
-  Files,
-  Globe2,
-  LayoutDashboard,
-  Plus,
-  TerminalSquare,
-  X,
-} from "lucide-react";
+import { Bot, Files, Globe2, LayoutDashboard, Plus, TerminalSquare, X } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
@@ -61,8 +53,11 @@ interface RightPanelTabsProps {
   onAddFiles: () => void;
   onManageAppViews: () => void;
   onActivateAppViewPlacement: (placement: ResolvedAppViewPlacement) => void;
+  onAddAgents: () => void;
   browserAvailable: boolean;
   filesAvailable: boolean;
+  /** Running + waiting subagents; badges the Agents card in the empty state. */
+  liveAgentCount: number;
   children: ReactNode;
 }
 
@@ -108,8 +103,10 @@ function RightPanelEmptyState(props: {
   onManageAppViews: () => void;
   onActivateAppViewPlacement: (placement: ResolvedAppViewPlacement) => void;
   appViewPlacements: ReadonlyArray<ResolvedAppViewPlacement>;
+  onAddAgents: () => void;
   browserAvailable: boolean;
   filesAvailable: boolean;
+  liveAgentCount: number;
 }) {
   const builtInActions = [
     {
@@ -148,6 +145,27 @@ function RightPanelEmptyState(props: {
       disabledReason: SURFACE_DISABLED_REASONS.files,
       onClick: props.onAddFiles,
     },
+    {
+      id: "agents" as const,
+      label: "Agents",
+      description: "Watch subagents and workflows run.",
+      icon: (
+        <span className="relative mb-3 inline-flex">
+          <Bot className="size-5" />
+          {props.liveAgentCount > 0 ? (
+            <span
+              aria-hidden
+              className="absolute -top-1.5 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-info px-1 text-[9px] font-semibold tabular-nums text-white"
+            >
+              {props.liveAgentCount}
+            </span>
+          ) : null}
+        </span>
+      ),
+      available: true,
+      disabledReason: null,
+      onClick: props.onAddAgents,
+    },
   ] as const;
   const { replacements, appended } = partitionRightPanelAppViewPlacements(props.appViewPlacements);
   const customAction = (item: ResolvedAppViewPlacement) => ({
@@ -164,7 +182,7 @@ function RightPanelEmptyState(props: {
   });
   const actions = [
     ...builtInActions.map((action) => {
-      const replacement = replacements.get(action.id);
+      const replacement = action.id === "agents" ? undefined : replacements.get(action.id);
       return replacement ? customAction(replacement) : action;
     }),
     ...appended.map(customAction),
@@ -256,7 +274,7 @@ function RightPanelEmptyState(props: {
                           void handleAppViewPlacementContextMenu(event, placement),
                       }
                     : {})}
-                  className="flex min-h-28 w-full flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left transition hover:border-border hover:bg-accent/60 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
+                  className="flex min-h-28 w-full cursor-pointer flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left transition hover:border-border hover:bg-accent/60 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
                 >
                   {content}
                 </button>
@@ -301,10 +319,10 @@ function surfaceTitle(
         terminalLabelsById.get(surface.activeTerminalId) ??
         getTerminalLabel(surface.activeTerminalId)
       );
-    case "plan":
-      return "Plan";
     case "app-view":
       return appViewTitles[surface.viewId] ?? "Generated view";
+    case "agents":
+      return "Agents";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -321,14 +339,14 @@ function surfaceTitle(
 function PreviewFavicon({ url }: { url: string | null }) {
   const faviconUrl = faviconUrlForOrigin(url, 32);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  if (!faviconUrl || failedUrl === faviconUrl) return <Globe2 className="size-3.5 shrink-0" />;
+  if (!faviconUrl || failedUrl === faviconUrl) return <Globe2 className="size-3 shrink-0" />;
   return (
     <img
       src={faviconUrl}
       alt=""
       aria-hidden
       draggable={false}
-      className="size-3.5 shrink-0 rounded-sm"
+      className="size-3 shrink-0 rounded-sm"
       onError={() => setFailedUrl(faviconUrl)}
     />
   );
@@ -350,22 +368,22 @@ function SurfaceIcon({
       return <PreviewFavicon url={url} />;
     }
     case "files":
-      return <Files className="size-3.5 shrink-0" />;
+      return <Files className="size-3 shrink-0" />;
     case "file":
       return (
         <PierreEntryIcon
           pathValue={surface.relativePath}
           kind="file"
           theme={theme}
-          className="size-3.5"
+          className="size-3"
         />
       );
     case "terminal":
-      return <TerminalSquare className="size-3.5 shrink-0" />;
-    case "plan":
-      return <ClipboardList className="size-3.5 shrink-0" />;
+      return <TerminalSquare className="size-3 shrink-0" />;
     case "app-view":
-      return <LayoutDashboard className="size-3.5 shrink-0" />;
+      return <LayoutDashboard className="size-3 shrink-0" />;
+    case "agents":
+      return <Bot className="size-3 shrink-0" />;
   }
 }
 
@@ -459,7 +477,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
         data-thread-work-panel=""
         className={cn(
           "workspace-topbar gap-1 pl-2",
-          !ownsDesktopTitleBar && "[--workspace-topbar-height:--spacing(11)]",
+          props.mode !== "inline" && "[--workspace-topbar-height:--spacing(11)]",
           props.mode === "inline" ? "pr-28" : "pr-3",
           ownsDesktopTitleBar && "wco:pr-[calc(var(--workspace-native-controls-inset)+6rem)]",
           props.mode === "inline" && props.maximized && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
@@ -491,62 +509,57 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                   onAuxClick={(event) => handleTabAuxClick(event, surface)}
                   onContextMenu={(event) => void handleTabContextMenu(event, surface)}
                   className={cn(
-                    "group flex h-7 min-w-25 max-w-44 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm",
+                    "cursor-pointer group/tab flex h-6 max-w-36 shrink-0 items-center gap-0.5 rounded-md pr-2 pl-1.5 text-xs",
                     active
                       ? "bg-accent text-foreground"
                       : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
                   )}
                 >
+                  <button
+                    type="button"
+                    className="cursor-pointer group/close relative flex size-4 shrink-0 items-center justify-center rounded-sm hover:bg-muted"
+                    aria-label={`Close ${title}`}
+                    onClick={() => props.onCloseSurface(surface)}
+                  >
+                    <span className="relative flex size-3 items-center justify-center group-hover/tab:hidden group-focus-visible/close:hidden">
+                      <SurfaceIcon
+                        surface={surface}
+                        sessions={props.previewSessions}
+                        theme={resolvedTheme}
+                      />
+                      {pending ? (
+                        <span
+                          className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full bg-current"
+                          aria-hidden
+                        />
+                      ) : null}
+                    </span>
+                    <X className="hidden size-3 group-hover/tab:block group-focus-visible/close:block" />
+                  </button>
                   <Tooltip>
                     <TooltipTrigger
                       render={
                         <button
                           type="button"
-                          className="flex min-w-0 flex-1 items-center gap-1.5"
+                          className="cursor-pointer flex min-w-0 items-center"
                           onClick={() => props.onActivate(surface)}
                         >
-                          <SurfaceIcon
-                            surface={surface}
-                            sessions={props.previewSessions}
-                            theme={resolvedTheme}
-                          />
                           <span className="truncate">{title}</span>
                         </button>
                       }
                     />
                     <TooltipPopup>{title}</TooltipPopup>
                   </Tooltip>
-                  <button
-                    type="button"
-                    className={cn(
-                      "relative flex size-4 shrink-0 items-center justify-center rounded hover:bg-muted focus:opacity-100",
-                      pending ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-                    )}
-                    aria-label={`Close ${title}`}
-                    onClick={() => props.onCloseSurface(surface)}
-                  >
-                    {pending ? (
-                      <>
-                        <span
-                          className="size-2 rounded-full bg-current group-hover:hidden"
-                          aria-hidden
-                        />
-                        <X className="hidden size-3 group-hover:block" />
-                      </>
-                    ) : (
-                      <X className="size-3" />
-                    )}
-                  </button>
                 </div>
               );
             })}
             {props.surfaces.length > 0 ? (
               <Menu>
                 <MenuTrigger
-                  className="relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                  className="cursor-pointer relative inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
                   aria-label="Add panel surface"
                 >
-                  <Plus className="size-4" />
+                  <Plus className="size-3.5" />
                 </MenuTrigger>
                 <MenuPopup align="start" side="bottom" sideOffset={6} className="min-w-44">
                   <SurfaceMenuItem
@@ -573,6 +586,10 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     <Files />
                     Files
                   </SurfaceMenuItem>
+                  <SurfaceMenuItem available onClick={props.onAddAgents}>
+                    <Bot />
+                    Agents
+                  </SurfaceMenuItem>
                 </MenuPopup>
               </Menu>
             ) : null}
@@ -580,7 +597,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
         </ScrollArea>
         {props.layoutControls}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col" data-right-panel-surface-content>
         {props.activeSurfaceId === null ? (
           <RightPanelEmptyState
             onAddBrowser={props.onAddBrowser}
@@ -589,8 +606,10 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onManageAppViews={props.onManageAppViews}
             onActivateAppViewPlacement={props.onActivateAppViewPlacement}
             appViewPlacements={props.appViewPlacements}
+            onAddAgents={props.onAddAgents}
             browserAvailable={props.browserAvailable}
             filesAvailable={props.filesAvailable}
+            liveAgentCount={props.liveAgentCount}
           />
         ) : (
           props.children

@@ -31,4 +31,5 @@ export * from "./appControl.ts";
 export * from "./appViews.ts";
 export * from "./extensions.ts";
 export * from "./resourceTelemetry.ts";
+export * from "./usage.ts";
 export * from "./rpc.ts";

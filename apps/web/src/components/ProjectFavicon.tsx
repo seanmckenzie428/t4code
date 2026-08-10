@@ -7,7 +7,7 @@ import { FolderIcon } from "lucide-react";
 import { DynamicIcon, iconNames, type IconName } from "lucide-react/dynamic";
 import type { ComponentType } from "react";
 import { useState } from "react";
-import { useAssetUrl } from "../assets/assetUrls";
+import { useAssetUrlState } from "../assets/assetUrls";
 import { cn } from "~/lib/utils";
 import { derivePhysicalProjectKeyFromPath } from "../logicalProject";
 import { useProjectAppearanceStore } from "../projectAppearanceStore";
@@ -17,16 +17,15 @@ const loadedProjectFaviconSrcs = new Map<string, string>();
 export function ProjectFavicon(input: {
   environmentId: EnvironmentId;
   cwd: string;
+  faviconPath?: string | null | undefined;
   className?: string | undefined;
   fallbackIcon?: ComponentType<{ className?: string }>;
 }) {
   const appearance = useProjectAppearanceStore(
     (state) => state.byKey[derivePhysicalProjectKeyFromPath(input.environmentId, input.cwd)],
   );
-  const src = useAssetUrl(input.environmentId, {
-    _tag: "project-favicon",
-    cwd: input.cwd,
-  });
+  const state = useProjectFaviconAsset(input);
+  const src = state._tag === "Success" ? state.url : null;
   const FallbackIcon = input.fallbackIcon ?? FolderIcon;
 
   if (appearance?.icon?.type === "image") {
@@ -65,6 +64,18 @@ export function ProjectFavicon(input: {
   );
 }
 
+export function useProjectFaviconAsset(input: {
+  readonly environmentId: EnvironmentId;
+  readonly cwd: string;
+  readonly faviconPath?: string | null | undefined;
+}) {
+  return useAssetUrlState(input.environmentId, {
+    _tag: "project-favicon",
+    cwd: input.cwd,
+    ...(input.faviconPath ? { path: input.faviconPath } : {}),
+  });
+}
+
 function ProjectFaviconFallback({
   className,
   icon: Icon,
@@ -72,7 +83,7 @@ function ProjectFaviconFallback({
   readonly className?: string | undefined;
   readonly icon: ComponentType<{ className?: string }>;
 }) {
-  return <Icon className={cn("size-3.5 shrink-0 text-muted-foreground/50", className)} />;
+  return <Icon className={cn("size-3.5 shrink-0 text-icon-muted", className)} />;
 }
 
 function ProjectFaviconImage({

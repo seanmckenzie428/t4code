@@ -3,13 +3,9 @@
 On a Linux host, T4 Code can run as a background service for your user. It starts when the machine
 boots and keeps running after you log out.
 
-> T4 distribution is not published yet. The commands below intentionally use the legacy `t3`
-> package and `t3code.service` compatibility identifiers and should only be used with a matching
-> local build or after independent T4 release infrastructure exists.
-
 ## Manage the Service
 
-Install it with a matching compatible release:
+Install it with the latest compatible T3 Code release:
 
 ```sh
 npx t3@latest service install
@@ -34,6 +30,13 @@ npx t3@latest service uninstall
 ```
 
 Updating restarts T4 Code briefly. Let active agent work and terminal commands finish first.
+If a remote update is already in progress, wait for it to finish before retrying a local update.
+
+The systemd unit runs a small stable launcher. Exact compatible versions are installed separately, so
+a failed remote candidate can return to the previous version without rewriting the unit. The
+launcher snapshots the database before a remote candidate starts, so database updates roll back
+with the server version. An older launcher may require one local `service update` before this is
+available.
 
 ## Using It with T4 Connect
 

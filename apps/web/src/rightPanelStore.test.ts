@@ -102,16 +102,21 @@ describe("rightPanelStore", () => {
     });
   });
 
-  it("moves legacy review surfaces out of the right panel", () => {
+  it("drops legacy diff and plan surfaces without reopening an empty panel", () => {
     expect(
       migratePersistedRightPanelState({
         byThreadKey: {
           "env-1:thread-A": {
             isOpen: true,
+            activeSurfaceId: "plan",
+            surfaces: [{ id: "plan", kind: "plan" }],
+          },
+          "env-1:thread-B": {
+            isOpen: true,
             activeSurfaceId: "diff",
             surfaces: [
-              { id: "browser:tab-a", kind: "preview", resourceId: "tab-a" },
               { id: "diff", kind: "diff" },
+              { id: "browser:tab-a", kind: "preview", resourceId: "tab-a" },
             ],
           },
         },
@@ -119,6 +124,11 @@ describe("rightPanelStore", () => {
     ).toEqual({
       byThreadKey: {
         "env-1:thread-A": {
+          isOpen: false,
+          activeSurfaceId: null,
+          surfaces: [],
+        },
+        "env-1:thread-B": {
           isOpen: true,
           activeSurfaceId: "browser:tab-a",
           surfaces: [{ id: "browser:tab-a", kind: "preview", resourceId: "tab-a" }],
@@ -148,7 +158,7 @@ describe("rightPanelStore", () => {
   });
 
   it("opening a different kind keeps both surfaces and activates the new one", () => {
-    useRightPanelStore.getState().open(refA, "plan");
+    useRightPanelStore.getState().open(refA, "agents");
     useRightPanelStore.getState().open(refA, "preview");
     expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe("preview");
     expect(
@@ -158,7 +168,7 @@ describe("rightPanelStore", () => {
 
   it("reopening an inactive singleton activates its existing surface", () => {
     useRightPanelStore.getState().open(refA, "files");
-    useRightPanelStore.getState().open(refA, "plan");
+    useRightPanelStore.getState().open(refA, "agents");
     useRightPanelStore.getState().open(refA, "files");
 
     expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
@@ -166,7 +176,7 @@ describe("rightPanelStore", () => {
       activeSurfaceId: "files",
       surfaces: [
         { id: "files", kind: "files" },
-        { id: "plan", kind: "plan" },
+        { id: "agents", kind: "agents" },
       ],
     });
   });
@@ -246,15 +256,15 @@ describe("rightPanelStore", () => {
 
   it("removes persisted file surfaces when their workspace no longer exists", () => {
     useRightPanelStore.getState().openFile(refA, "src/index.ts");
-    useRightPanelStore.getState().open(refA, "plan");
+    useRightPanelStore.getState().open(refA, "agents");
     useRightPanelStore.getState().openFile(refA, "README.md");
 
     useRightPanelStore.getState().reconcileFileSurfaces(refA, false);
 
     expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
       isOpen: true,
-      activeSurfaceId: "plan",
-      surfaces: [{ id: "plan", kind: "plan" }],
+      activeSurfaceId: "agents",
+      surfaces: [{ id: "agents", kind: "agents" }],
     });
 
     useRightPanelStore.getState().openFile(refB, "conductor.json");
@@ -267,13 +277,13 @@ describe("rightPanelStore", () => {
   });
 
   it("close hides the panel without clearing its selected surface", () => {
-    useRightPanelStore.getState().open(refA, "plan");
+    useRightPanelStore.getState().open(refA, "agents");
     useRightPanelStore.getState().close(refA);
     expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBeNull();
     expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
       isOpen: false,
-      activeSurfaceId: "plan",
-      surfaces: [{ id: "plan", kind: "plan" }],
+      activeSurfaceId: "agents",
+      surfaces: [{ id: "agents", kind: "agents" }],
     });
   });
 
@@ -290,25 +300,25 @@ describe("rightPanelStore", () => {
   });
 
   it("toggle hides the panel without discarding the active surface", () => {
-    useRightPanelStore.getState().toggle(refA, "plan");
-    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe("plan");
-    useRightPanelStore.getState().toggle(refA, "plan");
+    useRightPanelStore.getState().toggle(refA, "files");
+    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe("files");
+    useRightPanelStore.getState().toggle(refA, "files");
     expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBeNull();
     expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
       isOpen: false,
-      activeSurfaceId: "plan",
-      surfaces: [{ id: "plan", kind: "plan" }],
+      activeSurfaceId: "files",
+      surfaces: [{ id: "files", kind: "files" }],
     });
   });
 
   it("toggle to a different kind switches active", () => {
     useRightPanelStore.getState().toggle(refA, "preview");
-    useRightPanelStore.getState().toggle(refA, "plan");
-    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe("plan");
+    useRightPanelStore.getState().toggle(refA, "agents");
+    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe("agents");
   });
 
   it("removeThread clears persisted state", () => {
-    useRightPanelStore.getState().open(refA, "plan");
+    useRightPanelStore.getState().open(refA, "agents");
     useRightPanelStore.getState().removeThread(refA);
     expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBeNull();
   });

@@ -9,8 +9,8 @@
  */
 
 import * as Migrator from "effect/unstable/sql/Migrator";
-import * as Layer from "effect/Layer";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 
 // Import all migrations statically
 import Migration0001 from "./Migrations/001_OrchestrationEvents.ts";
@@ -48,9 +48,14 @@ import Migration0032 from "./Migrations/032_AuthPairingProofKeyThumbprint.ts";
 import Migration0033 from "./Migrations/033_ProjectionThreadsSettled.ts";
 import Migration0034 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
 import Migration0035 from "./Migrations/035_ProjectionThreadTitleRegeneration.ts";
-import Migration0036 from "./Migrations/036_ProjectionSystemEntities.ts";
-import Migration0037 from "./Migrations/037_ProjectionThreadMessageDelegation.ts";
-import Migration0038 from "./Migrations/038_ProjectionProjectCustomActions.ts";
+import Migration0036T4 from "./Migrations/036_ProjectionSystemEntities.ts";
+import Migration0037T4 from "./Migrations/037_ProjectionThreadMessageDelegation.ts";
+import Migration0038T4 from "./Migrations/038_ProjectionProjectCustomActions.ts";
+import Migration0036Upstream from "./Migrations/036_ProjectionThreadsPinned.ts";
+import Migration0037Upstream from "./Migrations/037_ProjectionTurnsKeysetIndex.ts";
+import Migration0038Upstream from "./Migrations/038_ProjectionThreadsPinOrderKey.ts";
+import Migration0039 from "./Migrations/039_ProjectionProjectsDefaultThreadEnvMode.ts";
+import Migration0040 from "./Migrations/040_ProjectionProjectFaviconPath.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -98,10 +103,24 @@ export const migrationEntries = [
   [33, "ProjectionThreadsSettled", Migration0033],
   [34, "ProjectionThreadsSnoozed", Migration0034],
   [35, "ProjectionThreadTitleRegeneration", Migration0035],
-  [36, "ProjectionSystemEntities", Migration0036],
-  [37, "ProjectionThreadMessageDelegation", Migration0037],
-  [38, "ProjectionProjectCustomActions", Migration0038],
+  // Keep T4's shipped IDs 36-38 stable. Existing T4 databases already record
+  // these IDs, while upstream assigned different migrations to the same IDs.
+  [36, "ProjectionSystemEntities", Migration0036T4],
+  [37, "ProjectionThreadMessageDelegation", Migration0037T4],
+  [38, "ProjectionProjectCustomActions", Migration0038T4],
+  [39, "ProjectionProjectsDefaultThreadEnvMode", Migration0039],
+  [40, "ProjectionProjectFaviconPath", Migration0040],
+  [41, "ProjectionThreadsPinned", Migration0036Upstream],
+  [42, "ProjectionTurnsKeysetIndex", Migration0037Upstream],
+  [43, "ProjectionThreadsPinOrderKey", Migration0038Upstream],
+  // Compatibility reruns make upstream databases that already recorded 36-40
+  // acquire T4's idempotent projection columns too.
+  [44, "ProjectionSystemEntitiesCompatibility", Migration0036T4],
+  [45, "ProjectionThreadMessageDelegationCompatibility", Migration0037T4],
+  [46, "ProjectionProjectCustomActionsCompatibility", Migration0038T4],
 ] as const;
+
+export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
 
 export const makeMigrationLoader = (throughId?: number) =>
   Migrator.fromRecord(

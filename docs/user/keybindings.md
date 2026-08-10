@@ -45,6 +45,12 @@ a new Quick Chat saves the previous conversation under **Settings** → **Archiv
 history**.
 Repeating a toggle shortcut closes its surface. Switching between the file and project search
 shortcuts replaces the open search.
+`themeEditor.toggle` opens or closes the floating theme editor and defaults to
+`mod+alt+shift+t`. Select a color label to spotlight the elements that use it; select the label
+again to clear the spotlight. The swatch and hex field keep that color selected while you edit it.
+Use **Inspect** to pick an element in the app and reveal its color token. Inspect disarms after one
+successful pick; its hover glow and badge preview the element and token that click will select.
+**Cancel** or `Escape` exits Inspect and clears its selection and spotlight.
 
 The command palette searches active thread titles, projects, branches, user messages, and final
 agent responses across connected environments. Message matches show one labeled excerpt while

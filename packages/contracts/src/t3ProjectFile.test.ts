@@ -80,4 +80,10 @@ describe("T3ProjectFile", () => {
     });
     expect(decoded.appViews?.[0]?.id).toBe("cockpit");
   });
+
+  it("decodes defaultThreadEnvMode and rejects unknown modes", () => {
+    expect(decode({ defaultThreadEnvMode: "worktree" }).defaultThreadEnvMode).toBe("worktree");
+    expect(decode({ defaultThreadEnvMode: "local" }).defaultThreadEnvMode).toBe("local");
+    expect(() => decode({ defaultThreadEnvMode: "remote" })).toThrow();
+  });
 });
