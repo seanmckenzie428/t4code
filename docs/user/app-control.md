@@ -33,11 +33,10 @@ Destructive and publication commands do not execute without a per-call human con
 Approval responses, user-input responses, credentials, pairing, grant changes, raw internal
 dispatch, and database access are never exposed as agent commands.
 
-Views can stay with a thread, be saved personally for that environment, or be saved to the project.
-Thread launchers are temporary. Personal and project launchers appear wherever that environment or
-project is active. Project saves remain review proposals, and the checked-in `t3.json` stores a
-portable project scope rather than an environment-local project ID. T3 never silently changes
-project configuration.
+Views can stay with a thread or be saved personally for that environment. Thread launchers are
+temporary. Personal launchers appear throughout that environment. Generated views never write
+project configuration. Hand-authored project views remain readable from checked-in `t3.json`, and
+changing them requires an explicit file edit.
 
 Extensions are environment-local and disabled until their exact executable,
 arguments, transport, and capabilities are approved. Changing those details
