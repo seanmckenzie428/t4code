@@ -2065,6 +2065,12 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
       `;
     }
 
+    yield* sql`
+      UPDATE projection_thread_messages
+      SET delegation_json = '{"assistantThreadId":"assistant-thread","actionId":"delegate-5","depth":1}'
+      WHERE message_id = 'user-msg-5'
+    `;
+
     // Straggler user message sent while turn-4 ran: turn_id NULL and not any
     // turn's pending_message_id.
     yield* sql`
@@ -2137,6 +2143,14 @@ projectionSnapshotLayer("ProjectionSnapshotQuery windowed thread detail", (it) =
           "turn-5-activity",
           "turnless-activity",
         ]);
+        assert.deepEqual(
+          snapshot.value.thread.messages.find((message) => message.id === "user-msg-5")?.delegation,
+          {
+            assistantThreadId: ThreadId.make("assistant-thread"),
+            actionId: "delegate-5",
+            depth: 1,
+          },
+        );
         assert.equal(snapshot.value.page?.hasMore, true);
         assert.notEqual(snapshot.value.page?.beforeCursor, null);
         assert.equal(snapshot.value.page?.snapshotSequence, 42);
