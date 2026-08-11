@@ -23,6 +23,8 @@
     "build:desktop": "vp run --filter @t3tools/desktop --filter t3 build",
     "build:desktop:nightly": "node scripts/build-desktop-nightly.ts",
     "install:desktop:nightly": "node scripts/install-desktop-nightly.ts",
+    "sync:t3:preflight": "node scripts/check-t4-upstream-overlap.ts",
+    "test:t4-invariants": "node scripts/test-t4-invariants.ts",
     "build:resource-monitor": "cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml",
     "typecheck": "vp run -r --concurrency-limit 2 typecheck",
     "tc": "vp run -r --concurrency-limit 2 typecheck",

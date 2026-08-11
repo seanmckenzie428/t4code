@@ -1,5 +1,21 @@
 # T3 Code
 
+## T4 fork precedence
+
+This checkout is T4, a persistent fork of upstream T3. Before fetching changes for integration,
+rebasing onto T3, merging T3, or cherry-picking a T3 change, read
+`docs/internals/t4-fork-invariants.md` and run
+`vp run sync:t3:preflight -- <exact-upstream-sha>`.
+
+T4 behavior wins by default. Preserve compatible T3 improvements alongside it. Never resolve an
+overlap by accepting the upstream file wholesale, using a blanket `-X theirs`, deleting a T4
+feature, renumbering T4 migrations, or weakening a T4 regression test. A clean textual merge is
+not proof of semantic compatibility. If T4 and T3 behavior cannot both survive, stop before the
+integration commit and ask the user which behavior takes precedence.
+
+After every T3 integration, update the sync record in `docs/internals/t4-fork-invariants.md`, run
+`vp run test:t4-invariants`, then run focused checks for every overlapping surface.
+
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs (Codex, Claude Code, Cursor, Grok, OpenCode) and serves web, desktop, and mobile clients.
 
 You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.

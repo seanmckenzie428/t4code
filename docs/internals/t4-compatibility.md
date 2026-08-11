@@ -26,7 +26,10 @@ The existing release workflow is guarded to run only in `pingdotgg/t3code`; it m
 
 Repository attribution is also intentional:
 
-- Personal fork: `seanmckenzie428/t4`
+- Personal fork: `seanmckenzie428/t4code`
 - Upstream: `pingdotgg/t3code`
 
 Historical testimonials, changelogs, quotes, and contribution history should retain T3 wording.
+
+Behavioral fork invariants and the required T3 integration procedure live in
+[`t4-fork-invariants.md`](./t4-fork-invariants.md).
