@@ -59,6 +59,38 @@ function buildScript() {
         turn: { id: `${CHILD_A}-turn-1`, status: "completed", items: [] },
       },
     },
+    // Parent bookkeeping may settle after the child's terminal lifecycle.
+    // It must not reopen an already-idle child as running.
+    {
+      method: "item/completed",
+      params: {
+        threadId: ROOT,
+        turnId: wireFixture.responses.turnStart.turn.id,
+        completedAtMs: 1,
+        item: {
+          type: "subAgentActivity",
+          id: "call_live_interaction",
+          kind: "interacted",
+          agentThreadId: CHILD_B,
+          agentPath: "/root/beta",
+        },
+      },
+    },
+    {
+      method: "item/completed",
+      params: {
+        threadId: ROOT,
+        turnId: wireFixture.responses.turnStart.turn.id,
+        completedAtMs: 2,
+        item: {
+          type: "subAgentActivity",
+          id: "call_late_interaction",
+          kind: "interacted",
+          agentThreadId: CHILD_A,
+          agentPath: "/root/alpha",
+        },
+      },
+    },
     { method: "thread/closed", params: { threadId: CHILD_B } },
     // Parent-owned traffic addressed to a child conversation: must reach the
     // parent path (approval correlation cleanup), not be swallowed.
@@ -115,6 +147,27 @@ describe("CodexSessionRuntime collab integration", () => {
           (event.payload as { agentThreadId?: string }).agentThreadId === CHILD_A,
       );
       assert.isDefined(childTurnCompleted, "child A's turn completion becomes an agent event");
+
+      const activeChildInteraction = events.find(
+        (event) =>
+          event.method === "collabAgent/activity" &&
+          (event.payload as { agentThreadId?: string; activityKind?: string }).agentThreadId ===
+            CHILD_B &&
+          (event.payload as { activityKind?: string }).activityKind === "interacted",
+      );
+      assert.isDefined(
+        activeChildInteraction,
+        "interaction still updates a child with a live turn",
+      );
+
+      const reopenedChild = events.find(
+        (event) =>
+          event.method === "collabAgent/activity" &&
+          (event.payload as { agentThreadId?: string; activityKind?: string }).agentThreadId ===
+            CHILD_A &&
+          (event.payload as { activityKind?: string }).activityKind === "interacted",
+      );
+      assert.isUndefined(reopenedChild, "late parent activity must not reopen an idle child");
 
       const childClosed = events.find(
         (event) =>

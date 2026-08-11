@@ -130,6 +130,7 @@ export function buildBulkTitleRegenerationContextMenuItem(input: {
 export interface ThreadStatusPill {
   label:
     | "Working"
+    | "Background"
     | "Monitoring"
     | "Connecting"
     | "Completed"
@@ -142,14 +143,15 @@ export interface ThreadStatusPill {
 }
 
 // Rollup order mirrors the per-thread resolver exactly: attention states,
-// then active work, then the actionable plan prompt, then passive
-// monitoring. A Monitoring sibling must never hide a Plan Ready thread.
+// then active work, then the actionable plan prompt, then background work
+// and passive monitoring. Neither may hide a Plan Ready thread.
 const THREAD_STATUS_PRIORITY: Record<ThreadStatusPill["label"], number> = {
-  "Pending Approval": 6,
-  "Awaiting Input": 5,
-  Working: 4,
-  Connecting: 4,
-  "Plan Ready": 3,
+  "Pending Approval": 7,
+  "Awaiting Input": 6,
+  Working: 5,
+  Connecting: 5,
+  "Plan Ready": 4,
+  Background: 3,
   Monitoring: 2,
   Completed: 1,
 };
@@ -434,7 +436,8 @@ export function resolveThreadRowClassName(input: {
 }
 
 // ── Sidebar thread status model ─────────────────────────────────────
-// Five visual states, three colors: color is reserved for "act now"
+// Status vocabulary keeps foreground turns distinct from background work.
+// Color is reserved for "act now"
 // (approval), "in motion" (working), and "broken" (failed). Ready is the
 // unlabeled resting state — the agent stopped and is waiting on the user,
 // whether it finished, asked a question, or proposed a plan.
@@ -444,6 +447,7 @@ export type SidebarThreadStatus =
   | "approval"
   | "input"
   | "working"
+  | "background"
   | "monitoring"
   | "failed"
   | "ready";
@@ -468,10 +472,10 @@ export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): Si
   if (thread.session?.status === "error") {
     return "failed";
   }
-  // Background work outlives the turn: fleets read as working; monitoring
-  // only when watch loops are the sole live work.
+  // Keep post-turn agents distinct from the active chat turn. Calling both
+  // "working" makes a settled thread look stuck and starts a bogus timer.
   if (thread.backgroundLiveness === "working") {
-    return "working";
+    return "background";
   }
   if (thread.backgroundLiveness === "monitoring") {
     return "monitoring";
@@ -673,16 +677,14 @@ export function resolveThreadStatusPill(input: {
     };
   }
 
-  // The turn can settle while native background work runs on. Subagent and
-  // workflow fleets read as plain Working; Monitoring is reserved for watch
-  // loops (a parent agent babysitting a PR, tailing checks) with no other
-  // live work. Same recede treatment as Working per inbox-zero.
+  // The turn can settle while native background work runs on. Keep that
+  // visible without claiming the chat turn itself is still Working.
   if (thread.backgroundLiveness === "working") {
     return {
-      label: "Working",
+      label: "Background",
       colorClass: "text-sky-600 dark:text-sky-300/80",
       dotClass: "bg-sky-500 dark:bg-sky-300/80",
-      pulse: true,
+      pulse: false,
     };
   }
 

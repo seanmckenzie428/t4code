@@ -1075,6 +1075,12 @@ export const makeCodexSessionRuntime = (
           ) {
             return false;
           }
+          const existingChild = (yield* Ref.get(collabChildAgentsRef)).get(item.agentThreadId);
+          let suppressSettledInteraction = false;
+          if (item.kind === "interacted" && existingChild !== undefined) {
+            const liveTurns = yield* Ref.get(collabChildLiveTurnsRef);
+            suppressSettledInteraction = !liveTurns.has(item.agentThreadId);
+          }
           const activitySpawnTurnId = (yield* Ref.get(sessionRef)).activeTurnId ?? undefined;
           yield* Ref.update(collabChildAgentsRef, (current) => {
             const existing = current.get(item.agentThreadId);
@@ -1100,6 +1106,14 @@ export const makeCodexSessionRuntime = (
             return next;
           });
           const registeredChild = (yield* Ref.get(collabChildAgentsRef)).get(item.agentThreadId);
+          // `interacted` is parent-side bookkeeping. Its item/completed can
+          // arrive after the child's own turn/completed; reopening an already
+          // settled child here leaves the thread falsely Working forever. A
+          // real resumed turn will emit turn/started and restore liveness.
+          // Keep the merge above because the late item may still fill identity.
+          if (suppressSettledInteraction) {
+            return true;
+          }
           yield* emitEvent({
             kind: "notification",
             threadId: options.threadId,

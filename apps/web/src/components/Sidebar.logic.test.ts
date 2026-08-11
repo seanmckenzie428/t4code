@@ -687,13 +687,32 @@ describe("resolveSidebarThreadStatus", () => {
   });
 
   it("reports working for running and starting sessions", () => {
-    expect(resolveSidebarThreadStatus({ ...idle, session })).toBe("working");
+    expect(resolveSidebarThreadStatus({ ...idle, session, backgroundLiveness: "working" })).toBe(
+      "working",
+    );
     expect(
       resolveSidebarThreadStatus({
         ...idle,
         session: { ...session, status: "starting" as const },
       }),
     ).toBe("working");
+  });
+
+  it("distinguishes post-turn agents from an active chat turn", () => {
+    expect(
+      resolveSidebarThreadStatus({
+        ...idle,
+        session: { ...session, status: "ready" as const, activeTurnId: null },
+        backgroundLiveness: "working",
+      }),
+    ).toBe("background");
+    expect(
+      resolveSidebarThreadStatus({
+        ...idle,
+        session: { ...session, status: "ready" as const, activeTurnId: null },
+        backgroundLiveness: "monitoring",
+      }),
+    ).toBe("monitoring");
   });
 
   it("reports failed only while the session status is error", () => {
@@ -1079,9 +1098,25 @@ describe("resolveThreadStatusPill", () => {
   it("falls back to working when the thread is actively running without blockers", () => {
     expect(
       resolveThreadStatusPill({
-        thread: baseThread,
+        thread: { ...baseThread, backgroundLiveness: "working" },
       }),
     ).toMatchObject({ label: "Working", pulse: true });
+  });
+
+  it("labels post-turn agent work as background without a working pulse", () => {
+    expect(
+      resolveThreadStatusPill({
+        thread: {
+          ...baseThread,
+          backgroundLiveness: "working",
+          session: {
+            ...baseThread.session,
+            status: "ready",
+            activeTurnId: null,
+          },
+        },
+      }),
+    ).toMatchObject({ label: "Background", pulse: false });
   });
 
   it("shows plan ready when a settled plan turn has a proposed plan ready for follow-up", () => {
@@ -1195,6 +1230,25 @@ describe("resolveProjectStatusIndicator", () => {
           label: "Completed",
           colorClass: "text-emerald-600",
           dotClass: "bg-emerald-500",
+          pulse: false,
+        },
+        {
+          label: "Plan Ready",
+          colorClass: "text-violet-600",
+          dotClass: "bg-violet-500",
+          pulse: false,
+        },
+      ]),
+    ).toMatchObject({ label: "Plan Ready", dotClass: "bg-violet-500" });
+  });
+
+  it("prefers plan-ready over background agent work", () => {
+    expect(
+      resolveProjectStatusIndicator([
+        {
+          label: "Background",
+          colorClass: "text-sky-600",
+          dotClass: "bg-sky-500",
           pulse: false,
         },
         {
