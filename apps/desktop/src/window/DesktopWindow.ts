@@ -63,6 +63,18 @@ export type DesktopWindowError =
 
 export type MainWindowZoomDirection = "in" | "out" | "reset";
 
+export const DESKTOP_HISTORY_BACK_ACTION = "history-back";
+export const DESKTOP_HISTORY_FORWARD_ACTION = "history-forward";
+export type DesktopHistoryAction =
+  | typeof DESKTOP_HISTORY_BACK_ACTION
+  | typeof DESKTOP_HISTORY_FORWARD_ACTION;
+
+export function desktopHistoryActionFromAppCommand(command: string): DesktopHistoryAction | null {
+  if (command === "browser-backward") return DESKTOP_HISTORY_BACK_ACTION;
+  if (command === "browser-forward") return DESKTOP_HISTORY_FORWARD_ACTION;
+  return null;
+}
+
 export class DesktopWindow extends Context.Service<
   DesktopWindow,
   {
@@ -529,10 +541,9 @@ export const make = Effect.gen(function* () {
       }
     });
 
-    // Electron's windowMenu close role owns CmdOrCtrl+W. Holding the
-    // close-terminal shortcut can outlive the terminal that handled its first
-    // press, so reject repeats before they reach the native window accelerator.
-    // Deliberate presses still flow through the renderer or native menu.
+    // Holding the close-panel shortcut can outlive the surface that handled
+    // its first press, so reject repeats before they reach renderer bindings.
+    // Deliberate presses still flow through normally.
     window.webContents.on("before-input-event", (event, input) => {
       if (input.type !== "keyDown" || !input.isAutoRepeat) return;
       const modifier = environment.platform === "darwin" ? input.meta : input.control;
@@ -545,6 +556,18 @@ export const make = Effect.gen(function* () {
       event.preventDefault();
       window.setTitle(environment.displayName);
     });
+    const dispatchHistoryAction = (action: DesktopHistoryAction | null) => {
+      if (action === null || window.isDestroyed()) return;
+      window.webContents.send(MENU_ACTION_CHANNEL, action);
+    };
+    // macOS history gestures are captured as cancellable horizontal wheel input
+    // in the host renderer and preview guest. Listening for BrowserWindow's
+    // legacy `swipe` event as well would navigate twice for one gesture.
+    if (environment.platform !== "darwin") {
+      window.on("app-command", (_event, command) => {
+        dispatchHistoryAction(desktopHistoryActionFromAppCommand(command));
+      });
+    }
     window.on("resize", scheduleBoundsPersist);
     window.on("move", scheduleBoundsPersist);
     window.on("maximize", scheduleBoundsPersist);

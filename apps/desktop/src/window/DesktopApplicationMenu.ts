@@ -180,7 +180,10 @@ export const make = Effect.gen(function* () {
                 },
                 { type: "separator" as const },
               ]),
-          { role: environment.platform === "darwin" ? "close" : "quit" },
+          {
+            role: environment.platform === "darwin" ? "close" : "quit",
+            ...(environment.platform === "darwin" ? { accelerator: "CmdOrCtrl+Shift+W" } : {}),
+          },
         ],
       },
       { role: "editMenu" },
@@ -210,7 +213,16 @@ export const make = Effect.gen(function* () {
           { role: "togglefullscreen" },
         ],
       },
-      { role: "windowMenu" },
+      environment.platform === "darwin"
+        ? { role: "windowMenu" }
+        : {
+            label: "Window",
+            submenu: [
+              { role: "minimize" },
+              { role: "zoom" },
+              { role: "close", accelerator: "CmdOrCtrl+Shift+W" },
+            ],
+          },
       {
         role: "help",
         submenu: [

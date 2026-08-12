@@ -43,6 +43,10 @@ Commands are IDs like `terminal.toggle`, `commandPalette.toggle`, `preview.refre
 attached to the active project and does not appear in the project sidebar. Closing it or starting
 a new Quick Chat saves the previous conversation under **Settings** → **Archived** → **Quick Chat
 history**.
+`rightPanel.close` closes the active Browser, Files, Terminal, Agents, or generated-view surface
+when focus is in the right panel. It defaults to `mod+w`; focused terminals keep their own
+`terminal.close` behavior on the same shortcut. In the desktop app, plain `mod+w` never closes the
+window; use `mod+shift+w` when you mean **Close Window**.
 Repeating a toggle shortcut closes its surface. Switching between the file and project search
 shortcuts replaces the open search.
 `themeEditor.toggle` opens or closes the floating theme editor and defaults to
@@ -70,9 +74,9 @@ project, `chat.new` opens a project chooser first.
 ## `when` Conditions
 
 A `when` expression is evaluated against context keys describing the current UI state. The keys
-the app supplies today are `terminalFocus`, `terminalOpen`, `previewFocus`, `previewOpen`, and
-`modelPickerOpen`. The set is open and grows over time, so treat that as the current list rather
-than a fixed one. Any key the running app does not supply evaluates to `false`.
+the app supplies today are `terminalFocus`, `terminalOpen`, `previewFocus`, `previewOpen`,
+`rightPanelFocus`, and `modelPickerOpen`. The set is open and grows over time, so treat that as the
+current list rather than a fixed one. Any key the running app does not supply evaluates to `false`.
 
 Operators: `!` (not), `&&` (and), `||` (or), and parentheses.
 

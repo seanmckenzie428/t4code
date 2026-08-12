@@ -158,17 +158,19 @@ const electronThemeLayer = Layer.succeed(ElectronTheme.ElectronTheme, {
   onUpdated: () => Effect.void,
 } satisfies ElectronTheme.ElectronTheme["Service"]);
 
-const desktopEnvironmentLayer = DesktopEnvironment.layer(environmentInput).pipe(
-  Layer.provide(
-    Layer.mergeAll(
-      NodeServices.layer,
-      DesktopConfig.layerTest({
-        T3CODE_PORT: "3773",
-        VITE_DEV_SERVER_URL: "http://127.0.0.1:5733",
-      }),
+const makeDesktopEnvironmentLayer = (platform: NodeJS.Platform = environmentInput.platform) =>
+  DesktopEnvironment.layer({ ...environmentInput, platform }).pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        NodeServices.layer,
+        DesktopConfig.layerTest({
+          T3CODE_PORT: "3773",
+          VITE_DEV_SERVER_URL: "http://127.0.0.1:5733",
+        }),
+      ),
     ),
-  ),
-);
+  );
+const desktopEnvironmentLayer = makeDesktopEnvironmentLayer();
 
 const desktopWindowBoundsEquivalence = Schema.toEquivalence(
   DesktopAppSettings.DesktopWindowBoundsSchema,
@@ -186,6 +188,7 @@ function makeTestLayer(input: {
     bounds: DesktopAppSettings.DesktopWindowBounds,
   ) => Effect.Effect<void>;
   readonly openedExternalUrls?: unknown[];
+  readonly platform?: NodeJS.Platform;
 }) {
   let desktopSettings = input.desktopSettings ?? DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS;
   const desktopAppSettingsLayer = Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
@@ -244,7 +247,7 @@ function makeTestLayer(input: {
     Layer.provide(
       Layer.mergeAll(
         desktopAssetsLayer,
-        desktopEnvironmentLayer,
+        makeDesktopEnvironmentLayer(input.platform),
         desktopAppSettingsLayer,
         desktopServerExposureLayer,
         DesktopState.layer,
@@ -367,6 +370,72 @@ const makeSplashScenario = (createOutcomes: readonly (Electron.BrowserWindow | n
   });
 
 describe("DesktopWindow", () => {
+  it("maps native browser history commands", () => {
+    assert.equal(
+      DesktopWindow.desktopHistoryActionFromAppCommand("browser-backward"),
+      DesktopWindow.DESKTOP_HISTORY_BACK_ACTION,
+    );
+    assert.equal(
+      DesktopWindow.desktopHistoryActionFromAppCommand("browser-forward"),
+      DesktopWindow.DESKTOP_HISTORY_FORWARD_ACTION,
+    );
+    assert.isNull(DesktopWindow.desktopHistoryActionFromAppCommand("media-play-pause"));
+  });
+
+  it.effect("does not register the legacy macOS swipe event alongside wheel gestures", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const layer = makeTestLayer({
+        window: fakeWindow.window,
+        createCount,
+        mainWindow,
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+
+        assert.isFalse(fakeWindow.windowListeners.has("swipe"));
+        assert.isFalse(fakeWindow.windowListeners.has("app-command"));
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("forwards Windows and Linux browser commands to the renderer", () =>
+    Effect.gen(function* () {
+      const fakeWindow = makeFakeBrowserWindow();
+      const createCount = yield* Ref.make(0);
+      const mainWindow = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+      const layer = makeTestLayer({
+        window: fakeWindow.window,
+        createCount,
+        mainWindow,
+        platform: "win32",
+      });
+
+      yield* Effect.gen(function* () {
+        const desktopWindow = yield* DesktopWindow.DesktopWindow;
+        yield* desktopWindow.handleBackendReady(new URL("http://127.0.0.1:3773"));
+
+        const appCommand = fakeWindow.windowListeners.get("app-command");
+        if (!appCommand) return yield* Effect.die("app-command listener was not registered");
+        appCommand({}, "browser-backward");
+        appCommand({}, "browser-forward");
+        appCommand({}, "media-play-pause");
+
+        assert.deepEqual(
+          fakeWindow.send.mock.calls.filter(([channel]) => channel === MENU_ACTION_CHANNEL),
+          [
+            [MENU_ACTION_CHANNEL, DesktopWindow.DESKTOP_HISTORY_BACK_ACTION],
+            [MENU_ACTION_CHANNEL, DesktopWindow.DESKTOP_HISTORY_FORWARD_ACTION],
+          ],
+        );
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
   it("restores bounds only when the window fits within a connected display", () => {
     const persistedBounds = { x: 2040, y: 80, width: 1320, height: 880 };
     const displays = [

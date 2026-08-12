@@ -98,6 +98,7 @@ const makeElectronMenuLayer = (
 const configureMenu = (
   selectedAction: Deferred.Deferred<string>,
   applicationMenuTemplate: Deferred.Deferred<readonly Electron.MenuItemConstructorOptions[]>,
+  platform: NodeJS.Platform = environmentInput.platform,
 ) =>
   Effect.gen(function* () {
     const menu = yield* DesktopApplicationMenu.DesktopApplicationMenu;
@@ -111,7 +112,7 @@ const configureMenu = (
         Layer.provideMerge(electronDialogLayer),
         Layer.provideMerge(electronAppLayer),
         Layer.provideMerge(
-          DesktopEnvironment.layer(environmentInput).pipe(
+          DesktopEnvironment.layer({ ...environmentInput, platform }).pipe(
             Layer.provide(Layer.mergeAll(NodeServices.layer, DesktopConfig.layerTest({}))),
           ),
         ),
@@ -177,6 +178,52 @@ describe("DesktopApplicationMenu", () => {
 
       zoomIn.click({} as Electron.MenuItem, {} as Electron.BrowserWindow, {} as KeyboardEvent);
       assert.equal(yield* Deferred.await(selectedAction), "zoom-in");
+    }),
+  );
+
+  it.effect("reserves plain Cmd+W for panel close on macOS", () =>
+    Effect.gen(function* () {
+      const selectedAction = yield* Deferred.make<string>();
+      const applicationMenuTemplate =
+        yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+
+      yield* configureMenu(selectedAction, applicationMenuTemplate, "darwin");
+
+      const template = yield* Deferred.await(applicationMenuTemplate);
+      const fileMenu = template.find((item) => item.label === "File");
+      assert.isDefined(fileMenu);
+      if (!Array.isArray(fileMenu.submenu)) {
+        throw new Error("Expected File menu submenu to be an array.");
+      }
+      const closeWindowItem = fileMenu.submenu.find((item) => item.role === "close");
+      assert.isDefined(closeWindowItem);
+      assert.equal(closeWindowItem.accelerator, "CmdOrCtrl+Shift+W");
+    }),
+  );
+
+  it.effect("reserves plain Ctrl+W for panel close on Windows and Linux", () =>
+    Effect.gen(function* () {
+      for (const platform of ["win32", "linux"] as const) {
+        const selectedAction = yield* Deferred.make<string>();
+        const applicationMenuTemplate =
+          yield* Deferred.make<readonly Electron.MenuItemConstructorOptions[]>();
+
+        yield* configureMenu(selectedAction, applicationMenuTemplate, platform);
+
+        const template = yield* Deferred.await(applicationMenuTemplate);
+        const windowMenu = template.find((item) => item.label === "Window");
+        assert.isDefined(windowMenu);
+        if (!Array.isArray(windowMenu.submenu)) {
+          throw new Error("Expected Window menu submenu to be an array.");
+        }
+        assert.deepEqual(
+          windowMenu.submenu.slice(0, 2).map((item) => item.role),
+          ["minimize", "zoom"],
+        );
+        const closeWindowItem = windowMenu.submenu.find((item) => item.role === "close");
+        assert.isDefined(closeWindowItem);
+        assert.equal(closeWindowItem.accelerator, "CmdOrCtrl+Shift+W");
+      }
     }),
   );
 });

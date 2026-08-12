@@ -191,6 +191,14 @@
       "types": "./src/previewViewport.ts",
       "import": "./src/previewViewport.ts"
     },
+    "./historyGesture": {
+      "types": "./src/historyGesture.ts",
+      "import": "./src/historyGesture.ts"
+    },
+    "./historyGestureEvents": {
+      "types": "./src/historyGestureEvents.ts",
+      "import": "./src/historyGestureEvents.ts"
+    },
     "./filePreview": {
       "types": "./src/filePreview.ts",
       "import": "./src/filePreview.ts"

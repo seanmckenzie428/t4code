@@ -189,6 +189,7 @@ describe("APP_COMMAND_CATALOG", () => {
       "terminal.new",
       "terminal.close",
       "rightPanel.toggle",
+      "rightPanel.close",
       "diff.toggle",
       "preview.open",
       "preview.toggle",

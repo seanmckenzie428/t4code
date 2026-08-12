@@ -57,7 +57,9 @@ import {
   CANCEL_PICK_CHANNEL,
   ELEMENT_PICKED_CHANNEL,
   HUMAN_INPUT_CHANNEL,
+  HISTORY_NAVIGATION_CHANNEL,
   START_PICK_CHANNEL,
+  isPreviewHistoryNavigationDirection,
 } from "./GuestProtocol.ts";
 import { isPreviewAnnotationPayload } from "./PickedElementPayload.ts";
 import { playwrightInjectedRuntimeInstallExpression } from "./PlaywrightInjectedRuntime.ts";
@@ -408,6 +410,7 @@ const APP_FORWARDED_SHORTCUTS: ReadonlyArray<{
   { key: ",", meta: true, shift: false, control: false },
   // mod+W → close tab/panel
   { key: "w", meta: true, shift: false, control: false },
+  { key: "w", meta: false, shift: false, control: true },
 ]);
 
 export const isForwardedAppShortcut = (
@@ -428,6 +431,22 @@ export const isPreviewRefreshShortcut = (input: Electron.Input): boolean =>
   (input.meta || input.control) &&
   !input.shift &&
   !input.alt;
+
+export function navigatePreviewHistory(
+  navigationHistory: Pick<
+    Electron.NavigationHistory,
+    "canGoBack" | "canGoForward" | "goBack" | "goForward"
+  >,
+  direction: unknown,
+): boolean {
+  if (!isPreviewHistoryNavigationDirection(direction)) return false;
+  if (direction === "back") {
+    if (navigationHistory.canGoBack()) navigationHistory.goBack();
+  } else if (navigationHistory.canGoForward()) {
+    navigationHistory.goForward();
+  }
+  return true;
+}
 
 const isPreviewInputSignal = (value: unknown): value is PreviewInputSignal => {
   if (typeof value !== "object" || value === null || !("kind" in value)) return false;
@@ -1357,6 +1376,17 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     const humanInput = (_event: unknown, rawSignal?: unknown): void => {
       runFork(handleHumanInput(rawSignal));
     };
+    const historyNavigation = (_event: unknown, direction?: unknown): void => {
+      if (!isPreviewHistoryNavigationDirection(direction)) return;
+      runFork(
+        attempt(
+          { operation: `historyNavigation.${direction}`, tabId, webContentsId: wc.id },
+          () => {
+            navigatePreviewHistory(wc.navigationHistory, direction);
+          },
+        ).pipe(Effect.ignore),
+      );
+    };
     const forwardShortcut = Effect.fn("PreviewManager.forwardShortcut")(function* (
       event: Electron.Event,
       input: Electron.Input,
@@ -1404,6 +1434,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         wc.off("did-fail-load", failed as never);
         wc.off("before-input-event", beforeInput);
         wc.ipc.off(HUMAN_INPUT_CHANNEL, humanInput);
+        wc.ipc.off(HISTORY_NAVIGATION_CHANNEL, historyNavigation);
       }).pipe(Effect.ignore),
     );
     const install = Effect.fn("PreviewManager.installWebContentsListeners")(function* () {
@@ -1415,6 +1446,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         wc.on("did-stop-loading", sync);
         wc.on("did-fail-load", failed as never);
         wc.ipc.on(HUMAN_INPUT_CHANNEL, humanInput);
+        wc.ipc.on(HISTORY_NAVIGATION_CHANNEL, historyNavigation);
         wc.setWindowOpenHandler(({ url }) => {
           runFork(
             attemptPromise({ operation: "openPreviewWindow", tabId, webContentsId: wc.id }, () =>

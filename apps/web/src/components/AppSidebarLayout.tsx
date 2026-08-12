@@ -22,6 +22,12 @@ import { SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { useSidebarStageBackdropVariant } from "./SidebarStageBackdrop";
 import { useProjects } from "../state/entities";
 import {
+  desktopHistoryActionFromDirection,
+  handleDesktopHistoryAction,
+  isDesktopHistoryAction,
+} from "../browser/desktopHistoryNavigation";
+import { makeHistoryGestureEventController } from "../browser/historyGestureEvents";
+import {
   resolveInitialThreadSidebarWidth,
   resolveThreadSidebarMaximumWidth,
   THREAD_MAIN_CONTENT_MIN_WIDTH,
@@ -200,6 +206,12 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     }
 
     const unsubscribe = onMenuAction((action) => {
+      if (isDesktopHistoryAction(action)) {
+        void handleDesktopHistoryAction(action).catch((error: unknown) => {
+          console.error("Could not navigate desktop history.", error);
+        });
+        return;
+      }
       if (action === "open-settings") {
         const isSettingsRoute = /^\/settings(\/|$)/.test(pathname);
         if (!isSettingsRoute) {
@@ -212,6 +224,27 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       unsubscribe?.();
     };
   }, [navigate, pathname]);
+
+  useEffect(() => {
+    if (!isMacosDesktop) return;
+    const controller = makeHistoryGestureEventController({
+      navigate: (direction) => {
+        void handleDesktopHistoryAction(desktopHistoryActionFromDirection(direction)).catch(
+          (error: unknown) => {
+            console.error("Could not navigate desktop history.", error);
+          },
+        );
+      },
+    });
+    document.addEventListener("mousedown", controller.handleMouseDown, true);
+    document.addEventListener("auxclick", controller.handleAuxClick, true);
+    document.addEventListener("wheel", controller.handleWheel, { capture: true, passive: false });
+    return () => {
+      document.removeEventListener("mousedown", controller.handleMouseDown, true);
+      document.removeEventListener("auxclick", controller.handleAuxClick, true);
+      document.removeEventListener("wheel", controller.handleWheel, true);
+    };
+  }, [isMacosDesktop]);
 
   return (
     <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>

@@ -57,6 +57,27 @@ describe("isForwardedAppShortcut", () => {
       }),
     ).toBe(true);
   });
+
+  it("forwards close-surface shortcuts from preview content on every desktop platform", () => {
+    expect(
+      PreviewManager.isForwardedAppShortcut({
+        type: "keyDown",
+        key: "w",
+        meta: true,
+        shift: false,
+        control: false,
+      }),
+    ).toBe(true);
+    expect(
+      PreviewManager.isForwardedAppShortcut({
+        type: "keyDown",
+        key: "w",
+        meta: false,
+        shift: false,
+        control: true,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("isPreviewRefreshShortcut", () => {
@@ -78,6 +99,25 @@ describe("isPreviewRefreshShortcut", () => {
     );
     expect(PreviewManager.isPreviewRefreshShortcut(input({ shift: true }))).toBe(false);
     expect(PreviewManager.isPreviewRefreshShortcut(input({ type: "keyUp" }))).toBe(false);
+  });
+});
+
+describe("navigatePreviewHistory", () => {
+  it("navigates valid directions and owns unavailable history edges", () => {
+    const goBack = vi.fn();
+    const goForward = vi.fn();
+    const history = {
+      canGoBack: () => true,
+      canGoForward: () => false,
+      goBack,
+      goForward,
+    };
+
+    expect(PreviewManager.navigatePreviewHistory(history, "back")).toBe(true);
+    expect(PreviewManager.navigatePreviewHistory(history, "forward")).toBe(true);
+    expect(PreviewManager.navigatePreviewHistory(history, "sideways")).toBe(false);
+    expect(goBack).toHaveBeenCalledOnce();
+    expect(goForward).not.toHaveBeenCalled();
   });
 });
 
@@ -276,6 +316,53 @@ describe("PreviewManager", () => {
           loading: false,
         });
         expect(fromId).not.toHaveBeenCalled();
+      }),
+    ),
+  );
+
+  effectIt.effect("routes validated guest history IPC to its own tab", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const ipcListeners = new Map<string, (...args: unknown[]) => void>();
+        const ipcOff = vi.fn();
+        const goBack = vi.fn();
+        const goForward = vi.fn();
+        const webContents = {
+          ...(makeTestPreviewWebContents(async () => ({
+            toJPEG: () => Buffer.alloc(0),
+            getSize: () => ({ width: 1, height: 1 }),
+          })) as unknown as Record<string, unknown>),
+          ipc: {
+            on: vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
+              ipcListeners.set(channel, listener);
+            }),
+            off: ipcOff,
+          },
+          navigationHistory: {
+            canGoBack: () => true,
+            canGoForward: () => false,
+            goBack,
+            goForward,
+          },
+        };
+        fromId.mockReturnValue(webContents as never);
+
+        yield* manager.createTab("tab_history");
+        yield* manager.registerWebview("tab_history", 42);
+        const historyNavigation = ipcListeners.get("preview:history-navigation");
+        if (!historyNavigation) {
+          return yield* Effect.die("history navigation listener was not registered");
+        }
+
+        historyNavigation({}, "back");
+        historyNavigation({}, "forward");
+        historyNavigation({}, "sideways");
+        yield* Effect.yieldNow;
+        expect(goBack).toHaveBeenCalledOnce();
+        expect(goForward).not.toHaveBeenCalled();
+
+        yield* manager.closeTab("tab_history");
+        expect(ipcOff).toHaveBeenCalledWith("preview:history-navigation", historyNavigation);
       }),
     ),
   );

@@ -219,6 +219,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
 import { getTerminalFocusOwner } from "../lib/terminalFocus";
+import { isRightPanelFocused } from "../lib/rightPanelFocus";
 import { preventRepeatedTerminalCloseShortcut } from "../lib/terminalCloseShortcut";
 import { resolveNewDraftStartFromOrigin } from "../lib/chatThreadActions";
 import {
@@ -3834,6 +3835,19 @@ function ChatViewContent(props: ChatViewProps) {
     },
     [activeThreadRef, cleanupRightPanelSurfaces, syncActivePreviewSurface],
   );
+  useEffect(() => {
+    if (!activeThreadRef || !rightPanelOpen || !activeRightPanelSurface) return;
+    return registerWebAppCommandHandler(
+      "ui.right-panel.close-surface",
+      () => closeRightPanelSurface(activeRightPanelSurface),
+      (context) => ({
+        available:
+          context.environmentId === activeThreadRef.environmentId &&
+          (context.threadId === undefined || context.threadId === activeThreadRef.threadId),
+        reason: "No matching right panel surface is active.",
+      }),
+    );
+  }, [activeRightPanelSurface, activeThreadRef, closeRightPanelSurface, rightPanelOpen]);
   const closeOtherRightPanelSurfaces = useCallback(
     (surface: RightPanelSurface) => {
       if (!activeThreadRef) return;
@@ -5015,6 +5029,7 @@ function ChatViewContent(props: ChatViewProps) {
         terminalFocus: terminalFocusOwner !== null,
         terminalOpen: Boolean(terminalUiState.terminalOpen),
         modelPickerOpen: composerRef.current?.isModelPickerOpen() ?? false,
+        rightPanelFocus: isRightPanelFocused(),
       };
 
       if (
@@ -5037,6 +5052,7 @@ function ChatViewContent(props: ChatViewProps) {
       const isHostedCommand =
         command === "terminal.toggle" ||
         command === "rightPanel.toggle" ||
+        command === "rightPanel.close" ||
         command === "terminal.split" ||
         command === "terminal.splitVertical" ||
         command === "terminal.close" ||

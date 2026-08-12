@@ -110,6 +110,11 @@ const DEFAULT_BINDINGS = compile([
     whenAst: whenIdentifier("terminalFocus"),
   },
   {
+    shortcut: modShortcut("w"),
+    command: "rightPanel.close",
+    whenAst: whenAnd(whenIdentifier("rightPanelFocus"), whenNot(whenIdentifier("terminalFocus"))),
+  },
+  {
     shortcut: modShortcut("d"),
     command: "diff.toggle",
     whenAst: whenNot(whenIdentifier("terminalFocus")),
@@ -678,6 +683,35 @@ describe("cross-command precedence", () => {
 });
 
 describe("resolveShortcutCommand", () => {
+  it("routes mod+w to the focused terminal or right panel without claiming chat focus", () => {
+    for (const [platform, modifiers] of [
+      ["MacIntel", { metaKey: true }],
+      ["Linux", { ctrlKey: true }],
+    ] as const) {
+      const closeEvent = event({ key: "w", ...modifiers });
+      assert.strictEqual(
+        resolveShortcutCommand(closeEvent, DEFAULT_BINDINGS, {
+          platform,
+          context: { terminalFocus: true, rightPanelFocus: true },
+        }),
+        "terminal.close",
+      );
+      assert.strictEqual(
+        resolveShortcutCommand(closeEvent, DEFAULT_BINDINGS, {
+          platform,
+          context: { terminalFocus: false, rightPanelFocus: true },
+        }),
+        "rightPanel.close",
+      );
+      assert.isNull(
+        resolveShortcutCommand(closeEvent, DEFAULT_BINDINGS, {
+          platform,
+          context: { terminalFocus: false, rightPanelFocus: false },
+        }),
+      );
+    }
+  });
+
   it("returns dynamic script commands", () => {
     const keybindings = compile([{ shortcut: modShortcut("r"), command: "script.setup.run" }]);
 

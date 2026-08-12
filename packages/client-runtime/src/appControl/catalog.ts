@@ -193,6 +193,15 @@ export const APP_COMMAND_CATALOG = [
     emptyInput,
   ),
   command(
+    "ui.right-panel.close-surface",
+    "ui",
+    "client",
+    "mutate",
+    "Close active right panel surface",
+    "thread:mutate",
+    emptyInput,
+  ),
+  command(
     "ui.right-panel.focus",
     "ui",
     "client",
@@ -792,6 +801,7 @@ const KEYBINDING_APP_COMMAND_ALIASES = {
   "terminal.new": "terminal.new",
   "terminal.close": "terminal.close",
   "rightPanel.toggle": "ui.right-panel.toggle",
+  "rightPanel.close": "ui.right-panel.close-surface",
   "diff.toggle": "ui.diff.toggle",
   "preview.open": "ui.preview.open",
   "preview.toggle": "ui.preview.toggle",

@@ -1,6 +1,7 @@
 // @effect-diagnostics globalDate:off - This isolated Electron preload does not run inside an Effect runtime.
 import { ipcRenderer } from "electron";
 import { getElementContext } from "react-grab/primitives";
+import { makeHistoryGestureEventController } from "@t3tools/shared/historyGestureEvents";
 import type {
   DesktopPreviewAnnotationTheme,
   PickedElementPayload,
@@ -22,6 +23,7 @@ import {
   CANCEL_PICK_CHANNEL,
   ELEMENT_PICKED_CHANNEL,
   HUMAN_INPUT_CHANNEL,
+  HISTORY_NAVIGATION_CHANNEL,
   START_PICK_CHANNEL,
 } from "./GuestProtocol.ts";
 const OVERLAY_ATTRIBUTE = "data-t3code-annotation-ui";
@@ -101,6 +103,21 @@ const reportHumanKeyInput = (event: KeyboardEvent): void => {
 
 window.addEventListener("pointerdown", reportHumanPointerInput, true);
 window.addEventListener("keydown", reportHumanKeyInput, true);
+
+const historyGestureEvents = makeHistoryGestureEventController({
+  navigate: (direction) => ipcRenderer.send(HISTORY_NAVIGATION_CHANNEL, direction),
+});
+
+// oxlint-disable-next-line t3code/no-global-process-runtime -- Electron's sandboxed preload exposes process.platform and has no Effect runtime.
+const isMacPlatform = process.platform === "darwin";
+if (isMacPlatform) {
+  window.addEventListener("mousedown", historyGestureEvents.handleMouseDown, true);
+  window.addEventListener("auxclick", historyGestureEvents.handleAuxClick, true);
+  window.addEventListener("wheel", historyGestureEvents.handleWheel, {
+    capture: true,
+    passive: false,
+  });
+}
 
 const nextId = (prefix: string): string => {
   idSequence += 1;
