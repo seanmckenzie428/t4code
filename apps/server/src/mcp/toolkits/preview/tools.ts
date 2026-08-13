@@ -2,6 +2,11 @@ import {
   PreviewAutomationClickInput,
   PreviewAutomationError,
   PreviewAutomationEvaluateInput,
+  PreviewAutomationHighlightClearResult,
+  PreviewAutomationHighlightApplyInput,
+  PreviewAutomationHighlightClearInput,
+  PreviewAutomationHighlightUpdateInput,
+  PreviewAutomationHighlightResult,
   PreviewAutomationNavigateInput,
   PreviewAutomationOpenInput,
   PreviewAutomationPressInput,
@@ -156,6 +161,43 @@ export const PreviewScrollTool = safeBrowserTool(
   }).annotate(Tool.Title, "Scroll preview page"),
 );
 
+export const PreviewHighlightTool = safeBrowserTool(
+  Tool.make("preview_highlight_apply", {
+    description:
+      "Apply ephemeral numbered outlines, badges, and explanation panels to locator targets. Supports multiple palette colors, optional scrolling, and an optional PNG screenshot. Replaces any existing callouts in the current document.",
+    parameters: PreviewAutomationHighlightApplyInput,
+    success: PreviewAutomationHighlightResult,
+    failure: PreviewAutomationError,
+    dependencies,
+  }).annotate(Tool.Title, "Highlight preview elements"),
+);
+
+export const PreviewHighlightUpdateTool = safeBrowserTool(
+  Tool.make("preview_highlight_update", {
+    description:
+      "Update the ephemeral preview callouts with a complete replacement set. Array order controls badge numbers; supports palette colors, optional scrolling, and an optional PNG screenshot.",
+    parameters: PreviewAutomationHighlightUpdateInput,
+    success: PreviewAutomationHighlightResult,
+    failure: PreviewAutomationError,
+    dependencies,
+  })
+    .annotate(Tool.Title, "Update preview highlights")
+    .annotate(Tool.Idempotent, true),
+);
+
+export const PreviewHighlightClearTool = safeBrowserTool(
+  Tool.make("preview_highlight_clear", {
+    description:
+      "Clear all ephemeral numbered callouts from the selected preview tab. Safe after navigation or reload when the previous document has already discarded them.",
+    parameters: PreviewAutomationHighlightClearInput,
+    success: PreviewAutomationHighlightClearResult,
+    failure: PreviewAutomationError,
+    dependencies,
+  })
+    .annotate(Tool.Title, "Clear preview highlights")
+    .annotate(Tool.Idempotent, true),
+);
+
 export const PreviewEvaluateTool = browserTool(
   Tool.make("preview_evaluate", {
     description:
@@ -211,6 +253,9 @@ export const PreviewToolkit = Toolkit.make(
   PreviewTypeTool,
   PreviewPressTool,
   PreviewScrollTool,
+  PreviewHighlightTool,
+  PreviewHighlightUpdateTool,
+  PreviewHighlightClearTool,
   PreviewEvaluateTool,
   PreviewWaitForTool,
   PreviewRecordingStartTool,
@@ -227,6 +272,7 @@ export const PreviewStandardToolkit = Toolkit.make(
   PreviewTypeTool,
   PreviewPressTool,
   PreviewScrollTool,
+  PreviewHighlightClearTool,
   PreviewEvaluateTool,
   PreviewWaitForTool,
   PreviewRecordingStartTool,
@@ -234,3 +280,8 @@ export const PreviewStandardToolkit = Toolkit.make(
 );
 
 export const PreviewSnapshotToolkit = Toolkit.make(PreviewSnapshotTool);
+
+export const PreviewHighlightToolkit = Toolkit.make(
+  PreviewHighlightTool,
+  PreviewHighlightUpdateTool,
+);

@@ -219,6 +219,21 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_PRESS_CHANNEL, { tabId, input }),
       scroll: (tabId, input) =>
         ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_SCROLL_CHANNEL, { tabId, input }),
+      highlightApply: (tabId, input) =>
+        ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_HIGHLIGHT_APPLY_CHANNEL, {
+          tabId,
+          input,
+        }),
+      highlightUpdate: (tabId, input) =>
+        ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_HIGHLIGHT_UPDATE_CHANNEL, {
+          tabId,
+          input,
+        }),
+      highlightClear: (tabId, input) =>
+        ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_HIGHLIGHT_CLEAR_CHANNEL, {
+          tabId,
+          input,
+        }),
       evaluate: (tabId, input) =>
         ipcRenderer.invoke(IpcChannels.PREVIEW_AUTOMATION_EVALUATE_CHANNEL, { tabId, input }),
       waitFor: (tabId, input) =>

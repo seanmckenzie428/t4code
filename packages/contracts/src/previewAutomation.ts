@@ -43,6 +43,9 @@ export const PREVIEW_AUTOMATION_OPERATIONS = [
   ...PREVIEW_AUTOMATION_V1_OPERATIONS,
   "resize",
   "setColorScheme",
+  "highlightApply",
+  "highlightUpdate",
+  "highlightClear",
 ] as const;
 
 export const PreviewAutomationOperation = Schema.Literals(PREVIEW_AUTOMATION_OPERATIONS);
@@ -415,6 +418,148 @@ export const PreviewAutomationScrollInput = Schema.Struct({
   });
 export type PreviewAutomationScrollInput = typeof PreviewAutomationScrollInput.Type;
 
+export const PreviewAutomationHighlightColor = Schema.Literals([
+  "blue",
+  "cyan",
+  "green",
+  "amber",
+  "red",
+  "purple",
+  "pink",
+]);
+export type PreviewAutomationHighlightColor = typeof PreviewAutomationHighlightColor.Type;
+
+const PreviewAutomationHighlightText = TrimmedNonEmptyString.check(Schema.isMaxLength(500));
+const PreviewAutomationHighlightId = Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty());
+
+export const PreviewAutomationHighlightCallout = Schema.Struct({
+  locator: Locator.annotate({
+    description:
+      "Playwright locator for the element to outline, for example role=button[name='Send'].",
+  }),
+  title: Schema.optional(
+    PreviewAutomationHighlightText.annotate({
+      description: "Short optional heading shown in the explanation panel.",
+    }),
+  ).annotate({ description: "Short optional heading shown in the explanation panel." }),
+  explanation: Schema.optional(
+    PreviewAutomationHighlightText.annotate({
+      description: "Optional explanation shown beside the numbered outline.",
+    }),
+  ).annotate({ description: "Optional explanation shown beside the numbered outline." }),
+  color: Schema.optional(
+    PreviewAutomationHighlightColor.annotate({
+      description: "Callout color. Omit to cycle through the built-in palette.",
+    }),
+  ).annotate({ description: "Callout color. Omit to cycle through the built-in palette." }),
+});
+export type PreviewAutomationHighlightCallout = typeof PreviewAutomationHighlightCallout.Type;
+
+const PreviewAutomationHighlightCalloutFields = {
+  callouts: Schema.Array(PreviewAutomationHighlightCallout)
+    .check(Schema.isMinLength(1), Schema.isMaxLength(12))
+    .annotate({
+      description:
+        "One to twelve locator-based callouts. Array order determines visible badge numbers.",
+    }),
+  scrollTo: Schema.optional(
+    Schema.Int.check(Schema.isGreaterThan(0), Schema.isLessThanOrEqualTo(12)).annotate({
+      description:
+        "One-based callout number to center before drawing. Omit to preserve current scroll position.",
+    }),
+  ).annotate({
+    description:
+      "One-based callout number to center before drawing. Omit to preserve current scroll position.",
+  }),
+  screenshot: Schema.optional(
+    Schema.Boolean.annotate({
+      description: "Include a PNG screenshot after the callouts have painted. Defaults to false.",
+    }),
+  ).annotate({
+    description: "Include a PNG screenshot after the callouts have painted. Defaults to false.",
+  }),
+};
+
+const validPreviewAutomationHighlightScrollTarget = (input: {
+  readonly callouts: ReadonlyArray<unknown>;
+  readonly scrollTo?: number | undefined;
+}) =>
+  input.scrollTo === undefined ||
+  input.scrollTo <= input.callouts.length ||
+  "scrollTo must identify a supplied callout.";
+
+export const PreviewAutomationHighlightApplyInput = Schema.Struct({
+  ...PreviewAutomationTabTargetFields,
+  ...PreviewAutomationHighlightCalloutFields,
+})
+  .check(Schema.makeFilter(validPreviewAutomationHighlightScrollTarget))
+  .annotate({
+    description:
+      "Draws a new ephemeral numbered callout set without changing page layout or input behavior.",
+  });
+export type PreviewAutomationHighlightApplyInput = typeof PreviewAutomationHighlightApplyInput.Type;
+
+export const PreviewAutomationHighlightUpdateInput = Schema.Struct({
+  ...PreviewAutomationTabTargetFields,
+  highlightId: PreviewAutomationHighlightId.annotate({
+    description: "Ephemeral highlight-set ID returned by preview_highlight_apply.",
+  }).annotateKey({
+    description: "Ephemeral highlight-set ID returned by preview_highlight_apply.",
+  }),
+  ...PreviewAutomationHighlightCalloutFields,
+})
+  .check(Schema.makeFilter(validPreviewAutomationHighlightScrollTarget))
+  .annotate({
+    description:
+      "Replaces an existing ephemeral callout set without changing page layout or input behavior.",
+  });
+export type PreviewAutomationHighlightUpdateInput =
+  typeof PreviewAutomationHighlightUpdateInput.Type;
+
+export const PreviewAutomationHighlightClearInput = Schema.Struct({
+  ...PreviewAutomationTabTargetFields,
+  highlightId: PreviewAutomationHighlightId.annotate({
+    description: "Ephemeral highlight-set ID returned by preview_highlight_apply.",
+  }).annotateKey({
+    description: "Ephemeral highlight-set ID returned by preview_highlight_apply.",
+  }),
+});
+export type PreviewAutomationHighlightClearInput = typeof PreviewAutomationHighlightClearInput.Type;
+
+export const PreviewAutomationScreenshot = Schema.Struct({
+  mimeType: Schema.Literal("image/png"),
+  data: Schema.String,
+  width: Schema.Int,
+  height: Schema.Int,
+});
+export type PreviewAutomationScreenshot = typeof PreviewAutomationScreenshot.Type;
+
+const PreviewAutomationHighlightRenderResultFields = {
+  highlightId: PreviewAutomationHighlightId,
+  count: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  screenshot: Schema.optional(PreviewAutomationScreenshot),
+};
+
+export const PreviewAutomationHighlightRenderResult = Schema.Struct(
+  PreviewAutomationHighlightRenderResultFields,
+);
+export type PreviewAutomationHighlightRenderResult =
+  typeof PreviewAutomationHighlightRenderResult.Type;
+
+export const PreviewAutomationHighlightResult = Schema.Struct({
+  tabId: PreviewTabId,
+  ...PreviewAutomationHighlightRenderResultFields,
+});
+export type PreviewAutomationHighlightResult = typeof PreviewAutomationHighlightResult.Type;
+
+export const PreviewAutomationHighlightClearResult = Schema.Struct({
+  tabId: PreviewTabId,
+  highlightId: PreviewAutomationHighlightId,
+  cleared: Schema.Boolean,
+});
+export type PreviewAutomationHighlightClearResult =
+  typeof PreviewAutomationHighlightClearResult.Type;
+
 export const PreviewAutomationEvaluateInput = Schema.Struct({
   ...PreviewAutomationTabTargetFields,
   expression: Schema.String.check(Schema.isTrimmed())
@@ -537,12 +682,7 @@ export const PreviewAutomationSnapshot = Schema.Struct({
   consoleEntries: Schema.Array(PreviewAutomationConsoleEntry),
   networkEntries: Schema.Array(PreviewAutomationNetworkEntry),
   actionTimeline: Schema.Array(PreviewAutomationActionEvent),
-  screenshot: Schema.Struct({
-    mimeType: Schema.Literal("image/png"),
-    data: Schema.String,
-    width: Schema.Int,
-    height: Schema.Int,
-  }),
+  screenshot: PreviewAutomationScreenshot,
 });
 export type PreviewAutomationSnapshot = typeof PreviewAutomationSnapshot.Type;
 

@@ -70,6 +70,12 @@ export const PREVIEW_AUTOMATION_CLICK_CHANNEL = "desktop:preview-automation-clic
 export const PREVIEW_AUTOMATION_TYPE_CHANNEL = "desktop:preview-automation-type";
 export const PREVIEW_AUTOMATION_PRESS_CHANNEL = "desktop:preview-automation-press";
 export const PREVIEW_AUTOMATION_SCROLL_CHANNEL = "desktop:preview-automation-scroll";
+export const PREVIEW_AUTOMATION_HIGHLIGHT_APPLY_CHANNEL =
+  "desktop:preview-automation-highlight-apply";
+export const PREVIEW_AUTOMATION_HIGHLIGHT_UPDATE_CHANNEL =
+  "desktop:preview-automation-highlight-update";
+export const PREVIEW_AUTOMATION_HIGHLIGHT_CLEAR_CHANNEL =
+  "desktop:preview-automation-highlight-clear";
 export const PREVIEW_AUTOMATION_EVALUATE_CHANNEL = "desktop:preview-automation-evaluate";
 export const PREVIEW_AUTOMATION_WAIT_FOR_CHANNEL = "desktop:preview-automation-wait-for";
 export const PREVIEW_RECORDING_START_CHANNEL = "desktop:preview-recording-start";

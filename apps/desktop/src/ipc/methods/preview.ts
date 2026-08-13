@@ -3,6 +3,9 @@ import {
   DesktopPreviewArtifactInputSchema,
   DesktopPreviewAutomationClickInputSchema,
   DesktopPreviewAutomationEvaluateInputSchema,
+  DesktopPreviewAutomationHighlightApplyInputSchema,
+  DesktopPreviewAutomationHighlightClearInputSchema,
+  DesktopPreviewAutomationHighlightUpdateInputSchema,
   DesktopPreviewAutomationPressInputSchema,
   DesktopPreviewAutomationScrollInputSchema,
   DesktopPreviewAutomationTypeInputSchema,
@@ -19,6 +22,7 @@ import {
   PreviewAnnotationSubmissionResultSchema,
   PreviewAutomationSnapshot,
   PreviewAutomationStatus,
+  PreviewAutomationHighlightRenderResult,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -324,6 +328,36 @@ export const automationScroll = DesktopIpc.makeIpcMethod({
   }),
 });
 
+export const automationHighlightApply = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_AUTOMATION_HIGHLIGHT_APPLY_CHANNEL,
+  payload: DesktopPreviewAutomationHighlightApplyInputSchema,
+  result: PreviewAutomationHighlightRenderResult,
+  handler: Effect.fn("desktop.ipc.preview.automationHighlightApply")(function* ({ tabId, input }) {
+    const manager = yield* PreviewManager.PreviewManager;
+    return yield* manager.automationHighlightApply(tabId, input);
+  }),
+});
+
+export const automationHighlightUpdate = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_AUTOMATION_HIGHLIGHT_UPDATE_CHANNEL,
+  payload: DesktopPreviewAutomationHighlightUpdateInputSchema,
+  result: PreviewAutomationHighlightRenderResult,
+  handler: Effect.fn("desktop.ipc.preview.automationHighlightUpdate")(function* ({ tabId, input }) {
+    const manager = yield* PreviewManager.PreviewManager;
+    return yield* manager.automationHighlightUpdate(tabId, input);
+  }),
+});
+
+export const automationHighlightClear = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_AUTOMATION_HIGHLIGHT_CLEAR_CHANNEL,
+  payload: DesktopPreviewAutomationHighlightClearInputSchema,
+  result: Schema.Boolean,
+  handler: Effect.fn("desktop.ipc.preview.automationHighlightClear")(function* ({ tabId, input }) {
+    const manager = yield* PreviewManager.PreviewManager;
+    return yield* manager.automationHighlightClear(tabId, input);
+  }),
+});
+
 export const automationEvaluate = DesktopIpc.makeIpcMethod({
   channel: IpcChannels.PREVIEW_AUTOMATION_EVALUATE_CHANNEL,
   payload: DesktopPreviewAutomationEvaluateInputSchema,
@@ -385,6 +419,9 @@ export const methods = [
   automationType,
   automationPress,
   automationScroll,
+  automationHighlightApply,
+  automationHighlightUpdate,
+  automationHighlightClear,
   automationEvaluate,
   automationWaitFor,
   startRecording,

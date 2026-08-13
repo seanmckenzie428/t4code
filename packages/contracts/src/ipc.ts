@@ -65,6 +65,10 @@ import type {
 import {
   PreviewAutomationClickInput,
   PreviewAutomationEvaluateInput,
+  PreviewAutomationHighlightApplyInput,
+  PreviewAutomationHighlightClearInput,
+  PreviewAutomationHighlightRenderResult,
+  PreviewAutomationHighlightUpdateInput,
   PreviewAutomationHost,
   PreviewAutomationHostFocus,
   PreviewAutomationPressInput,
@@ -984,6 +988,21 @@ export const DesktopPreviewAutomationScrollInputSchema = Schema.Struct({
   input: PreviewAutomationScrollInput,
 });
 
+export const DesktopPreviewAutomationHighlightApplyInputSchema = Schema.Struct({
+  tabId: DesktopPreviewTabIdSchema,
+  input: PreviewAutomationHighlightApplyInput,
+});
+
+export const DesktopPreviewAutomationHighlightUpdateInputSchema = Schema.Struct({
+  tabId: DesktopPreviewTabIdSchema,
+  input: PreviewAutomationHighlightUpdateInput,
+});
+
+export const DesktopPreviewAutomationHighlightClearInputSchema = Schema.Struct({
+  tabId: DesktopPreviewTabIdSchema,
+  input: PreviewAutomationHighlightClearInput,
+});
+
 export const DesktopPreviewAutomationEvaluateInputSchema = Schema.Struct({
   tabId: DesktopPreviewTabIdSchema,
   input: PreviewAutomationEvaluateInput,
@@ -1129,6 +1148,18 @@ export interface DesktopPreviewBridge {
     type: (tabId: string, input: PreviewAutomationTypeInput) => Promise<void>;
     press: (tabId: string, input: PreviewAutomationPressInput) => Promise<void>;
     scroll: (tabId: string, input: PreviewAutomationScrollInput) => Promise<void>;
+    highlightApply: (
+      tabId: string,
+      input: PreviewAutomationHighlightApplyInput,
+    ) => Promise<PreviewAutomationHighlightRenderResult>;
+    highlightUpdate: (
+      tabId: string,
+      input: PreviewAutomationHighlightUpdateInput,
+    ) => Promise<PreviewAutomationHighlightRenderResult>;
+    highlightClear: (
+      tabId: string,
+      input: PreviewAutomationHighlightClearInput,
+    ) => Promise<boolean>;
     evaluate: (tabId: string, input: PreviewAutomationEvaluateInput) => Promise<unknown>;
     waitFor: (tabId: string, input: PreviewAutomationWaitForInput) => Promise<void>;
   };

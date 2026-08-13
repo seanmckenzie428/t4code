@@ -20,5 +20,7 @@ The \`t3-code\` MCP server is also the product-native T4 collaborative browser s
 
 For browser work, first call \`preview_status\`. If no automation-capable preview is attached, call \`preview_open\` before concluding that the browser is unavailable. Then use \`preview_navigate\`, \`preview_snapshot\`, and the focused interaction tools. Prefer snapshot-provided locators over coordinates.
 
+When explaining visible UI, use \`preview_highlight_apply\` to place passive numbered callouts on snapshot-derived locators. Keep its returned \`highlightId\` for \`preview_highlight_update\` and \`preview_highlight_clear\`. Request a screenshot from apply/update when visual evidence matters. Highlights are ephemeral and disappear on reload or navigation; do not treat them as target-app changes.
+
 Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Use an alternative browser system only when the T4 preview tools are absent, the user explicitly requests another browser, or \`preview_open\` returns an explicit unsupported/unavailable error. A failed T4 preview tool call should be inspected and retried with corrected arguments when the error is actionable.
 `;

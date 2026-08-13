@@ -1,7 +1,13 @@
 import { expect, it } from "@effect/vitest";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { EnvironmentId, PreviewTabId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  PREVIEW_AUTOMATION_OPERATIONS,
+  PreviewTabId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Stream from "effect/Stream";
@@ -164,6 +170,7 @@ it.effect("registers annotated tools and preserves authenticated request context
       const events = yield* broker.connect({
         clientId: "mcp-test-client",
         environmentId,
+        supportedOperations: [...PREVIEW_AUTOMATION_OPERATIONS],
       });
       yield* Stream.runForEach(events, (event) => {
         if (event.type === "connected") return Effect.void;
@@ -192,16 +199,28 @@ it.effect("registers annotated tools and preserves authenticated request context
                     height: 5,
                   },
                 }
-              : event.request.operation === "press"
-                ? undefined
-                : {
-                    available: true,
-                    visible: true,
+              : event.request.operation === "highlightApply"
+                ? {
                     tabId,
-                    url: "http://example.test/",
-                    title: "Example",
-                    loading: false,
-                  },
+                    highlightId: "highlight-mcp-test",
+                    count: 1,
+                    screenshot: {
+                      mimeType: "image/png",
+                      data: Buffer.from("highlight-png").toString("base64"),
+                      width: 20,
+                      height: 10,
+                    },
+                  }
+                : event.request.operation === "press"
+                  ? undefined
+                  : {
+                      available: true,
+                      visible: true,
+                      tabId,
+                      url: "http://example.test/",
+                      title: "Example",
+                      loading: false,
+                    },
         });
       }).pipe(Effect.forkScoped);
       yield* Effect.yieldNow;
@@ -259,6 +278,30 @@ it.effect("registers annotated tools and preserves authenticated request context
       });
       expect(routedRequests.find(({ operation }) => operation === "snapshot")?.tabId).toBe(
         alternateTabId,
+      );
+
+      const highlight = yield* server
+        .callTool({
+          name: "preview_highlight_apply",
+          arguments: {
+            callouts: [{ locator: "role=button[name='Send']", title: "Send" }],
+            screenshot: true,
+          },
+        })
+        .pipe(
+          Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+          Effect.provideService(McpSchema.McpServerClient, client),
+        );
+      expect(highlight.isError).toBe(false);
+      expect(highlight.content.some((content) => content.type === "image")).toBe(true);
+      expect(highlight.structuredContent).toEqual({
+        tabId,
+        highlightId: "highlight-mcp-test",
+        count: 1,
+        screenshot: { mimeType: "image/png", width: 20, height: 10 },
+      });
+      expect(JSON.stringify(highlight.structuredContent)).not.toContain(
+        Buffer.from("highlight-png").toString("base64"),
       );
 
       const press = yield* server

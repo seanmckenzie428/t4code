@@ -10,6 +10,9 @@ import {
 } from "./preview.ts";
 import {
   PreviewAutomationHost,
+  PreviewAutomationHighlightApplyInput,
+  PreviewAutomationHighlightClearInput,
+  PreviewAutomationHighlightUpdateInput,
   PreviewAutomationError,
   PreviewAutomationOpenInput,
   PreviewAutomationResizeInput,
@@ -28,6 +31,9 @@ const decodeResizeResult = Schema.decodeUnknownSync(PreviewAutomationResizeResul
 const decodeAutomationHost = Schema.decodeUnknownSync(PreviewAutomationHost);
 const decodeAutomationError = Schema.decodeUnknownSync(PreviewAutomationError);
 const decodeAutomationStatus = Schema.decodeUnknownSync(PreviewAutomationStatus);
+const decodeHighlightApply = Schema.decodeUnknownSync(PreviewAutomationHighlightApplyInput);
+const decodeHighlightUpdate = Schema.decodeUnknownSync(PreviewAutomationHighlightUpdateInput);
+const decodeHighlightClear = Schema.decodeUnknownSync(PreviewAutomationHighlightClearInput);
 
 describe("PreviewAutomationOpenInput", () => {
   it("accepts the inline preview visibility flag", () => {
@@ -36,6 +42,32 @@ describe("PreviewAutomationOpenInput", () => {
 
   it("retains the legacy show visibility alias", () => {
     expect(decodeOpenInput({ show: false })).toEqual({ show: false });
+  });
+});
+
+describe("preview automation highlights", () => {
+  const callout = { locator: "role=button[name='Send']", explanation: "Submits message" };
+
+  it("accepts bounded locator callouts and ID-scoped updates", () => {
+    expect(decodeHighlightApply({ callouts: [callout], scrollTo: 1, screenshot: true })).toEqual({
+      callouts: [callout],
+      scrollTo: 1,
+      screenshot: true,
+    });
+    expect(
+      decodeHighlightUpdate({ highlightId: "highlight-1", callouts: [callout] }),
+    ).toMatchObject({ highlightId: "highlight-1" });
+    expect(decodeHighlightClear({ highlightId: "highlight-1" })).toEqual({
+      highlightId: "highlight-1",
+    });
+  });
+
+  it("rejects empty, oversized, and invalid scroll targets", () => {
+    expect(() => decodeHighlightApply({ callouts: [] })).toThrow();
+    expect(() =>
+      decodeHighlightApply({ callouts: Array.from({ length: 13 }, () => callout) }),
+    ).toThrow();
+    expect(() => decodeHighlightApply({ callouts: [callout], scrollTo: 2 })).toThrow();
   });
 });
 

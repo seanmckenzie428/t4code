@@ -13,6 +13,11 @@ import {
   type PreviewAutomationSetColorSchemeInput,
   type PreviewAutomationSetColorSchemeResult,
   type PreviewAutomationHost as PreviewAutomationHostState,
+  type PreviewAutomationHighlightApplyInput,
+  type PreviewAutomationHighlightClearInput,
+  type PreviewAutomationHighlightClearResult,
+  type PreviewAutomationHighlightResult,
+  type PreviewAutomationHighlightUpdateInput,
   type PreviewAutomationRequest,
   type PreviewAutomationStatus,
   type PreviewRenderedViewportSize,
@@ -606,6 +611,32 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
               ready.runtimeTabId,
               request.input as Parameters<typeof ready.bridge.automation.scroll>[1],
             );
+          }
+          case "highlightApply": {
+            const ready = await requireReadyTab();
+            const result = await ready.bridge.automation.highlightApply(
+              ready.runtimeTabId,
+              request.input as PreviewAutomationHighlightApplyInput,
+            );
+            return { tabId: ready.tabId, ...result } satisfies PreviewAutomationHighlightResult;
+          }
+          case "highlightUpdate": {
+            const ready = await requireReadyTab();
+            const result = await ready.bridge.automation.highlightUpdate(
+              ready.runtimeTabId,
+              request.input as PreviewAutomationHighlightUpdateInput,
+            );
+            return { tabId: ready.tabId, ...result } satisfies PreviewAutomationHighlightResult;
+          }
+          case "highlightClear": {
+            const ready = await requireReadyTab();
+            const input = request.input as PreviewAutomationHighlightClearInput;
+            const cleared = await ready.bridge.automation.highlightClear(ready.runtimeTabId, input);
+            return {
+              tabId: ready.tabId,
+              highlightId: input.highlightId,
+              cleared,
+            } satisfies PreviewAutomationHighlightClearResult;
           }
           case "evaluate": {
             const ready = await requireReadyTab();

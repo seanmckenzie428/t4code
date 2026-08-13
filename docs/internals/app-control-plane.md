@@ -140,6 +140,9 @@ DOM polling and no new continuously repainting animation. Authenticated server
 actions and confirmations work through the existing connection model for local,
 relay, tunnel, web, and desktop clients.
 
+The desktop-hosted preview automation path also supports passive, ephemeral callouts. Its typed
+contract and isolation rules are documented in [Integrated browser highlights](browser-highlights.md).
+
 ## Known delivery gaps
 
 - Confirmation uses the focused client's exact server-derived prompt; a

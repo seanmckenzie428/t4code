@@ -2,6 +2,8 @@ import * as Effect from "effect/Effect";
 import type {
   PreviewAutomationOperation,
   PreviewAutomationOpenInput,
+  PreviewAutomationHighlightClearResult,
+  PreviewAutomationHighlightResult,
   PreviewAutomationRecordingArtifact,
   PreviewAutomationRecordingStatus,
   PreviewAutomationResizeResult,
@@ -13,7 +15,12 @@ import type {
 
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as PreviewAutomationBroker from "../../PreviewAutomationBroker.ts";
-import { PreviewSnapshotToolkit, PreviewStandardToolkit, PreviewToolkit } from "./tools.ts";
+import {
+  PreviewHighlightToolkit,
+  PreviewSnapshotToolkit,
+  PreviewStandardToolkit,
+  PreviewToolkit,
+} from "./tools.ts";
 
 export function normalizePreviewOpenInput(
   input: PreviewAutomationOpenInput,
@@ -77,6 +84,12 @@ const handlers = {
     invokeTargeted<void>("type", input, input.timeoutMs).pipe(Effect.as(null)),
   preview_press: (input) => invokeTargeted<void>("press", input).pipe(Effect.as(null)),
   preview_scroll: (input) => invokeTargeted<void>("scroll", input).pipe(Effect.as(null)),
+  preview_highlight_apply: (input) =>
+    invokeTargeted<PreviewAutomationHighlightResult>("highlightApply", input),
+  preview_highlight_update: (input) =>
+    invokeTargeted<PreviewAutomationHighlightResult>("highlightUpdate", input),
+  preview_highlight_clear: (input) =>
+    invokeTargeted<PreviewAutomationHighlightClearResult>("highlightClear", input),
   preview_evaluate: (input) =>
     invokeTargeted<unknown>("evaluate", input).pipe(Effect.map((result) => result ?? null)),
   preview_wait_for: (input) =>
@@ -87,12 +100,18 @@ const handlers = {
     invokeTargeted<PreviewAutomationRecordingArtifact>("recordingStop", input ?? {}),
 } satisfies Parameters<typeof PreviewToolkit.toLayer>[0];
 
-const { preview_snapshot, ...standardHandlers } = handlers;
+const { preview_snapshot, preview_highlight_apply, preview_highlight_update, ...standardHandlers } =
+  handlers;
 
 export const PreviewStandardToolkitHandlersLive = PreviewStandardToolkit.toLayer(standardHandlers);
 
 export const PreviewSnapshotToolkitHandlersLive = PreviewSnapshotToolkit.toLayer({
   preview_snapshot,
+});
+
+export const PreviewHighlightToolkitHandlersLive = PreviewHighlightToolkit.toLayer({
+  preview_highlight_apply,
+  preview_highlight_update,
 });
 
 export const PreviewToolkitHandlersLive = PreviewToolkit.toLayer(handlers);

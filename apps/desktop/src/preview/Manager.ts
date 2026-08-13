@@ -19,6 +19,10 @@ import type {
   PreviewAutomationActionEvent,
   PreviewAutomationConsoleEntry,
   PreviewAutomationEvaluateInput,
+  PreviewAutomationHighlightApplyInput,
+  PreviewAutomationHighlightClearInput,
+  PreviewAutomationHighlightRenderResult,
+  PreviewAutomationHighlightUpdateInput,
   PreviewAutomationPressInput,
   PreviewAutomationNetworkEntry,
   PreviewAutomationScrollInput,
@@ -30,6 +34,7 @@ import type {
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { normalizePreviewUrl } from "@t3tools/shared/preview";
 import { BrowserWindow, type Session, clipboard, nativeImage, shell, webContents } from "electron";
+import * as NodeCrypto from "node:crypto";
 import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -64,6 +69,10 @@ import {
 import { isPreviewAnnotationPayload } from "./PickedElementPayload.ts";
 import { playwrightInjectedRuntimeInstallExpression } from "./PlaywrightInjectedRuntime.ts";
 import { makePreviewAutomationKeySequence } from "./PreviewKeyboard.ts";
+import {
+  buildPreviewHighlightClearExpression,
+  buildPreviewHighlightExpression,
+} from "./PreviewHighlights.ts";
 
 export type PreviewNavStatus =
   | { kind: "Idle" }
@@ -3151,6 +3160,130 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     );
   });
 
+  const performAutomationHighlight = Effect.fn("PreviewManager.performAutomationHighlight")(
+    function* (
+      tabId: string,
+      wc: Electron.WebContents,
+      input: PreviewAutomationHighlightApplyInput | PreviewAutomationHighlightUpdateInput,
+      mode: "apply" | "update",
+      send: SendCommand,
+    ) {
+      yield* send("Runtime.enable");
+      yield* ensurePlaywrightInjected(tabId, send);
+      const highlightId =
+        mode === "update"
+          ? (input as PreviewAutomationHighlightUpdateInput).highlightId
+          : NodeCrypto.randomUUID();
+      const result = yield* evaluateWithDebugger<
+        | { ok: true; count: number }
+        | { staleHighlight: true }
+        | { notFound: number }
+        | { invalidSelector: number; message: string }
+      >(
+        tabId,
+        send,
+        buildPreviewHighlightExpression({
+          mode,
+          highlightId,
+          callouts: input.callouts,
+          ...(input.scrollTo === undefined ? {} : { scrollTo: input.scrollTo }),
+        }),
+        true,
+      );
+      if ("staleHighlight" in result) {
+        return yield* new PreviewAutomationHighlightNotFoundError({
+          operation: mode === "apply" ? "highlightApply" : "highlightUpdate",
+          tabId,
+          highlightId,
+        });
+      }
+      if ("invalidSelector" in result) {
+        const locator = input.callouts[result.invalidSelector]?.locator ?? "";
+        return yield* new PreviewAutomationInvalidSelectorError({
+          operation: mode === "apply" ? "highlightApply" : "highlightUpdate",
+          tabId,
+          selectorKind: "locator",
+          selectorLength: locator.length,
+          reasonLength: result.message.length,
+          cause: result,
+        });
+      }
+      if ("notFound" in result) {
+        const locator = input.callouts[result.notFound]?.locator ?? "";
+        return yield* new PreviewAutomationTargetNotFoundError({
+          operation: mode === "apply" ? "highlightApply" : "highlightUpdate",
+          tabId,
+          selectorKind: "locator",
+          selectorLength: locator.length,
+        });
+      }
+      const screenshot = input.screenshot
+        ? yield* attemptPromise(
+            {
+              operation: "automationHighlight.capturePage",
+              tabId,
+              webContentsId: wc.id,
+            },
+            () => wc.capturePage(),
+          ).pipe(
+            Effect.map((sourceImage) => {
+              const sourceSize = sourceImage.getSize();
+              const image =
+                sourceSize.width > MAX_SCREENSHOT_WIDTH
+                  ? sourceImage.resize({ width: MAX_SCREENSHOT_WIDTH })
+                  : sourceImage;
+              const size = image.getSize();
+              return {
+                mimeType: "image/png" as const,
+                data: image.toPNG().toString("base64"),
+                width: size.width,
+                height: size.height,
+              };
+            }),
+          )
+        : undefined;
+      return {
+        highlightId,
+        count: result.count,
+        ...(screenshot === undefined ? {} : { screenshot }),
+      } satisfies PreviewAutomationHighlightRenderResult;
+    },
+  );
+
+  const automationHighlightApply = Effect.fn("PreviewManager.automationHighlightApply")(function* (
+    tabId: string,
+    input: PreviewAutomationHighlightApplyInput,
+  ) {
+    const wc = yield* requireWebContents(tabId);
+    return yield* withControlSession(tabId, wc, "highlightApply", (send) =>
+      performAutomationHighlight(tabId, wc, input, "apply", send),
+    );
+  });
+
+  const automationHighlightUpdate = Effect.fn("PreviewManager.automationHighlightUpdate")(
+    function* (tabId: string, input: PreviewAutomationHighlightUpdateInput) {
+      const wc = yield* requireWebContents(tabId);
+      return yield* withControlSession(tabId, wc, "highlightUpdate", (send) =>
+        performAutomationHighlight(tabId, wc, input, "update", send),
+      );
+    },
+  );
+
+  const automationHighlightClear = Effect.fn("PreviewManager.automationHighlightClear")(function* (
+    tabId: string,
+    input: PreviewAutomationHighlightClearInput,
+  ) {
+    const wc = yield* requireWebContents(tabId);
+    return yield* withControlSession(tabId, wc, "highlightClear", (send) =>
+      evaluateWithDebugger<{ cleared: boolean }>(
+        tabId,
+        send,
+        buildPreviewHighlightClearExpression(input.highlightId),
+        true,
+      ).pipe(Effect.map((result) => result.cleared)),
+    );
+  });
+
   const performAutomationEvaluate = Effect.fn("PreviewManager.performAutomationEvaluate")(
     function* (tabId: string, input: PreviewAutomationEvaluateInput, send: SendCommand) {
       yield* send("Runtime.enable");
@@ -3318,6 +3451,9 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
     automationEvaluate,
     automationPress,
     automationScroll,
+    automationHighlightApply,
+    automationHighlightUpdate,
+    automationHighlightClear,
     automationSnapshot,
     automationStatus,
     automationType,
@@ -3480,6 +3616,19 @@ export class PreviewAutomationTargetNotFoundError extends Schema.TaggedErrorClas
   }
 }
 
+export class PreviewAutomationHighlightNotFoundError extends Schema.TaggedErrorClass<PreviewAutomationHighlightNotFoundError>()(
+  "PreviewAutomationHighlightNotFoundError",
+  {
+    operation: Schema.Literals(["highlightApply", "highlightUpdate"]),
+    tabId: Schema.String,
+    highlightId: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `Preview highlight ${this.highlightId} is no longer active in tab ${this.tabId}`;
+  }
+}
+
 export class PreviewAutomationTargetNotEditableError extends Schema.TaggedErrorClass<PreviewAutomationTargetNotEditableError>()(
   "PreviewAutomationTargetNotEditableError",
   {
@@ -3595,6 +3744,7 @@ export const PreviewManagerError = Schema.Union([
   PreviewAutomationDebuggerAttachedError,
   PreviewAutomationEvaluationError,
   PreviewAutomationTargetNotFoundError,
+  PreviewAutomationHighlightNotFoundError,
   PreviewAutomationTargetNotEditableError,
   PreviewAutomationCoordinatesOutsideViewportError,
   PreviewAutomationInvalidSelectorError,
@@ -3684,6 +3834,18 @@ export class PreviewManager extends Context.Service<
       tabId: string,
       input: PreviewAutomationScrollInput,
     ) => Effect.Effect<void, PreviewManagerError>;
+    readonly automationHighlightApply: (
+      tabId: string,
+      input: PreviewAutomationHighlightApplyInput,
+    ) => Effect.Effect<PreviewAutomationHighlightRenderResult, PreviewManagerError>;
+    readonly automationHighlightUpdate: (
+      tabId: string,
+      input: PreviewAutomationHighlightUpdateInput,
+    ) => Effect.Effect<PreviewAutomationHighlightRenderResult, PreviewManagerError>;
+    readonly automationHighlightClear: (
+      tabId: string,
+      input: PreviewAutomationHighlightClearInput,
+    ) => Effect.Effect<boolean, PreviewManagerError>;
     readonly automationEvaluate: (
       tabId: string,
       input: PreviewAutomationEvaluateInput,
@@ -3777,6 +3939,9 @@ export const make = Effect.gen(function* PreviewManagerMake() {
     automationType: operations.automationType,
     automationPress: operations.automationPress,
     automationScroll: operations.automationScroll,
+    automationHighlightApply: operations.automationHighlightApply,
+    automationHighlightUpdate: operations.automationHighlightUpdate,
+    automationHighlightClear: operations.automationHighlightClear,
     automationEvaluate: operations.automationEvaluate,
     automationWaitFor: operations.automationWaitFor,
     subscribeStateChanges: operations.subscribeStateChanges,

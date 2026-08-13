@@ -28,6 +28,8 @@ They can open the full generated view, an approved HTTP(S) URL in the system bro
 T3's dedicated browser; they do not inject arbitrary code into app chrome.
 
 The dedicated browser is also available from Global Search and opens with `mod+shift+b`.
+Agents can add ephemeral numbered explanations to pages in that browser; see
+[Browser highlights](browser-highlights.md).
 
 Destructive and publication commands do not execute without a per-call human confirmation host.
 Approval responses, user-input responses, credentials, pairing, grant changes, raw internal

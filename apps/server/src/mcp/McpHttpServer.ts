@@ -21,10 +21,14 @@ import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpSessionRegistry from "./McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./PreviewAutomationBroker.ts";
 import {
+  PreviewHighlightToolkitHandlersLive,
   PreviewSnapshotToolkitHandlersLive,
   PreviewStandardToolkitHandlersLive,
 } from "./toolkits/preview/handlers.ts";
 import {
+  PreviewHighlightTool,
+  PreviewHighlightToolkit,
+  PreviewHighlightUpdateTool,
   PreviewSnapshotTool,
   PreviewSnapshotToolkit,
   PreviewStandardToolkit,
@@ -210,6 +214,124 @@ const registerPreviewSnapshot = Effect.fn("McpHttpServer.registerPreviewSnapshot
   });
 });
 
+const previewHighlightFailure =
+  (operation: "highlightApply" | "highlightUpdate") =>
+  <E>(cause: Cause.Cause<E>) => {
+    if (Cause.hasInterrupts(cause) || cause.reasons.some(Cause.isDieReason)) {
+      return Effect.failCause(cause).pipe(Effect.orDie);
+    }
+    const failures = cause.reasons.filter(Cause.isFailReason);
+    const firstFailure = failures[0]?.error;
+    const errorTag =
+      typeof firstFailure === "object" &&
+      firstFailure !== null &&
+      "_tag" in firstFailure &&
+      typeof firstFailure._tag === "string"
+        ? firstFailure._tag
+        : "PreviewHighlightError";
+    const result = new McpSchema.CallToolResult({
+      isError: true,
+      structuredContent: {
+        error: { _tag: errorTag, operation, failureCount: failures.length },
+      },
+      content: [{ type: "text", text: "Preview highlighting failed." }],
+    });
+    return Effect.logWarning("preview highlighting failed", {
+      operation,
+      errorTag,
+      failureCount: failures.length,
+    }).pipe(Effect.as(result));
+  };
+
+const registerPreviewHighlights = Effect.fn("McpHttpServer.registerPreviewHighlights")(
+  function* () {
+    const server = yield* McpServer.McpServer;
+    const broker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
+    const built = yield* PreviewHighlightToolkit;
+    const entries = [
+      [PreviewHighlightTool, "preview_highlight_apply", "highlightApply"],
+      [PreviewHighlightUpdateTool, "preview_highlight_update", "highlightUpdate"],
+    ] as const;
+    yield* Effect.forEach(entries, ([tool, name, operation]) =>
+      server.addTool({
+        tool: new McpSchema.Tool({
+          name: tool.name,
+          description: Tool.getDescription(tool),
+          inputSchema: Tool.getJsonSchema(tool),
+          annotations: {
+            ...Context.getOption(tool.annotations, Tool.Title).pipe(
+              Option.map((title) => ({ title })),
+              Option.getOrUndefined,
+            ),
+            readOnlyHint: Context.get(tool.annotations, Tool.Readonly),
+            destructiveHint: Context.get(tool.annotations, Tool.Destructive),
+            idempotentHint: Context.get(tool.annotations, Tool.Idempotent),
+            openWorldHint: Context.get(tool.annotations, Tool.OpenWorld),
+          },
+        }),
+        annotations: tool.annotations,
+        handle: (payload) =>
+          Effect.withFiber((fiber) => {
+            const invocation = Context.getUnsafe(
+              fiber.context,
+              McpInvocationContext.McpInvocationContext,
+            );
+            return built.handle(name, payload).pipe(
+              Stream.unwrap,
+              Stream.run(Sink.last()),
+              Effect.flatMap(Effect.fromOption),
+              Effect.provideService(PreviewAutomationBroker.PreviewAutomationBroker, broker),
+              Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+              Effect.matchCauseEffect({
+                onFailure: previewHighlightFailure(operation),
+                onSuccess: ({ encodedResult }) => {
+                  const result = encodedResult as {
+                    readonly screenshot?: {
+                      readonly mimeType: "image/png";
+                      readonly data: string;
+                      readonly width: number;
+                      readonly height: number;
+                    };
+                    readonly [key: string]: unknown;
+                  };
+                  const { screenshot, ...rest } = result;
+                  const metadata = screenshot
+                    ? {
+                        ...rest,
+                        screenshot: {
+                          mimeType: screenshot.mimeType,
+                          width: screenshot.width,
+                          height: screenshot.height,
+                        },
+                      }
+                    : rest;
+                  return Effect.succeed(
+                    new McpSchema.CallToolResult({
+                      isError: false,
+                      structuredContent: metadata,
+                      content: [
+                        { type: "text", text: JSON.stringify(metadata) },
+                        ...(screenshot
+                          ? [
+                              {
+                                type: "image" as const,
+                                data: new Uint8Array(Buffer.from(screenshot.data, "base64")),
+                                mimeType: screenshot.mimeType,
+                              },
+                            ]
+                          : []),
+                      ],
+                    }),
+                  );
+                },
+              }),
+            );
+          }),
+      }),
+    );
+  },
+);
+
 const PreviewStandardToolkitRegistrationLive = McpServer.toolkit(PreviewStandardToolkit).pipe(
   Layer.provide(PreviewStandardToolkitHandlersLive),
 );
@@ -218,9 +340,14 @@ const PreviewSnapshotRegistrationLive = Layer.effectDiscard(registerPreviewSnaps
   Layer.provide(PreviewSnapshotToolkitHandlersLive),
 );
 
+const PreviewHighlightRegistrationLive = Layer.effectDiscard(registerPreviewHighlights()).pipe(
+  Layer.provide(PreviewHighlightToolkitHandlersLive),
+);
+
 export const PreviewToolkitRegistrationLive = Layer.mergeAll(
   PreviewStandardToolkitRegistrationLive,
   PreviewSnapshotRegistrationLive,
+  PreviewHighlightRegistrationLive,
 );
 
 export const AppControlToolkitRegistrationLive = McpServer.toolkit(AppControlToolkit).pipe(

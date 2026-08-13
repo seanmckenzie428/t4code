@@ -26,6 +26,9 @@ The MCP HTTP lifecycle test needs a temporary local port.
    revoke grant, and reject new delegation.
 7. Repeat drawer, confirmation, preview, terminal, and iframe checks in desktop.
    Connect remote web and verify focus handoff.
+8. In the desktop preview, apply multiple colored callouts, scroll one into view, update by the
+   returned ID, and capture a screenshot. Verify page controls remain clickable and accessibility
+   inspection omits the callouts. Reload, verify the callouts disappear, then clear the stale ID.
 
 ## Extension and Lotus checklist
 

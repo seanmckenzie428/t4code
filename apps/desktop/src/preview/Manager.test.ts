@@ -1778,6 +1778,87 @@ describe("PreviewManager", () => {
     ),
   );
 
+  effectIt.effect("applies, updates, screenshots, and clears ID-scoped passive highlights", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const expressions: string[] = [];
+        const png = Buffer.from("highlight-png");
+        const capturePage = vi.fn(async () => ({
+          getSize: () => ({ width: 800, height: 600 }),
+          resize: vi.fn(),
+          toPNG: () => png,
+        }));
+        const sendCommand = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+          if (method !== "Runtime.evaluate") return undefined;
+          const expression = String(params?.["expression"] ?? "");
+          expressions.push(expression);
+          if (expression === "Boolean(globalThis.__t3PlaywrightInjected)") {
+            return { result: { value: true } };
+          }
+          if (expression.includes("return { cleared: false }")) {
+            return { result: { value: { cleared: true } } };
+          }
+          return { result: { value: { ok: true, count: 2 } } };
+        });
+        fromId.mockReturnValue({
+          id: 42,
+          isDestroyed: () => false,
+          getType: () => "webview",
+          getURL: () => "https://example.com",
+          getTitle: () => "Example",
+          isLoading: () => false,
+          isDevToolsOpened: () => false,
+          getZoomFactor: () => 1,
+          setZoomFactor: vi.fn(),
+          on: vi.fn(),
+          off: vi.fn(),
+          ipc: { on: vi.fn(), off: vi.fn() },
+          send: webviewSend,
+          navigationHistory: { canGoBack: () => false, canGoForward: () => false },
+          setWindowOpenHandler: vi.fn(),
+          debugger: {
+            isAttached: () => false,
+            attach: vi.fn(),
+            sendCommand,
+            on: vi.fn(),
+            off: vi.fn(),
+          },
+          capturePage,
+        } as never);
+
+        yield* manager.createTab("tab_highlights");
+        yield* manager.registerWebview("tab_highlights", 42);
+        const applied = yield* manager.automationHighlightApply("tab_highlights", {
+          callouts: [
+            { locator: "role=button[name='Send']", title: "Send", color: "blue" },
+            { locator: "text=Cancel", explanation: "Leave without sending", color: "amber" },
+          ],
+          scrollTo: 2,
+          screenshot: true,
+        });
+        const updated = yield* manager.automationHighlightUpdate("tab_highlights", {
+          highlightId: applied.highlightId,
+          callouts: [{ locator: "text=Cancel", title: "Cancel" }],
+        });
+        const cleared = yield* manager.automationHighlightClear("tab_highlights", {
+          highlightId: applied.highlightId,
+        });
+
+        expect(applied).toMatchObject({
+          count: 2,
+          screenshot: { mimeType: "image/png", data: png.toString("base64") },
+        });
+        expect(updated).toMatchObject({ highlightId: applied.highlightId, count: 2 });
+        expect(cleared).toBe(true);
+        expect(capturePage).toHaveBeenCalledOnce();
+        expect(expressions.some((expression) => expression.includes('"scrollTo":2'))).toBe(true);
+        expect(expressions.some((expression) => expression.includes(applied.highlightId))).toBe(
+          true,
+        );
+      }),
+    ),
+  );
+
   effectIt.effect("types in background webviews and enables native key input", () =>
     withManager((manager) =>
       Effect.gen(function* () {
