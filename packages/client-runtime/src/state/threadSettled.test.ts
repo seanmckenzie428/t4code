@@ -9,6 +9,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   canSettle,
+  changeRequestAutoSettles,
   effectiveSettled,
   hasQueuedTurnStart,
   threadLastActivityAt,
@@ -154,28 +155,41 @@ describe("effectiveSettled", () => {
     },
   );
 
-  it("treats closed change requests like merged ones", () => {
+  it("keeps completed change requests active when automatic settlement is off", () => {
     const shell = makeShell({ activityAt: null });
-    expect(
-      effectiveSettled(shell, {
-        now: NOW,
-        autoSettleAfterDays: null,
-        changeRequestState: "closed",
-      }),
-    ).toBe(true);
+    for (const changeRequestState of ["merged", "closed"] as const) {
+      expect(
+        effectiveSettled(shell, {
+          now: NOW,
+          autoSettleAfterDays: null,
+          changeRequestState,
+        }),
+      ).toBe(false);
+    }
   });
 
-  it("settles immediately when a change request merges or closes", () => {
+  it("settles immediately when enabled and a change request merges or closes", () => {
     const recentlyActive = makeShell({ activityAt: "2026-04-09T23:59:59.999Z" });
     for (const changeRequestState of ["merged", "closed"] as const) {
       expect(
         effectiveSettled(recentlyActive, {
           now: NOW,
-          autoSettleAfterDays: null,
+          autoSettleAfterDays: 3,
           changeRequestState,
         }),
       ).toBe(true);
     }
+  });
+
+  it("keeps explicit settlement authoritative when automation is off", () => {
+    const shell = makeShell({ settledOverride: "settled", activityAt: FRESH });
+    expect(
+      effectiveSettled(shell, {
+        now: NOW,
+        autoSettleAfterDays: null,
+        changeRequestState: "merged",
+      }),
+    ).toBe(true);
   });
 
   it("never auto-settles a stale thread with an open change request", () => {
@@ -280,6 +294,16 @@ describe("effectiveSettled", () => {
 
     expect(effectiveSettled(boundary, { now: NOW, autoSettleAfterDays: 3 })).toBe(false);
     expect(effectiveSettled(stale, { now: NOW, autoSettleAfterDays: null })).toBe(false);
+  });
+});
+
+describe("changeRequestAutoSettles", () => {
+  it("uses the automatic settlement preference as the master switch", () => {
+    expect(changeRequestAutoSettles("merged", null)).toBe(false);
+    expect(changeRequestAutoSettles("closed", null)).toBe(false);
+    expect(changeRequestAutoSettles("merged", 3)).toBe(true);
+    expect(changeRequestAutoSettles("closed", 3)).toBe(true);
+    expect(changeRequestAutoSettles("open", 3)).toBe(false);
   });
 });
 

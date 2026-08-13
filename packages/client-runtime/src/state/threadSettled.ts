@@ -3,6 +3,13 @@ import type { OrchestrationThreadShell } from "@t3tools/contracts";
 
 export type ChangeRequestStateLike = "open" | "closed" | "merged";
 
+export function changeRequestAutoSettles(
+  state: ChangeRequestStateLike | null | undefined,
+  autoSettleAfterDays: number | null,
+): boolean {
+  return autoSettleAfterDays !== null && (state === "merged" || state === "closed");
+}
+
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
 export function threadLastActivityAt(shell: OrchestrationThreadShell): string | null {
@@ -221,9 +228,9 @@ export function threadWokeAt(
  * queued turn) are checked first and hold a thread active regardless of any
  * override. Past the blockers, the explicit user override (thread.settle /
  * thread.unsettle commands, projected into settledOverride + settledAt)
- * wins in both directions; without one, a thread auto-settles on a
- * merged/closed PR immediately or on inactivity past the window — except
- * that an open PR blocks the inactivity path entirely. The server
+ * wins in both directions; without one, enabled automation settles a thread
+ * on a merged/closed PR immediately or on inactivity past the window —
+ * except that an open PR blocks the inactivity path entirely. The server
  * un-settles on real activity (user message, session start, approval/
  * user-input request), so an override never goes stale silently.
  */
@@ -258,7 +265,8 @@ export function effectiveSettled(
   // "active" is the explicit keep-active pin: it suppresses auto-settle
   // until real activity clears it server-side.
   if (shell.settledOverride === "active") return false;
-  if (options.changeRequestState === "merged" || options.changeRequestState === "closed") {
+  if (options.autoSettleAfterDays === null) return false;
+  if (changeRequestAutoSettles(options.changeRequestState, options.autoSettleAfterDays)) {
     return true;
   }
   // An open PR is unfinished business regardless of how long the thread has
@@ -266,8 +274,6 @@ export function effectiveSettled(
   // work waiting on it. Only merge/close (above) or an explicit user settle
   // resolves it.
   if (options.changeRequestState === "open") return false;
-  if (options.autoSettleAfterDays === null) return false;
-
   const lastActivityAt = threadLastActivityAt(shell);
   if (lastActivityAt === null) return false;
 
