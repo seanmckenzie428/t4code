@@ -5,12 +5,19 @@ import { CheckCircle2Icon, ListIcon, ListTreeIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useTheme } from "~/hooks/useTheme";
+import { useResizableWidth } from "~/hooks/useResizableWidth";
 import { cn } from "~/lib/utils";
 import { T3_PIERRE_ICONS } from "~/pierre-icons";
 
 import type { DiffFileReviewState } from "../../lib/diffCollapse";
 import { getDiffCollapseIconClassName } from "../../lib/diffRendering";
+import { RightPanelResizeHandle } from "../preview/RightPanelResizeHandle";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
+
+export const DIFF_FILE_RAIL_DEFAULT_WIDTH = 288;
+export const DIFF_FILE_RAIL_MIN_WIDTH = 180;
+export const DIFF_FILE_RAIL_MAX_WIDTH = 480;
+const DIFF_FILE_RAIL_WIDTH_STORAGE_KEY = "t3code:diff-file-rail-width";
 
 export interface DiffFileRailEntry {
   readonly fileDiff: FileDiffMetadata;
@@ -124,12 +131,21 @@ function DiffFileTree(props: DiffFileRailProps) {
 export function DiffFileRail(props: DiffFileRailProps) {
   const [mode, setMode] = useState<"tree" | "flat">("tree");
   const viewedCount = props.files.filter((file) => file.reviewState === "viewed").length;
+  const { width, handlers } = useResizableWidth({
+    storageKey: DIFF_FILE_RAIL_WIDTH_STORAGE_KEY,
+    defaultWidth: DIFF_FILE_RAIL_DEFAULT_WIDTH,
+    minWidth: DIFF_FILE_RAIL_MIN_WIDTH,
+    maxWidth: DIFF_FILE_RAIL_MAX_WIDTH,
+    edge: "left",
+  });
 
   return (
     <aside
-      className="hidden w-56 shrink-0 flex-col border-l border-border/70 bg-card/25 @min-[480px]:flex"
+      className="relative hidden shrink-0 flex-col border-l border-border/70 bg-card/25 @min-[480px]:flex"
+      style={{ width: `${width}px` }}
       aria-label="Changed files"
     >
+      <RightPanelResizeHandle handlers={handlers} />
       <div className="flex h-8 shrink-0 items-center gap-1 border-b border-border/70 px-2 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
         <span className="min-w-0 flex-1 truncate">Changed files</span>
         <span className="tabular-nums">

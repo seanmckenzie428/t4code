@@ -49,13 +49,14 @@ T4 Code works with the platforms your team already uses:
 - While working in a thread, open linked reviews in the same compact right-panel tabs without
   leaving the conversation
 - Open the review directly in your browser with one click
-- Command-click (Control-click on Windows and Linux) a pull request number in the sidebar to open it in your browser instead of in T3 Code
+- Command-click (Control-click on Windows and Linux) a pull request number in the sidebar to open it in your browser instead of in T4 Code
 - Check out a teammate's branch to review code locally
 
 **Review local changes**
 
 - Open the **Review** tab to review a turn, your working tree, or all branch changes
-- Use the changed-file list on the right to jump between files, and switch it between tree and flat views
+- Use the changed-file list on the right to jump between files, switch it between tree and flat
+  views, or drag its left edge to resize it
 - Mark a file **Viewed** to collapse it; if that file changes later, it reopens and is marked **Changed since viewed**
 - Choose stacked or split diffs, line wrapping, and whitespace handling from the diff toolbar
 - Choose the code theme, font, line numbers, change backgrounds, word, alternate-word, or character inline highlights, and diff indicators in **Settings → Appearance → Code review**

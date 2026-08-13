@@ -116,8 +116,7 @@ export default function DiffPanel({
     [resolvedTheme, settings.diffTheme],
   );
   const diffPanelUnsafeCss = useMemo(
-    () => `${DIFF_PANEL_UNSAFE_CSS}
-[data-diffs-header],
+    () => `[data-diffs-header],
 [data-diff],
 [data-file],
 [data-error-wrapper],
@@ -1201,6 +1200,7 @@ export default function DiffPanel({
                     }}
                     editable={canEditWorkingTree}
                     onSaveFile={saveDiffFile}
+                    unsafeCSSExtra={diffPanelUnsafeCss}
                     options={{
                       diffStyle: diffRenderMode === "split" ? "split" : "unified",
                       diffIndicators: settings.diffIndicators,
@@ -1210,7 +1210,6 @@ export default function DiffPanel({
                       overflow: wordWrap ? "wrap" : "scroll",
                       theme: codeTheme.name,
                       themeType: codeTheme.type,
-                      unsafeCSSExtra: diffPanelUnsafeCss,
                       stickyHeaders: true,
                       ...(loadDiffFiles ? { loadDiffFiles } : {}),
                     }}

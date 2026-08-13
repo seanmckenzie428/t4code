@@ -90,6 +90,7 @@ interface AnnotatableCodeViewProps {
   sectionTitle: string;
   composerDraftTarget: ScopedThreadRef | DraftId;
   options: StyledDiffCodeViewOptions<DiffCommentAnnotationGroup>;
+  unsafeCSSExtra?: string;
   viewerRef?: Ref<AnnotatableCodeViewHandle>;
   className?: string;
   renderHeaderPrefix: (
@@ -113,6 +114,7 @@ export function AnnotatableCodeView({
   sectionTitle,
   composerDraftTarget,
   options,
+  unsafeCSSExtra,
   viewerRef,
   className,
   renderHeaderPrefix,
@@ -325,6 +327,7 @@ export function AnnotatableCodeView({
         enableLineSelection: !hasOpenComment && !hasActiveEdit,
         onGutterUtilityClick: beginComment,
       }}
+      {...(unsafeCSSExtra ? { unsafeCSSExtra } : {})}
       renderHeaderPrefix={(item) =>
         item.type === "diff"
           ? renderHeaderPrefix(item.fileDiff, item.id, item.collapsed === true)

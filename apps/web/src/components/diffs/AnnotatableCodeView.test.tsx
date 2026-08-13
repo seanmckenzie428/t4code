@@ -45,6 +45,7 @@ describe("AnnotatableCodeView", () => {
         sectionTitle="Working tree"
         composerDraftTarget={"draft-test" as never}
         options={{}}
+        unsafeCSSExtra="[data-diff] { --test-font: monospace; }"
         renderHeaderPrefix={() => null}
       />,
     );
@@ -55,5 +56,7 @@ describe("AnnotatableCodeView", () => {
       onGutterUtilityClick: expect.any(Function),
     });
     expect(testState.codeViewOptions).not.toHaveProperty("onLineSelectionEnd");
+    expect(testState.codeViewOptions?.unsafeCSS).toContain("[data-unmodified-lines]::before");
+    expect(testState.codeViewOptions?.unsafeCSS).toContain("--test-font: monospace");
   });
 });
