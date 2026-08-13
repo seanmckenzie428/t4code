@@ -45,7 +45,11 @@ T4 Code works with the platforms your team already uses:
 **Stay on top of open reviews**
 
 - See if your current branch already has an open PR/MR
+- Open several reviews from the **Pull requests** page as tabs in the right panel
+- While working in a thread, open linked reviews in the same compact right-panel tabs without
+  leaving the conversation
 - Open the review directly in your browser with one click
+- Command-click (Control-click on Windows and Linux) a pull request number in the sidebar to open it in your browser instead of in T3 Code
 - Check out a teammate's branch to review code locally
 
 **Review local changes**
@@ -57,6 +61,14 @@ T4 Code works with the platforms your team already uses:
 - Choose the code theme, font, line numbers, change backgrounds, word, alternate-word, or character inline highlights, and diff indicators in **Settings → Appearance → Code review**
 - Edit a working-tree file directly from its expanded diff, then save or cancel the edit. Historical, branch, deleted, and truncated diffs stay read-only.
 - Select a line or click its **+** button to attach a review comment to the next message you send to the agent
+
+**Fix what you wrote, in place**
+
+- Rewrite a pull request's title and description from the review itself, in Markdown, with a
+  preview before you save
+- Rewrite your own comments the same way, wherever they are shown
+- Works on GitHub, GitLab, and Bitbucket. Azure DevOps takes a new title and description; its
+  comments stay read-only here, as they already were
 
 ### Know Your Setup at a Glance
 

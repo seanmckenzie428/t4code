@@ -1,7 +1,17 @@
-import type { ContextMenuItem, PreviewSessionSnapshot } from "@t3tools/contracts";
+import type { ContextMenuItem, PreviewSessionSnapshot, PullRequestState } from "@t3tools/contracts";
 import { getTerminalLabel } from "@t3tools/shared/terminalLabels";
-import { Bot, Files, Globe2, LayoutDashboard, Plus, TerminalSquare, X } from "lucide-react";
 import {
+  Bot,
+  Files,
+  GitPullRequest,
+  Globe2,
+  LayoutDashboard,
+  Plus,
+  TerminalSquare,
+  X,
+} from "lucide-react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactElement,
   type ReactNode,
@@ -16,6 +26,7 @@ import type { RightPanelSurface } from "~/rightPanelStore";
 import { cn } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { Kbd } from "~/components/ui/kbd";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "~/components/ui/menu";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { faviconUrlForOrigin } from "~/lib/favicon";
@@ -34,6 +45,10 @@ import { AppViewPlacementIcon } from "./app-views/AppViewPlacementIcon";
 interface RightPanelTabsProps {
   mode: PreviewPanelMode;
   maximized?: boolean;
+  /** Forwarded to PreviewPanelShell so this surface persists its own width. */
+  widthStorageKey?: string;
+  /** Forwarded to PreviewPanelShell as the initial width before a user resize. */
+  defaultWidth?: number;
   layoutControls?: ReactNode;
   surfaces: readonly RightPanelSurface[];
   activeSurfaceId: string | null;
@@ -53,17 +68,54 @@ interface RightPanelTabsProps {
   onAddFiles: () => void;
   onManageAppViews: () => void;
   onActivateAppViewPlacement: (placement: ResolvedAppViewPlacement) => void;
+  onAddPullRequest: () => void;
   onAddAgents: () => void;
   browserAvailable: boolean;
+  terminalAvailable: boolean;
   filesAvailable: boolean;
+  pullRequestAvailable: boolean;
+  agentsAvailable: boolean;
+  pullRequestStatuses?: Readonly<Record<string, PullRequestTabStatus>>;
   /** Running + waiting subagents; badges the Agents card in the empty state. */
   liveAgentCount: number;
   children: ReactNode;
 }
 
+export interface PullRequestTabStatus {
+  projectId: string;
+  repository: string;
+  number: number;
+  state: PullRequestState;
+  isDraft: boolean;
+}
+
 const SURFACE_DISABLED_REASONS = {
   browser: "Browser previews are only available in the T4 Code desktop app.",
+  terminal: "Terminal surfaces are only available from a project thread.",
   files: "Files are only available when a project is open.",
+  pullRequest: "This thread's branch has no pull request yet.",
+  agents: "Agents are only available from a thread.",
+} as const;
+
+/** Overlays that must win over the launcher's letter shortcuts. */
+const LAUNCHER_SHORTCUT_BLOCKING_LAYERS = [
+  '[data-slot="dialog-popup"]',
+  '[data-slot="alert-dialog-popup"]',
+  '[data-slot="command-dialog-popup"]',
+  '[data-slot="menu-popup"]',
+  '[data-slot="select-popup"]',
+  '[data-slot="popover-popup"]',
+  '[data-slot="combobox-popup"]',
+  '[data-slot="autocomplete-popup"]',
+].join(",");
+
+/** One-line unavailability hints for the empty-state cards. */
+const SURFACE_UNAVAILABLE_HINTS = {
+  browser: "Only available in the desktop app.",
+  terminal: "Available when a project is open.",
+  files: "Available when a project is open.",
+  pullRequest: "No pull request on this branch yet.",
+  agents: "Available from a thread.",
 } as const;
 
 type TabContextMenuAction = "copy-path" | "close" | "close-others" | "close-to-right" | "close-all";
@@ -96,6 +148,13 @@ function SurfaceMenuItem(props: {
   return <DisabledReasonTooltip reason={props.disabledReason} trigger={item} />;
 }
 
+/**
+ * Card launcher shown when the right panel has no surfaces. Keyboard-first
+ * without palette chrome: a surface's letter opens it directly from anywhere
+ * outside a typing context, and arrows plus Enter work while the launcher is
+ * focused. The highlight only appears on hover or arrow use. Unavailable
+ * surfaces stay visible with a one-line reason.
+ */
 function RightPanelEmptyState(props: {
   onAddBrowser: () => void;
   onAddTerminal: () => void;
@@ -103,68 +162,84 @@ function RightPanelEmptyState(props: {
   onManageAppViews: () => void;
   onActivateAppViewPlacement: (placement: ResolvedAppViewPlacement) => void;
   appViewPlacements: ReadonlyArray<ResolvedAppViewPlacement>;
+  onAddPullRequest: () => void;
   onAddAgents: () => void;
   browserAvailable: boolean;
+  terminalAvailable: boolean;
   filesAvailable: boolean;
+  pullRequestAvailable: boolean;
+  agentsAvailable: boolean;
   liveAgentCount: number;
 }) {
+  // -1 means no highlight: it only appears on hover or arrow use.
+  const [highlight, setHighlight] = useState(-1);
+
   const builtInActions = [
     {
       id: "generated-views" as const,
       label: "Generated views",
       description: "Reopen and pin agent-created views.",
-      icon: <LayoutDashboard className="mb-3 size-5" />,
+      icon: <LayoutDashboard className="size-4" />,
+      shortcut: "G",
       available: true,
       disabledReason: null,
       onClick: props.onManageAppViews,
+      badgeCount: 0,
     },
     {
       id: "browser" as const,
       label: "Browser",
       description: "Open a local app or URL.",
-      icon: <Globe2 className="mb-3 size-5" />,
+      icon: <Globe2 className="size-4" />,
+      shortcut: "B",
       available: props.browserAvailable,
-      disabledReason: SURFACE_DISABLED_REASONS.browser,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.browser,
       onClick: props.onAddBrowser,
+      badgeCount: 0,
     },
     {
       id: "terminal" as const,
       label: "Terminal",
       description: "Start a shell in this workspace.",
-      icon: <TerminalSquare className="mb-3 size-5" />,
-      available: true,
-      disabledReason: null,
+      icon: <TerminalSquare className="size-4" />,
+      shortcut: "T",
+      available: props.terminalAvailable,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.terminal,
       onClick: props.onAddTerminal,
+      badgeCount: 0,
     },
     {
       id: "files" as const,
       label: "Files",
       description: "Browse and read workspace files.",
-      icon: <Files className="mb-3 size-5" />,
+      icon: <Files className="size-4" />,
+      shortcut: "F",
       available: props.filesAvailable,
-      disabledReason: SURFACE_DISABLED_REASONS.files,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.files,
       onClick: props.onAddFiles,
+      badgeCount: 0,
+    },
+    {
+      id: "pull-request" as const,
+      label: "Pull request",
+      description: "Open this branch's pull request.",
+      icon: <GitPullRequest className="size-4" />,
+      shortcut: "P",
+      available: props.pullRequestAvailable,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.pullRequest,
+      onClick: props.onAddPullRequest,
+      badgeCount: 0,
     },
     {
       id: "agents" as const,
       label: "Agents",
-      description: "Watch subagents and workflows run.",
-      icon: (
-        <span className="relative mb-3 inline-flex">
-          <Bot className="size-5" />
-          {props.liveAgentCount > 0 ? (
-            <span
-              aria-hidden
-              className="absolute -top-1.5 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-info px-1 text-[9px] font-semibold tabular-nums text-white"
-            >
-              {props.liveAgentCount}
-            </span>
-          ) : null}
-        </span>
-      ),
-      available: true,
-      disabledReason: null,
+      description: "Follow subagents and workflows.",
+      icon: <Bot className="size-4" />,
+      shortcut: "A",
+      available: props.agentsAvailable,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.agents,
       onClick: props.onAddAgents,
+      badgeCount: props.liveAgentCount,
     },
   ] as const;
   const { replacements, appended } = partitionRightPanelAppViewPlacements(props.appViewPlacements);
@@ -172,10 +247,12 @@ function RightPanelEmptyState(props: {
     id: item.id,
     label: item.label,
     description: item.description,
-    icon: <AppViewPlacementIcon icon={item.placement.icon} className="mb-3 size-5" />,
+    icon: <AppViewPlacementIcon icon={item.placement.icon} className="size-4" />,
+    shortcut: "",
     available: true,
     disabledReason: null,
     onClick: () => props.onActivateAppViewPlacement(item),
+    badgeCount: 0,
     ...(item.placement.action && "menu" in item.placement.action
       ? { menu: item.placement.action.menu, placement: item }
       : {}),
@@ -204,23 +281,139 @@ function RightPanelEmptyState(props: {
     }
   };
 
+  type SurfaceAction = (typeof actions)[number];
+
+  const availableActions = actions.filter((action) => action.available);
+  const highlightIndex =
+    availableActions.length === 0 ? -1 : Math.min(highlight, availableActions.length - 1);
+
+  // Letter shortcuts work while the launcher is visible, not only while it
+  // is focused; focus moves around too easily (stray clicks) to carry them.
+  // Capture phase so app-level key handlers cannot swallow the event first;
+  // typing contexts and already-handled events are left alone.
+  const shortcutActionsRef = useRef(availableActions);
+  useEffect(() => {
+    shortcutActionsRef.current = availableActions;
+  });
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (document.querySelector(LAUNCHER_SHORTCUT_BLOCKING_LAYERS)) return;
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        if (target.closest("input, textarea, select")) return;
+        // An empty contenteditable (the chat composer at rest) does not
+        // count as typing; letters only become text once a draft exists.
+        const editable = target.isContentEditable ? target : target.closest("[contenteditable]");
+        if (editable && (editable.textContent ?? "").trim().length > 0) return;
+      }
+      const action = shortcutActionsRef.current.find(
+        (candidate) =>
+          candidate.shortcut.length > 0 &&
+          candidate.shortcut.toLowerCase() === event.key.toLowerCase(),
+      );
+      if (!action) return;
+      event.preventDefault();
+      event.stopPropagation();
+      action.onClick();
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, []);
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (availableActions.length === 0) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      setHighlight((highlightIndex + 1) % availableActions.length);
+      return;
+    }
+    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      setHighlight(
+        highlightIndex === -1
+          ? availableActions.length - 1
+          : (highlightIndex - 1 + availableActions.length) % availableActions.length,
+      );
+      return;
+    }
+    if (event.key === "Enter") {
+      // A focused card button owns its own activation; only open from the
+      // highlight when the container itself has focus.
+      if (event.target instanceof HTMLElement && event.target.closest("button")) return;
+      const action = availableActions[highlightIndex];
+      if (!action) return;
+      event.preventDefault();
+      action.onClick();
+    }
+  };
+
+  // Stable identity so React only runs this callback ref on mount/unmount;
+  // an inline arrow would re-attach and re-focus on every render.
+  const focusOnMount = useCallback((node: HTMLDivElement | null) => {
+    node?.focus();
+  }, []);
+
+  const isHighlighted = (action: SurfaceAction) =>
+    highlightIndex !== -1 && availableActions[highlightIndex] === action;
+
+  const actionIcon = (action: SurfaceAction, iconClassName = "size-4") => {
+    return (
+      <span className="relative inline-flex shrink-0">
+        <span className={iconClassName}>{action.icon}</span>
+        {action.badgeCount > 0 ? (
+          <span
+            aria-hidden
+            className="absolute -top-1.5 -right-2 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-info px-1 text-[9px] font-semibold tabular-nums text-white"
+          >
+            {action.badgeCount}
+          </span>
+        ) : null}
+      </span>
+    );
+  };
+
+  const cardShellClass =
+    "rounded-lg border border-border/80 bg-card dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5";
+  const highlightedCardClass = "bg-accent/60 dark:inset-ring-white/20";
+
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-xl">
-        <div className="mb-5 text-center">
-          <h3 className="text-sm font-medium text-foreground">Open a surface</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
+    <div
+      ref={focusOnMount}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      aria-label="Open a surface"
+      data-surface-launcher-keys={availableActions.map((action) => action.shortcut).join("")}
+      className={cn(
+        "flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 pt-6 outline-none",
+        // The panel topbar sits above this container; matching bottom padding
+        // keeps the cards centered against the full panel, not the leftover.
+        "pb-[calc(var(--workspace-topbar-height)+--spacing(6))]",
+      )}
+    >
+      <div className="relative w-full max-w-lg">
+        <div className="absolute inset-x-0 bottom-full mb-5 text-center">
+          <h3 className="font-medium text-foreground text-sm">Open a surface</h3>
+          <p className="mt-1 text-muted-foreground text-xs">
             Choose what to show in the right panel.
           </p>
         </div>
         <div className="grid grid-cols-2 gap-2">
           {actions.map((action) => {
             const placement = "placement" in action ? action.placement : undefined;
+            const actionIndex = availableActions.indexOf(action);
             const content = (
               <>
-                {action.icon}
-                <span className="text-sm font-medium">{action.label}</span>
-                <span className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {action.shortcut ? (
+                  <Kbd className="absolute top-3 right-3">{action.shortcut}</Kbd>
+                ) : null}
+                <span className="flex items-center gap-2 pe-8">
+                  {actionIcon(action)}
+                  <span className="text-sm font-medium">{action.label}</span>
+                </span>
+                <span className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                   {action.description}
                 </span>
               </>
@@ -236,7 +429,15 @@ function RightPanelEmptyState(props: {
                           onContextMenu={(event) =>
                             void handleAppViewPlacementContextMenu(event, placement)
                           }
-                          className="flex min-h-28 w-full flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left transition hover:border-border hover:bg-accent/60 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
+                          onMouseEnter={() => setHighlight(actionIndex)}
+                          onMouseLeave={() =>
+                            setHighlight((current) => (current === actionIndex ? -1 : current))
+                          }
+                          className={cn(
+                            "relative flex min-h-28 w-full flex-col items-start p-4 text-left transition hover:border-border hover:bg-accent/60",
+                            cardShellClass,
+                            isHighlighted(action) && highlightedCardClass,
+                          )}
                         />
                       }
                     >
@@ -274,7 +475,15 @@ function RightPanelEmptyState(props: {
                           void handleAppViewPlacementContextMenu(event, placement),
                       }
                     : {})}
-                  className="flex min-h-28 w-full cursor-pointer flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left transition hover:border-border hover:bg-accent/60 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
+                  onMouseEnter={() => setHighlight(actionIndex)}
+                  onMouseLeave={() =>
+                    setHighlight((current) => (current === actionIndex ? -1 : current))
+                  }
+                  className={cn(
+                    "relative flex min-h-28 w-full cursor-pointer flex-col items-start p-4 text-left transition hover:border-border hover:bg-accent/60",
+                    cardShellClass,
+                    isHighlighted(action) && highlightedCardClass,
+                  )}
                 >
                   {content}
                 </button>
@@ -283,7 +492,10 @@ function RightPanelEmptyState(props: {
             const disabledCard = (
               <button
                 type="button"
-                className="flex min-h-28 w-full cursor-not-allowed flex-col items-start rounded-lg border border-border/80 bg-card p-4 text-left opacity-40 dark:border-transparent dark:shadow-none dark:inset-ring-1 dark:inset-ring-white/5"
+                className={cn(
+                  "relative flex min-h-28 w-full cursor-not-allowed flex-col items-start p-4 text-left opacity-40",
+                  cardShellClass,
+                )}
                 aria-disabled="true"
               >
                 {content}
@@ -321,6 +533,8 @@ function surfaceTitle(
       );
     case "app-view":
       return appViewTitles[surface.viewId] ?? "Generated view";
+    case "pull-request":
+      return `#${surface.number}`;
     case "agents":
       return "Agents";
     case "preview": {
@@ -356,10 +570,12 @@ function SurfaceIcon({
   surface,
   sessions,
   theme,
+  pullRequestStatuses,
 }: {
   surface: RightPanelSurface;
   sessions: Readonly<Record<string, PreviewSessionSnapshot>>;
   theme: "light" | "dark";
+  pullRequestStatuses: Readonly<Record<string, PullRequestTabStatus>> | undefined;
 }) {
   switch (surface.kind) {
     case "preview": {
@@ -382,6 +598,20 @@ function SurfaceIcon({
       return <TerminalSquare className="size-3 shrink-0" />;
     case "app-view":
       return <LayoutDashboard className="size-3 shrink-0" />;
+    case "pull-request": {
+      const status = pullRequestStatuses?.[surface.id] ?? null;
+      const toneClassName =
+        status?.state === "merged"
+          ? "text-violet-600 dark:text-violet-300/90"
+          : status?.state === "closed"
+            ? "text-red-600 dark:text-red-300/90"
+            : status?.isDraft
+              ? "text-zinc-500 dark:text-zinc-400/80"
+              : status?.state === "open"
+                ? "text-emerald-600 dark:text-emerald-300/90"
+                : "text-muted-foreground";
+      return <GitPullRequest className={cn("size-3 shrink-0", toneClassName)} />;
+    }
     case "agents":
       return <Bot className="size-3 shrink-0" />;
   }
@@ -472,13 +702,15 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
     <PreviewPanelShell
       mode={props.mode}
       {...(props.maximized !== undefined ? { maximized: props.maximized } : {})}
+      {...(props.widthStorageKey !== undefined ? { widthStorageKey: props.widthStorageKey } : {})}
+      {...(props.defaultWidth !== undefined ? { defaultWidth: props.defaultWidth } : {})}
     >
       <div
         data-thread-work-panel=""
         className={cn(
           "workspace-topbar gap-1 pl-2",
           props.mode !== "inline" && "[--workspace-topbar-height:--spacing(11)]",
-          props.mode === "inline" ? "pr-28" : "pr-3",
+          props.mode === "inline" && !props.layoutControls ? "pr-28" : "pr-3",
           ownsDesktopTitleBar && "wco:pr-[calc(var(--workspace-native-controls-inset)+6rem)]",
           props.mode === "inline" && props.maximized && COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
         )}
@@ -526,6 +758,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                         surface={surface}
                         sessions={props.previewSessions}
                         theme={resolvedTheme}
+                        pullRequestStatuses={props.pullRequestStatuses}
                       />
                       {pending ? (
                         <span
@@ -574,7 +807,11 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     <LayoutDashboard />
                     Generated views
                   </SurfaceMenuItem>
-                  <SurfaceMenuItem available onClick={props.onAddTerminal}>
+                  <SurfaceMenuItem
+                    available={props.terminalAvailable}
+                    disabledReason={SURFACE_DISABLED_REASONS.terminal}
+                    onClick={props.onAddTerminal}
+                  >
                     <TerminalSquare />
                     Terminal
                   </SurfaceMenuItem>
@@ -586,7 +823,19 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                     <Files />
                     Files
                   </SurfaceMenuItem>
-                  <SurfaceMenuItem available onClick={props.onAddAgents}>
+                  <SurfaceMenuItem
+                    available={props.pullRequestAvailable}
+                    disabledReason={SURFACE_DISABLED_REASONS.pullRequest}
+                    onClick={props.onAddPullRequest}
+                  >
+                    <GitPullRequest />
+                    Pull request
+                  </SurfaceMenuItem>
+                  <SurfaceMenuItem
+                    available={props.agentsAvailable}
+                    disabledReason={SURFACE_DISABLED_REASONS.agents}
+                    onClick={props.onAddAgents}
+                  >
                     <Bot />
                     Agents
                   </SurfaceMenuItem>
@@ -606,9 +855,13 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onManageAppViews={props.onManageAppViews}
             onActivateAppViewPlacement={props.onActivateAppViewPlacement}
             appViewPlacements={props.appViewPlacements}
+            onAddPullRequest={props.onAddPullRequest}
             onAddAgents={props.onAddAgents}
             browserAvailable={props.browserAvailable}
+            terminalAvailable={props.terminalAvailable}
             filesAvailable={props.filesAvailable}
+            pullRequestAvailable={props.pullRequestAvailable}
+            agentsAvailable={props.agentsAvailable}
             liveAgentCount={props.liveAgentCount}
           />
         ) : (

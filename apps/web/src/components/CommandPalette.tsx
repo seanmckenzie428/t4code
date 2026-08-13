@@ -126,9 +126,14 @@ import { ProjectFavicon } from "./ProjectFavicon";
 import { ProjectFilePicker } from "./files/ProjectFilePicker";
 import { ProjectContentSearchDialog } from "./search/ProjectContentSearchDialog";
 import { toggleThemeEditorForTheme } from "./settings/themeEditorStore";
+import { ThreadCommandSubtitle } from "./ThreadCommandSubtitle";
 import { ThreadRowLeadingStatus, ThreadRowTrailingStatus } from "./ThreadStatusIndicators";
 import { primaryServerKeybindingsAtom, primaryServerProvidersAtom } from "../state/server";
-import { resolveDefaultProviderModelSelection } from "../providerInstances";
+import {
+  deriveProviderInstanceEntries,
+  resolveDefaultProviderModelSelection,
+  type ProviderInstanceEntry,
+} from "../providerInstances";
 import { resolveShortcutCommand, threadJumpIndexFromCommand } from "../keybindings";
 import { CommandDialog, CommandDialogPopup } from "./ui/command";
 import { Button } from "./ui/button";
@@ -616,6 +621,18 @@ function OpenCommandPaletteDialog(props: {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const { theme, themeHalves, resolvedTheme } = useTheme();
   const providers = useAtomValue(primaryServerProvidersAtom);
+  const providerEntryByEnvironmentAndInstanceId = useMemo(() => {
+    const map = new Map<string, ProviderInstanceEntry>();
+    for (const environment of environments) {
+      const environmentProviders =
+        environment.serverConfig?.providers ??
+        (environment.environmentId === primaryEnvironmentId ? providers : []);
+      for (const entry of deriveProviderInstanceEntries(environmentProviders)) {
+        map.set(`${environment.environmentId}:${entry.instanceId}`, entry);
+      }
+    }
+    return map;
+  }, [environments, primaryEnvironmentId, providers]);
   const [viewStack, setViewStack] = useState<CommandPaletteView[]>([]);
   const currentView = viewStack.at(-1) ?? null;
   const environmentIds = useMemo(
@@ -846,6 +863,10 @@ function OpenCommandPaletteDialog(props: {
   const projectCwdById = useMemo(
     () =>
       new Map<ProjectId, string>(projects.map((project) => [project.id, project.workspaceRoot])),
+    [projects],
+  );
+  const projectFaviconPathById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project.faviconPath ?? null] as const)),
     [projects],
   );
   const projectTitleById = useMemo(
@@ -1137,6 +1158,29 @@ function OpenCommandPaletteDialog(props: {
         icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
         renderLeadingContent: (thread) => <ThreadRowLeadingStatus thread={thread} />,
         renderTrailingContent: (thread) => <ThreadRowTrailingStatus thread={thread} />,
+        renderDescription: (thread, { projectTitle }) => {
+          const modelInstanceId =
+            thread.session?.providerInstanceId ?? thread.modelSelection.instanceId;
+          const providerEntry =
+            providerEntryByEnvironmentAndInstanceId.get(
+              `${thread.environmentId}:${modelInstanceId}`,
+            ) ?? null;
+          return (
+            <ThreadCommandSubtitle
+              environmentId={thread.environmentId}
+              projectCwd={projectCwdById.get(thread.projectId) ?? null}
+              projectFaviconPath={projectFaviconPathById.get(thread.projectId) ?? null}
+              projectTitle={projectTitle ?? null}
+              branch={thread.branch}
+              worktreePath={thread.worktreePath}
+              isCurrent={thread.id === activeThreadId}
+              driverKind={providerEntry?.driverKind ?? null}
+              providerDisplayName={
+                thread.session?.providerName ?? providerEntry?.displayName ?? modelInstanceId
+              }
+            />
+          );
+        },
         getContentMatch: (thread) => {
           const match = threadContentMatchByKey.get(
             threadSearchMatchKey({
@@ -1163,7 +1207,10 @@ function OpenCommandPaletteDialog(props: {
       activeThreadId,
       clientSettings.sidebarThreadSortOrder,
       navigate,
+      projectCwdById,
+      projectFaviconPathById,
       projectTitleById,
+      providerEntryByEnvironmentAndInstanceId,
       threadContentMatchByKey,
       threadSearchQuery,
       threads,
