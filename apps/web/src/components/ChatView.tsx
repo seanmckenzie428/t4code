@@ -3523,7 +3523,7 @@ function ChatViewContent(props: ChatViewProps) {
     handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
   }, [handleInteractionModeChange, interactionMode]);
   const createBrowserSurface = useCallback(
-    (url?: string) => {
+    (url: string | undefined) => {
       if (!activeThreadRef) return;
       if (!isPreviewSupportedInRuntime()) {
         toastManager.add({
@@ -3537,9 +3537,21 @@ function ChatViewContent(props: ChatViewProps) {
         threadRef: activeThreadRef,
         openPreview,
         ...(url === undefined ? {} : { url }),
+      }).then((result) => {
+        if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: "Unable to open browser tab",
+          description: error instanceof Error ? error.message : "The browser tab could not open.",
+        });
       });
     },
     [activeThreadRef, openPreview],
+  );
+  const addBlankBrowserSurface = useCallback(
+    () => createBrowserSurface(undefined),
+    [createBrowserSurface],
   );
   const addFilesSurface = useCallback(() => {
     if (!activeThreadRef || !activeProject) return;
@@ -3587,9 +3599,9 @@ function ChatViewContent(props: ChatViewProps) {
     if (activeTabId) {
       useRightPanelStore.getState().openBrowser(activeThreadRef, activeTabId);
     } else {
-      createBrowserSurface();
+      addBlankBrowserSurface();
     }
-  }, [activePreviewState.activeTabId, activeThreadRef, createBrowserSurface, previewPanelOpen]);
+  }, [activePreviewState.activeTabId, activeThreadRef, addBlankBrowserSurface, previewPanelOpen]);
   const closePreviewPanel = useCallback(() => {
     if (activeThreadRef) {
       setMaximizedRightPanelThreadKey(null);
@@ -7217,7 +7229,7 @@ function ChatViewContent(props: ChatViewProps) {
           onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
           onCloseAllSurfaces={closeAllRightPanelSurfaces}
           onCopyFilePath={copyRightPanelFilePath}
-          onAddBrowser={createBrowserSurface}
+          onAddBrowser={addBlankBrowserSurface}
           onAddTerminal={addTerminalSurface}
           onAddFiles={addFilesSurface}
           onManageAppViews={() => setGeneratedViewLibraryOpen(true)}
@@ -7253,7 +7265,7 @@ function ChatViewContent(props: ChatViewProps) {
             onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
             onCloseAllSurfaces={closeAllRightPanelSurfaces}
             onCopyFilePath={copyRightPanelFilePath}
-            onAddBrowser={createBrowserSurface}
+            onAddBrowser={addBlankBrowserSurface}
             onAddTerminal={addTerminalSurface}
             onAddFiles={addFilesSurface}
             onManageAppViews={() => setGeneratedViewLibraryOpen(true)}

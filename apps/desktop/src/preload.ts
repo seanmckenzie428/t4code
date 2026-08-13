@@ -3,6 +3,7 @@ import type {
   DesktopPreviewPointerEvent,
   DesktopPreviewRecordingFrame,
   DesktopPreviewTabState,
+  DesktopPreviewWindowOpenRequest,
 } from "@t3tools/contracts";
 import { exposeClerkBridge } from "@clerk/electron/preload";
 import { contextBridge, ipcRenderer } from "electron";
@@ -260,6 +261,21 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ipcRenderer.on(IpcChannels.PREVIEW_POINTER_EVENT_CHANNEL, wrappedListener);
       return () =>
         ipcRenderer.removeListener(IpcChannels.PREVIEW_POINTER_EVENT_CHANNEL, wrappedListener);
+    },
+    onWindowOpen: (listener) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, request: unknown) => {
+        if (typeof request !== "object" || request === null) return;
+        if (!("sourceRuntimeTabId" in request) || typeof request.sourceRuntimeTabId !== "string") {
+          return;
+        }
+        if (!("url" in request) || (request.url !== null && typeof request.url !== "string")) {
+          return;
+        }
+        listener(request as DesktopPreviewWindowOpenRequest);
+      };
+      ipcRenderer.on(IpcChannels.PREVIEW_WINDOW_OPEN_CHANNEL, wrappedListener);
+      return () =>
+        ipcRenderer.removeListener(IpcChannels.PREVIEW_WINDOW_OPEN_CHANNEL, wrappedListener);
     },
   },
 } satisfies DesktopBridge);

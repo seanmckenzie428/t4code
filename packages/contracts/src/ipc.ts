@@ -543,6 +543,11 @@ export interface DesktopPreviewTabState {
   updatedAt: string;
 }
 
+export interface DesktopPreviewWindowOpenRequest {
+  sourceRuntimeTabId: string;
+  url: string | null;
+}
+
 export const DesktopPreviewTabIdSchema = Schema.String.check(Schema.isTrimmed()).check(
   Schema.isNonEmpty(),
 );
@@ -1165,6 +1170,7 @@ export interface DesktopPreviewBridge {
   };
   onStateChange: (listener: (tabId: string, state: DesktopPreviewTabState) => void) => () => void;
   onPointerEvent: (listener: (event: DesktopPreviewPointerEvent) => void) => () => void;
+  onWindowOpen: (listener: (request: DesktopPreviewWindowOpenRequest) => void) => () => void;
 }
 
 export type ConfirmDialogVariant = "default" | "destructive";

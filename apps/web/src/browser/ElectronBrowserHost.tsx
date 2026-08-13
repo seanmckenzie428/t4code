@@ -1,12 +1,20 @@
 "use client";
 
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import { FILL_PREVIEW_VIEWPORT } from "@t3tools/contracts";
 import { useEffect, useMemo } from "react";
 
 import { isElectron } from "~/env";
 import { useTheme } from "~/hooks/useTheme";
 import { useActivePreviewSessions } from "~/previewStateStore";
+import { useAtomCommand } from "~/state/use-atom-command";
+import { previewEnvironment } from "~/state/preview";
+import { addBrowserSurface } from "~/components/preview/addBrowserSurface";
+import { toastManager } from "~/components/ui/toast";
 
 import { readPreviewAnnotationTheme } from "./annotationTheme";
 import { useBrowserPointerStore } from "./browserPointerStore";
@@ -34,6 +42,11 @@ export function ElectronBrowserHost() {
           : [];
       }),
     [previewByThreadKey],
+  );
+  const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
+  const threadRefByRuntimeTabId = useMemo(
+    () => new Map(sessions.map((session) => [session.runtimeTabId, session.threadRef])),
+    [sessions],
   );
 
   useEffect(() => {
@@ -76,6 +89,28 @@ export function ElectronBrowserHost() {
       useBrowserPointerStore.getState().apply(event);
     });
   }, []);
+
+  useEffect(() => {
+    const preview = window.desktopBridge?.preview;
+    if (!preview) return;
+    return preview.onWindowOpen((request) => {
+      const threadRef = threadRefByRuntimeTabId.get(request.sourceRuntimeTabId);
+      if (!threadRef) return;
+      void addBrowserSurface({
+        threadRef,
+        openPreview,
+        ...(request.url === null ? {} : { url: request.url }),
+      }).then((result) => {
+        if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: "Unable to open browser tab",
+          description: error instanceof Error ? error.message : "The browser tab could not open.",
+        });
+      });
+    });
+  }, [openPreview, threadRefByRuntimeTabId]);
 
   if (!isElectron) return null;
   return (

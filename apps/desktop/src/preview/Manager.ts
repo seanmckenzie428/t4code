@@ -54,7 +54,10 @@ import * as Scope from "effect/Scope";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
-import { PREVIEW_PICTURE_IN_PICTURE_FRAME_CHANNEL } from "../ipc/channels.ts";
+import {
+  PREVIEW_PICTURE_IN_PICTURE_FRAME_CHANNEL,
+  PREVIEW_WINDOW_OPEN_CHANNEL,
+} from "../ipc/channels.ts";
 import * as BrowserSession from "./BrowserSession.ts";
 import {
   ANNOTATION_CAPTURED_CHANNEL,
@@ -141,6 +144,16 @@ const DEFAULT_ANNOTATION_THEME: DesktopPreviewAnnotationTheme = {
   fontSans: "system-ui, sans-serif",
   fontMono: "ui-monospace, monospace",
 };
+
+export function normalizePreviewWindowOpenUrl(url: string): string | null | undefined {
+  if (url === "about:blank") return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export const buildPreviewPictureInPictureDataUrl = (): string => {
   const html = `<!doctype html>
@@ -1457,11 +1470,13 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         wc.ipc.on(HUMAN_INPUT_CHANNEL, humanInput);
         wc.ipc.on(HISTORY_NAVIGATION_CHANNEL, historyNavigation);
         wc.setWindowOpenHandler(({ url }) => {
-          runFork(
-            attemptPromise({ operation: "openPreviewWindow", tabId, webContentsId: wc.id }, () =>
-              wc.loadURL(url),
-            ).pipe(Effect.ignore),
-          );
+          const normalizedUrl = normalizePreviewWindowOpenUrl(url);
+          if (normalizedUrl !== undefined) {
+            wc.hostWebContents?.send(PREVIEW_WINDOW_OPEN_CHANNEL, {
+              sourceRuntimeTabId: tabId,
+              url: normalizedUrl,
+            });
+          }
           return { action: "deny" };
         });
         wc.on("before-input-event", beforeInput);

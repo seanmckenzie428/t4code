@@ -36,6 +36,22 @@ describe("fitPictureInPictureContentSize", () => {
   });
 });
 
+describe("normalizePreviewWindowOpenUrl", () => {
+  it("opens blank and web targets as browser tabs", () => {
+    expect(PreviewManager.normalizePreviewWindowOpenUrl("about:blank")).toBeNull();
+    expect(PreviewManager.normalizePreviewWindowOpenUrl("https://example.com/path")).toBe(
+      "https://example.com/path",
+    );
+  });
+
+  it.each(["javascript:alert(1)", "data:text/plain,nope", "file:///tmp/nope", "not a url"])(
+    "rejects an unsafe popup target: %s",
+    (url) => {
+      expect(PreviewManager.normalizePreviewWindowOpenUrl(url)).toBeUndefined();
+    },
+  );
+});
+
 describe("isForwardedAppShortcut", () => {
   it("forwards the browser shortcut from preview content on macOS and Windows/Linux", () => {
     expect(
