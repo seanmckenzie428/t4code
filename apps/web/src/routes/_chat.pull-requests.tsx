@@ -176,6 +176,8 @@ const NO_LIST_TARGETS: ReadonlyArray<EnvironmentQueryTarget<PullRequestListInput
 const EMPTY_PREVIEW_SESSIONS = {};
 const EMPTY_TERMINAL_LABELS = new Map<string, string>();
 const EMPTY_PENDING_SURFACES = new Set<string>();
+const EMPTY_APP_VIEW_TITLES: Readonly<Record<string, string>> = {};
+const EMPTY_APP_VIEW_PLACEMENTS: readonly never[] = [];
 
 export const Route = createFileRoute("/_chat/pull-requests")({
   validateSearch: (raw: Record<string, unknown>): PullRequestsSearch => ({
@@ -1310,7 +1312,7 @@ function PullRequestsRouteView() {
       ) : !pullRequestsSupported ? (
         <PullRequestsUnavailableState
           title="Pull requests unavailable"
-          error="Update your T3 Code servers to browse pull requests."
+          error="Update your T4 Code servers to browse pull requests."
         />
       ) : firstLoad ? (
         <PullRequestListGhost rows={7} />
@@ -1531,6 +1533,8 @@ function PullRequestsRouteView() {
             pendingSurfaceIds={EMPTY_PENDING_SURFACES}
             previewSessions={EMPTY_PREVIEW_SESSIONS}
             terminalLabelsById={EMPTY_TERMINAL_LABELS}
+            appViewTitles={EMPTY_APP_VIEW_TITLES}
+            appViewPlacements={EMPTY_APP_VIEW_PLACEMENTS}
             onActivate={(surface) => {
               if (surface.kind === "pull-request") activateSurface(surface);
             }}
@@ -1547,13 +1551,13 @@ function PullRequestsRouteView() {
             onCopyFilePath={() => undefined}
             onAddBrowser={() => undefined}
             onAddTerminal={() => undefined}
-            onAddDiff={() => undefined}
             onAddFiles={() => undefined}
+            onManageAppViews={() => undefined}
+            onActivateAppViewPlacement={() => undefined}
             onAddPullRequest={() => undefined}
             onAddAgents={() => undefined}
             browserAvailable={false}
             terminalAvailable={false}
-            diffAvailable={false}
             filesAvailable={false}
             pullRequestAvailable={false}
             agentsAvailable={false}

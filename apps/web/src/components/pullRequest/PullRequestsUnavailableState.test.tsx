@@ -1,5 +1,6 @@
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it } from "vite-plus/test";
+import { PRODUCT_NAME } from "@t3tools/shared/branding";
 
 import { PullRequestsUnavailableState } from "./PullRequestsUnavailableState";
 
@@ -15,12 +16,12 @@ describe("PullRequestsUnavailableState", () => {
     const text = textOf(
       PullRequestsUnavailableState({
         title: "Pull requests unavailable",
-        error: "Update this environment's T3 Code server to browse pull requests.",
+        error: `Update this environment's ${PRODUCT_NAME} server to browse pull requests.`,
       }),
     );
 
     expect(text).toContain("Pull requests unavailable");
-    expect(text).toContain("Update this environment's T3 Code server");
+    expect(text).toContain(`Update this environment's ${PRODUCT_NAME} server`);
     expect(text).not.toContain("Retry");
   });
 

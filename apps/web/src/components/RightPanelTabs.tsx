@@ -259,7 +259,10 @@ function RightPanelEmptyState(props: {
   });
   const actions = [
     ...builtInActions.map((action) => {
-      const replacement = action.id === "agents" ? undefined : replacements.get(action.id);
+      const replacement =
+        action.id === "agents" || action.id === "pull-request"
+          ? undefined
+          : replacements.get(action.id);
       return replacement ? customAction(replacement) : action;
     }),
     ...appended.map(customAction),

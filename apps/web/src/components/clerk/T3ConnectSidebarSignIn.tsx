@@ -1,4 +1,5 @@
 import { UserButton, useAuth } from "@clerk/react";
+import { CONNECT_PRODUCT_NAME } from "@t3tools/shared/branding";
 import { LogInIcon, ServerIcon, SmartphoneIcon } from "lucide-react";
 
 import { hasCloudPublicConfig } from "../../cloud/publicConfig";
@@ -41,7 +42,7 @@ function ConfiguredT3ConnectSidebarAvatar() {
         <MobileClientsUserProfilePage />
       </UserButton.UserProfilePage>
       <UserButton.UserProfilePage
-        label="T3 Connect"
+        label={CONNECT_PRODUCT_NAME}
         labelIcon={<ServerIcon className="size-4" />}
         url="t3-connect"
       >

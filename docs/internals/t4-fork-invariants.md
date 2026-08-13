@@ -89,3 +89,16 @@ remain mandatory.
   `delegation` field. Both HTTP and WebSocket thread snapshot paths then failed decoding, leaving
   clients at “Loading messages.” Regression coverage now requires delegated data through the
   windowed query.
+
+### 2026-08-13 — T3 nightly 20260813.1087
+
+- T4 parent: `8dab9c65b`
+- T3 parent: `fd51561b4`
+- Merge: `96c9e91af`
+- Scope: 66 upstream commits, 349 changed files, 52 paths changed on both sides, 17 textual
+  conflicts.
+- Explicit resolution: preserve generated views, app-control routing, main-view review, expanded
+  snooze choices, workspace shelf preferences, T4 branding, and patched `@pierre/diffs` 1.3.2;
+  add upstream pull-request surfaces, shared diff styling, typography controls, and mobile fixes.
+- Validation: T4 invariant suite (14 files, 119 tests), focused merge/fix suite (22 files, 646
+  tests), web/client/server/desktop typechecks, and loopback-enabled server router tests passed.
