@@ -26,6 +26,7 @@ import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
 import { useCanGoBack, useNavigate } from "@tanstack/react-router";
 import * as Cause from "effect/Cause";
 import { ChevronDownIcon, CopyIcon, PlusIcon, SettingsIcon, Trash2Icon } from "lucide-react";
+import { iconNames, type IconName } from "lucide-react/dynamic";
 import {
   useCallback,
   useEffect,
@@ -60,6 +61,7 @@ import {
   sortProviderInstanceEntries,
 } from "../../providerInstances";
 import { getCustomModelOptionsByInstance } from "../../modelSelection";
+import { useProjectAppearanceStore } from "../../projectAppearanceStore";
 import {
   buildSidebarProjectSnapshots,
   type SidebarProjectGroupMember,
@@ -310,6 +312,8 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
   const threads = useThreadShells();
   const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
   const deleteProject = useAtomCommand(projectEnvironment.delete, { reportFailure: false });
+  const projectAppearances = useProjectAppearanceStore((state) => state.byKey);
+  const setProjectAppearanceForKeys = useProjectAppearanceStore((state) => state.setForKeys);
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
     reportFailure: false,
   });
@@ -336,6 +340,24 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
       (member) => member.environmentId === group.environmentId && member.id === group.id,
     ) ?? group.memberProjects[0]!;
   const faviconPath = representative.faviconPath ?? null;
+  const projectAppearanceKeys = useMemo(
+    () => group.memberProjects.map((member) => member.physicalProjectKey),
+    [group.memberProjects],
+  );
+  const projectAppearance = projectAppearances[representative.physicalProjectKey];
+  const lucideProjectIcon =
+    projectAppearance?.icon?.type === "lucide" ? projectAppearance.icon.name : "";
+  const setLucideProjectIcon = useCallback(
+    (name: string) => {
+      if (!iconNames.includes(name as IconName)) return;
+      setProjectAppearanceForKeys(projectAppearanceKeys, { icon: { type: "lucide", name } });
+    },
+    [projectAppearanceKeys, setProjectAppearanceForKeys],
+  );
+  const clearProjectAppearanceIcon = useCallback(
+    () => setProjectAppearanceForKeys(projectAppearanceKeys, {}),
+    [projectAppearanceKeys, setProjectAppearanceForKeys],
+  );
 
   const threadCountByMember = useMemo(() => {
     const counts = new Map<string, number>();
@@ -780,18 +802,21 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
           />
           <SettingsRow
             title="Project icon"
-            description={faviconPath ?? "Automatic"}
+            description="Choose a Lucide icon, an icon file, or use the detected project icon."
             resetAction={
-              faviconPath !== null ? (
+              faviconPath !== null || projectAppearance?.icon ? (
                 <SettingResetButton
                   label="project icon"
                   disabled={isSavingFavicon}
-                  onClick={() => void setFaviconPath(null)}
+                  onClick={() => {
+                    clearProjectAppearanceIcon();
+                    if (faviconPath !== null) void setFaviconPath(null);
+                  }}
                 />
               ) : null
             }
             control={
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <ProjectFavicon
                   environmentId={representative.environmentId}
                   cwd={representative.workspaceRoot}
@@ -808,6 +833,30 @@ function ProjectDetail({ group }: { group: SidebarProjectSnapshot }) {
                 >
                   Choose file
                 </Button>
+                <Input
+                  key={`${group.projectKey}:${lucideProjectIcon}`}
+                  list="lucide-project-icons"
+                  aria-label="Lucide project icon"
+                  className="w-48"
+                  placeholder="Search Lucide icons"
+                  defaultValue={lucideProjectIcon}
+                  onChange={(event) => setLucideProjectIcon(event.currentTarget.value.trim())}
+                />
+                <datalist id="lucide-project-icons">
+                  {iconNames.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+                {projectAppearance?.icon?.type === "lucide" ? (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    type="button"
+                    onClick={clearProjectAppearanceIcon}
+                  >
+                    Use detected icon
+                  </Button>
+                ) : null}
               </div>
             }
           />
