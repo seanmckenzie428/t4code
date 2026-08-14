@@ -18,6 +18,7 @@ import {
   resolveProjectStatusIndicator,
   resolveSidebarStageBadgeLabel,
   resolveSidebarThreadLocationLabel,
+  resolveSidebarThreadBranchLabel,
   resolveThreadRowClassName,
   resolveSidebarThreadStatus,
   resolveThreadStatusPill,
@@ -49,6 +50,7 @@ import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   type Project,
+  type SidebarThreadSummary,
   type Thread,
 } from "../types";
 
@@ -75,6 +77,34 @@ describe("resolveSidebarThreadLocationLabel", () => {
 
   it("stays empty when a main checkout has no branch", () => {
     expect(resolveSidebarThreadLocationLabel({ branch: null, worktreePath: null })).toBeNull();
+  });
+});
+
+describe("resolveSidebarThreadBranchLabel", () => {
+  it("shows a Lotus workspace slug instead of its branch", () => {
+    expect(
+      resolveSidebarThreadBranchLabel({
+        branch: "lotus-228-order-list",
+        workspaceBinding: {
+          extensionId: "lotus-runtime",
+          providerId: "lotus",
+          workspaceId: "orderlist",
+        },
+      } as SidebarThreadSummary),
+    ).toBe("orderlist");
+  });
+
+  it("keeps the branch for other workspace bindings", () => {
+    expect(
+      resolveSidebarThreadBranchLabel({
+        branch: "main",
+        workspaceBinding: {
+          extensionId: "other",
+          providerId: "lotus",
+          workspaceId: "orderlist",
+        },
+      } as SidebarThreadSummary),
+    ).toBe("main");
   });
 });
 
