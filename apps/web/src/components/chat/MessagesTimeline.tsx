@@ -15,6 +15,7 @@ import {
 const EMPTY_AGENT_PANEL_MODEL = emptyAgentPanelModel();
 const NOOP_OPEN_AGENTS = () => {};
 import { resolveChatListAnchoredEndSpace } from "@t3tools/shared/chatList";
+import { stripUnsupportedAssistantDirectives } from "@t3tools/shared/assistantText";
 import {
   createContext,
   Fragment,
@@ -1170,7 +1171,9 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
 
 function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
-  const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
+  const messageText =
+    stripUnsupportedAssistantDirectives(row.message.text) ||
+    (row.message.streaming ? "" : "(empty response)");
 
   return (
     <>
@@ -1212,7 +1215,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
 
 function AssistantCopyButton({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const assistantCopyState = resolveAssistantMessageCopyState({
-    text: row.message.text ?? null,
+    text: row.message.text ? stripUnsupportedAssistantDirectives(row.message.text) : null,
     showCopyButton: row.showAssistantCopyButton,
     streaming: row.assistantCopyStreaming,
   });

@@ -7,6 +7,10 @@
       "types": "./src/branding.ts",
       "import": "./src/branding.ts"
     },
+    "./assistantText": {
+      "types": "./src/assistantText.ts",
+      "import": "./src/assistantText.ts"
+    },
     "./projectFavicon": {
       "types": "./src/projectFavicon.ts",
       "import": "./src/projectFavicon.ts"
