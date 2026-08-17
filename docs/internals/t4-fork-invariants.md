@@ -102,3 +102,19 @@ remain mandatory.
   add upstream pull-request surfaces, shared diff styling, typography controls, and mobile fixes.
 - Validation: T4 invariant suite (14 files, 119 tests), focused merge/fix suite (22 files, 646
   tests), web/client/server/desktop typechecks, and loopback-enabled server router tests passed.
+
+### 2026-08-17 — T3 nightly 20260817.1119
+
+- T4 parent: `e567a761b`
+- T3 parent: `c7e6d711d`
+- Merge: `030ee12b3`
+- Scope: 143 upstream commits, 623 changed files, 117 paths changed on both sides, 38 textual
+  conflict paths.
+- Explicit resolution: preserve T4 branding and icons, generated views, app control, Quick Chat,
+  main-view review, diff rail, workspace preferences, and settlement master switch; add upstream
+  mobile flows, browser defaults and favicons, quit hold, source-control integrations, and release
+  packaging. When agent browser access is disabled, keep T4 app control on a restricted MCP
+  endpoint while withholding preview tools and their prompt instructions.
+- Validation: T4 invariant suite (14 files, 122 tests), focused merge/fix suites (67 files, 1,463
+  tests), typechecks across server, web, desktop, mobile, marketing, contracts, client runtime,
+  shared, and scripts, plus loopback-enabled MCP and server integration tests passed.
