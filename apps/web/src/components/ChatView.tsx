@@ -1853,6 +1853,7 @@ function ChatViewContent(props: ChatViewProps) {
     activeProject?.workspaceRoot ?? null,
     activeProject?.id ?? null,
     activeThread?.worktreePath ?? null,
+    activeThread?.workspaceBinding ?? null,
   );
   const contextualAppViews = useMemo(
     () =>
