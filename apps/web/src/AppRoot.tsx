@@ -17,7 +17,7 @@ export function AppRoot({ router }: { readonly router: AppRouter }) {
     <AppAtomRegistryProvider>
       <RouterProvider router={router} />
       <PreviewAutomationHosts />
-      <AppControlHosts />
+      <AppControlHosts router={router} />
       <ElectronBrowserHost />
       <QuitHoldOverlay />
     </AppAtomRegistryProvider>

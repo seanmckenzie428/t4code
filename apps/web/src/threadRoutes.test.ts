@@ -10,6 +10,7 @@ import {
   resolveThreadRouteRenderState,
   resolveThreadRouteRef,
   resolveThreadRouteTarget,
+  resolveThreadRouteTargetFromMatches,
 } from "./threadRoutes";
 
 describe("threadRoutes", () => {
@@ -65,6 +66,22 @@ describe("threadRoutes", () => {
       kind: "draft",
       draftId: "draft-1",
     });
+  });
+
+  it("resolves the current target from global router matches", () => {
+    expect(
+      resolveThreadRouteTargetFromMatches([
+        { params: {} },
+        { params: { environmentId: "env-1", threadId: "thread-1" } },
+      ]),
+    ).toEqual({
+      kind: "server",
+      threadRef: {
+        environmentId: "env-1",
+        threadId: "thread-1",
+      },
+    });
+    expect(resolveThreadRouteTargetFromMatches([])).toBeNull();
   });
 
   it("resolves the backing thread while a draft route is being promoted", () => {

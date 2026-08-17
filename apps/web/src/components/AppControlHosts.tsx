@@ -11,7 +11,6 @@ import {
   type EnvironmentId,
 } from "@t3tools/contracts";
 import { Atom } from "effect/unstable/reactivity";
-import { useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { registerWebAppCommandHandler, webAppCommandRegistry } from "../appCommandRegistry";
@@ -24,7 +23,8 @@ import { useEnvironments } from "../state/environments";
 import { useProjects, useThreadShells } from "../state/entities";
 import { appControlEnvironment } from "../state/appControl";
 import { useAtomCommand } from "../state/use-atom-command";
-import { resolveThreadRouteTarget } from "../threadRoutes";
+import { useThreadRouteTarget } from "../hooks/useThreadRouteTarget";
+import type { AppRouter } from "../router";
 import { createAppControlRequestConsumerAtom } from "./appControlRequestConsumer";
 
 const RESERVED_COMMAND_IDS = ["app.status", "app.commands"] as const;
@@ -38,21 +38,28 @@ export const isAppControlHostFocused = (
   documentState: Pick<Document, "hasFocus" | "visibilityState">,
 ): boolean => documentState.visibilityState === "visible" && documentState.hasFocus();
 
-export function AppControlHosts() {
+export function AppControlHosts({ router }: { readonly router: AppRouter }) {
   const { environments } = useEnvironments();
   return environments.map((environment) => (
-    <AppControlHost key={environment.environmentId} environmentId={environment.environmentId} />
+    <AppControlHost
+      key={environment.environmentId}
+      environmentId={environment.environmentId}
+      router={router}
+    />
   ));
 }
 
-function AppControlHost({ environmentId }: { readonly environmentId: EnvironmentId }) {
+function AppControlHost({
+  environmentId,
+  router,
+}: {
+  readonly environmentId: EnvironmentId;
+  readonly router: AppRouter;
+}) {
   const [clientId] = useState(() => AppControlClientId.make(`web-${randomHex(16)}`));
   const projects = useProjects().filter((project) => project.environmentId === environmentId);
   const threads = useThreadShells().filter((thread) => thread.environmentId === environmentId);
-  const routeTarget = useParams({
-    strict: false,
-    select: (params) => resolveThreadRouteTarget(params),
-  });
+  const routeTarget = useThreadRouteTarget(router);
   const focusedThread = resolveAppControlFocusedThread({
     environmentId,
     routeThreadRef: routeTarget?.kind === "server" ? routeTarget.threadRef : null,

@@ -12,6 +12,10 @@ export type ThreadRouteTarget =
       draftId: DraftId;
     };
 
+export type ThreadRouteParams = Partial<
+  Record<"environmentId" | "threadId" | "draftId", string | undefined>
+>;
+
 type DraftThreadRouteState = {
   environmentId: EnvironmentId;
   threadId: ThreadId;
@@ -65,9 +69,7 @@ export function resolveThreadRouteRef(
   return scopeThreadRef(params.environmentId as EnvironmentId, params.threadId as ThreadId);
 }
 
-export function resolveThreadRouteTarget(
-  params: Partial<Record<"environmentId" | "threadId" | "draftId", string | undefined>>,
-): ThreadRouteTarget | null {
+export function resolveThreadRouteTarget(params: ThreadRouteParams): ThreadRouteTarget | null {
   if (params.environmentId && params.threadId) {
     return {
       kind: "server",
@@ -83,6 +85,12 @@ export function resolveThreadRouteTarget(
     kind: "draft",
     draftId: params.draftId as DraftId,
   };
+}
+
+export function resolveThreadRouteTargetFromMatches(
+  matches: ReadonlyArray<{ readonly params: object }>,
+): ThreadRouteTarget | null {
+  return resolveThreadRouteTarget((matches.at(-1)?.params ?? {}) as ThreadRouteParams);
 }
 
 /**
