@@ -1,15 +1,26 @@
-import { bootstrapRemoteBearerSession } from "@t3tools/client-runtime/authorization";
+import {
+  bootstrapRemoteBearerSession,
+  RemoteEnvironmentAuthTimeoutError,
+} from "@t3tools/client-runtime/authorization";
 import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
 import * as Context from "effect/Context";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Schedule from "effect/Schedule";
 import * as Semaphore from "effect/Semaphore";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 
 import * as DesktopBackendPool from "./DesktopBackendPool.ts";
+
+// The primary server can advertise its readiness before its OAuth exchange is
+// schedulable during a cold boot. Retrying only that timeout keeps the renderer
+// from failing its first data load and presenting an empty desktop window.
+const LOCAL_BEARER_SESSION_MAX_ATTEMPTS = 5;
+const LOCAL_BEARER_SESSION_RETRY_DELAY_MS = 250;
 
 export class DesktopLocalEnvironmentAuthBackendNotConfiguredError extends Schema.TaggedErrorClass<DesktopLocalEnvironmentAuthBackendNotConfiguredError>()(
   "DesktopLocalEnvironmentAuthBackendNotConfiguredError",
@@ -75,6 +86,12 @@ export const make = Effect.gen(function* () {
             deviceType: "desktop",
           },
         }).pipe(
+          Effect.retry({
+            schedule: Schedule.spaced(Duration.millis(LOCAL_BEARER_SESSION_RETRY_DELAY_MS)).pipe(
+              Schedule.upTo({ times: LOCAL_BEARER_SESSION_MAX_ATTEMPTS - 1 }),
+            ),
+            while: (error) => error instanceof RemoteEnvironmentAuthTimeoutError,
+          }),
           Effect.provideService(HttpClient.HttpClient, httpClient),
           Effect.mapError(
             (cause) =>
