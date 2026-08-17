@@ -133,12 +133,13 @@ const checkScope = (
   ) {
     return error("forbidden", "Project scripts require a project thread agent.");
   }
-  if (scope.principal.kind === "global-assistant") return undefined;
-  if (typeof args.projectId === "string" && args.projectId !== scope.principal.projectId) {
-    return error("forbidden", "Thread agents cannot control another project.");
-  }
-  if (typeof args.threadId === "string" && args.threadId !== scope.principal.threadId) {
-    return error("forbidden", "Thread agents cannot control another thread.");
+  if (
+    invocation.commandId === "script.import" &&
+    scope.principal.kind === "thread-agent" &&
+    typeof args.projectId === "string" &&
+    args.projectId !== scope.principal.projectId
+  ) {
+    return error("forbidden", "Project scripts stay bound to the originating project.");
   }
   return undefined;
 };

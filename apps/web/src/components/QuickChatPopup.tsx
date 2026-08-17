@@ -181,7 +181,8 @@ function QuickChatContent({
   const modelValue = modelSelection
     ? JSON.stringify([modelSelection.instanceId, modelSelection.model])
     : "unconfigured";
-  const running = thread?.latestTurn?.state === "running";
+  const sessionError = thread?.session?.lastError ?? null;
+  const running = thread?.latestTurn?.state === "running" && thread?.session?.status !== "error";
   const canSend = modelSelection !== null && !running;
 
   useEffect(() => {
@@ -390,6 +391,7 @@ function QuickChatContent({
         </div>
         <p className="mt-2 text-[10px] text-muted-foreground">
           {sendError ??
+            sessionError ??
             (running ? "Quick Chat is working…" : "Ctrl/⌘ Shift Space toggles Quick Chat")}
         </p>
       </form>

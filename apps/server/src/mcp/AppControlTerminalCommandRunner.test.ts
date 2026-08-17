@@ -81,6 +81,8 @@ it.effect("runs through the bounded one-shot process path", () => {
           timedOut: false,
           stdoutTruncated: false,
           stderrTruncated: false,
+          stdoutInvalidUtf8: false,
+          stderrInvalidUtf8: false,
         };
       }),
   });

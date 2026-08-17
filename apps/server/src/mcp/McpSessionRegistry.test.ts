@@ -86,6 +86,31 @@ it.effect("grants app control only when credential issuance includes a typed pri
   }),
 );
 
+it.effect("issues an app-control-only endpoint when preview access is disabled", () =>
+  Effect.gen(function* () {
+    const registry = yield* makeRegistry(() => 1_000);
+    const threadId = ThreadId.make("thread-app-control-only");
+    const issued = yield* registry.issue({
+      threadId,
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      previewEnabled: false,
+      principal: {
+        kind: "thread-agent",
+        threadId,
+        projectId: ProjectId.make("project-1"),
+      },
+    });
+    const scope = yield* registry.resolve(
+      issued.config.authorizationHeader.replace(/^Bearer\s+/, ""),
+    );
+
+    expect(issued.config.endpoint).toBe("http://127.0.0.1:43123/mcp/app-control");
+    expect(issued.config.browserToolsAvailable).toBe(false);
+    expect(scope?.capabilities.has("preview")).toBe(false);
+    expect(scope?.capabilities.has("app-control")).toBe(true);
+  }),
+);
+
 it.effect("rejects a principal bound to a different provider thread", () =>
   Effect.gen(function* () {
     const registry = yield* makeRegistry(() => 1_000);

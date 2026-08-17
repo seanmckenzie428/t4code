@@ -63,14 +63,17 @@ provenance, root deny, and network deny.
 Direct conversation, one-level delegation, origin metadata, a three-turn
 concurrency limit, grant revocation, and stop controls are implemented. Target
 project threads retain normal project permissions; Quick Chat never
-inherits them. Proactive suggestion cards and mute controls are not yet
+inherits them. App-control credentials are issued independently of browser
+access, so disabling browser tools cannot strand Quick Chat without its only
+control surface. Proactive suggestion cards and mute controls are not yet
 implemented.
 
-Ordinary Codex project threads also receive app-control credentials, scoped to
-their current environment, project, and thread. This lets a regular chat
-inspect and control its own T4 context without switching to Quick Chat. Read
-snapshots are filtered to the same scope; destructive and
-external actions retain their normal confirmation requirements.
+Ordinary project threads also receive app-control credentials, scoped to
+their current environment. This lets a regular chat inspect every project and
+thread in that environment, control another thread, and delegate work there
+without switching to Quick Chat. Delegated threads cannot delegate again.
+Cross-environment control remains forbidden; destructive and external actions
+retain their normal confirmation requirements.
 
 The web client subscribes to the active quick thread directly, so it
 can render in a floating popup without entering the public project/thread

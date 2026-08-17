@@ -47,7 +47,7 @@ export const MODEL_PICKER_KEYBINDING_COMMANDS = [
 ] as const;
 export type ModelPickerKeybindingCommand = (typeof MODEL_PICKER_KEYBINDING_COMMANDS)[number];
 
-const STATIC_KEYBINDING_COMMANDS = [
+export const STATIC_KEYBINDING_COMMANDS = [
   "sidebar.toggle",
   // Legacy shortcut id: resolves to Quick Chat but is no longer a shipped default.
   "assistant.toggle",
@@ -59,6 +59,7 @@ const STATIC_KEYBINDING_COMMANDS = [
   "terminal.close",
   "rightPanel.toggle",
   "rightPanel.close",
+  "rightPanel.toggleMaximized",
   "diff.toggle",
   "preview.open",
   "preview.toggle",

@@ -85,6 +85,7 @@ import {
   resolveTimelineMinimapIndexFromPointer,
   resolveTimelineMinimapInteractiveWidth,
   resolveTimelineMinimapTopPercent,
+  shouldPreserveAssistantLineBreaks,
   type StableMessagesTimelineRowsState,
   type MessagesTimelineRow,
   TIMELINE_MINIMAP_MIN_ITEMS,
@@ -112,7 +113,7 @@ import {
   type TimestampFormat,
 } from "@t3tools/contracts/settings";
 import { useClientSettings } from "~/hooks/useSettings";
-import { formatChatTimestampTooltip, formatShortTimestamp } from "../../timestampFormat";
+import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
 
 import {
   buildInlineTerminalContextText,
@@ -639,7 +640,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             onScroll={handleScroll}
             className={cn(
               "scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain px-3 [overflow-anchor:none] sm:px-5",
-              topFadeEnabled && "chat-timeline-scroll-fade",
+              topFadeEnabled && "topbar-scroll-fade",
             )}
             ListHeaderComponent={
               loadEarlier !== null ? (
@@ -1030,7 +1031,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       <div className="relative max-w-[80%] rounded-2xl bg-message p-3 text-message-foreground">
         {delegation !== undefined ? (
           <div className="mb-2 flex items-center justify-between gap-3 border-border/60 border-b pb-2 text-[11px] text-muted-foreground">
-            <span>Delegated by Quick Chat</span>
+            <span>Delegated by another chat</span>
             {canStopDelegatedTurn ? (
               <Button
                 type="button"
@@ -1106,7 +1107,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         <div className="flex shrink-0 items-center gap-2">
           <Tooltip>
             <TooltipTrigger render={<p className="text-muted-foreground text-xs tabular-nums" />}>
-              {formatShortTimestamp(row.message.createdAt, ctx.timestampFormat)}
+              {formatDayAwareTimestamp(row.message.createdAt, ctx.timestampFormat)}
             </TooltipTrigger>
             <TooltipPopup>
               {formatChatTimestampTooltip(row.message.createdAt, ctx.timestampFormat)}
@@ -1183,6 +1184,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
           cwd={ctx.markdownCwd}
           threadRef={ctx.threadRef ?? undefined}
           isStreaming={Boolean(row.message.streaming)}
+          lineBreaks={shouldPreserveAssistantLineBreaks(messageText)}
           skills={ctx.skills}
         />
         <AssistantChangedFilesSection
@@ -1199,7 +1201,7 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
                 <TooltipTrigger
                   render={<p className="text-muted-foreground text-xs tabular-nums" />}
                 >
-                  {formatShortTimestamp(row.message.updatedAt, ctx.timestampFormat)}
+                  {formatDayAwareTimestamp(row.message.updatedAt, ctx.timestampFormat)}
                 </TooltipTrigger>
                 <TooltipPopup>
                   {formatChatTimestampTooltip(row.message.updatedAt, ctx.timestampFormat)}
@@ -1760,6 +1762,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
             skills={props.skills}
             className="text-message-foreground"
             lineBreaks
+            parseRawHtml={false}
           />
         ) : null}
         {trailingWhitespace ? <span aria-hidden="true">{trailingWhitespace}</span> : null}
@@ -1782,6 +1785,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
                   skills={props.skills}
                   className="text-message-foreground"
                   lineBreaks
+                  parseRawHtml={false}
                 />
               </div>
             ) : null
@@ -1870,6 +1874,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
           skills={props.skills}
           className="text-message-foreground"
           lineBreaks
+          parseRawHtml={false}
         />,
       );
     } else if (inlinePrefix.length === 0) {
@@ -1895,6 +1900,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
       skills={props.skills}
       className="text-message-foreground"
       lineBreaks
+      parseRawHtml={false}
     />
   );
 });
@@ -2132,6 +2138,9 @@ function buildToolCallExpandedBody(
   }
   return blocks.length > 0 ? blocks.join("\n\n") : null;
 }
+
+const toolCallExpandedBodyClassName =
+  "max-h-64 cursor-text overflow-auto whitespace-pre-wrap break-words font-mono text-secondary-label text-[length:var(--font-size-code,0.6875rem)] leading-relaxed select-text";
 
 function workEntryIconName(workEntry: TimelineWorkEntry): WorkEntryIconName {
   if (
@@ -2443,9 +2452,7 @@ const PlainWorkEntryRow = memo(function PlainWorkEntryRow(props: {
           onClick={stopRowToggle}
           onPointerDown={stopRowToggle}
         >
-          <pre className="max-h-64 cursor-text overflow-auto whitespace-pre-wrap break-words font-mono text-secondary-label text-[11px] leading-relaxed select-text">
-            {expandedBody}
-          </pre>
+          <pre className={toolCallExpandedBodyClassName}>{expandedBody}</pre>
         </div>
       ) : null}
     </div>

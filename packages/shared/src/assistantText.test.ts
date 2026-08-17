@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { stripUnsupportedAssistantDirectives } from "./assistantText";
+import { stripUnsupportedAssistantDirectives } from "./assistantText.js";
 
 describe("stripUnsupportedAssistantDirectives", () => {
   it("omits a complete Codex visualize transport directive", () => {

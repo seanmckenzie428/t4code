@@ -30,6 +30,7 @@ import type * as McpInvocationContext from "./McpInvocationContext.ts";
 import {
   MAX_CONCURRENT_ASSISTANT_DELEGATIONS,
   activeDelegatedTurnCount,
+  delegationOriginThreadId,
   validateDelegationPrincipal,
   validateDelegationTarget,
 } from "./AppControlDelegation.ts";
@@ -225,14 +226,26 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
     }
     const command = yield* Effect.gen(function* () {
       if (invocation.commandId.startsWith("delegation.")) {
-        const principalError = validateDelegationPrincipal(scope.principal);
-        if (principalError !== undefined) {
-          return yield* Effect.fail(controlError("forbidden", principalError));
-        }
         if (Option.isNone(settings) || Option.isNone(projections)) {
           return yield* Effect.fail(
             controlError("unavailable", "Delegation services are unavailable."),
           );
+        }
+        const source =
+          scope.principal.kind === "thread-agent"
+            ? yield* projections.value.getThreadDetailById(scope.principal.threadId).pipe(
+                Effect.map(Option.getOrUndefined),
+                Effect.mapError(() =>
+                  controlError("unavailable", "Delegation source is unavailable."),
+                ),
+              )
+            : undefined;
+        const principalError = validateDelegationPrincipal({
+          principal: scope.principal,
+          source,
+        });
+        if (principalError !== undefined) {
+          return yield* Effect.fail(controlError("forbidden", principalError));
         }
         const currentSettings = yield* settings.value.getSettings.pipe(
           Effect.mapError(() =>
@@ -248,9 +261,6 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
       switch (invocation.commandId) {
         case "delegation.thread.create": {
           const args = yield* decode(DelegationCreateArgs);
-          if (scope.principal.kind !== "global-assistant") {
-            return yield* Effect.fail(controlError("forbidden", "Delegation requires Quick Chat."));
-          }
           if (Option.isNone(projections)) {
             return yield* Effect.fail(controlError("unavailable", "Project state is unavailable."));
           }
@@ -276,7 +286,7 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
             threadId: ThreadId.make(`delegated:${invocation.actionId}`),
             projectId: args.projectId,
             kind: "project" as const,
-            title: args.title ?? "Delegated by Quick Chat",
+            title: args.title ?? "Delegated by chat",
             modelSelection,
             runtimeMode: "full-access" as const,
             interactionMode: "default" as const,
@@ -287,9 +297,6 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
         }
         case "delegation.turn.start": {
           const args = yield* decode(DelegationStartArgs);
-          if (scope.principal.kind !== "global-assistant") {
-            return yield* Effect.fail(controlError("forbidden", "Delegation requires Quick Chat."));
-          }
           if (Option.isNone(projections)) {
             return yield* Effect.fail(controlError("unavailable", "Thread state is unavailable."));
           }
@@ -303,12 +310,13 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
           if (targetError !== undefined) {
             return yield* Effect.fail(controlError("forbidden", targetError));
           }
+          const originThreadId = delegationOriginThreadId(scope.principal);
           if (
-            activeDelegatedTurnCount(snapshot, scope.principal.assistantThreadId) >=
+            activeDelegatedTurnCount(snapshot, originThreadId) >=
             MAX_CONCURRENT_ASSISTANT_DELEGATIONS
           ) {
             return yield* Effect.fail(
-              controlError("conflict", "Quick Chat already has three delegated turns running."),
+              controlError("conflict", "This chat already has three delegated turns running."),
             );
           }
           return {
@@ -324,7 +332,7 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
             runtimeMode: target?.runtimeMode ?? "full-access",
             interactionMode: target?.interactionMode ?? "default",
             delegation: {
-              assistantThreadId: scope.principal.assistantThreadId,
+              assistantThreadId: originThreadId,
               actionId: invocation.actionId,
               depth: 1 as const,
             },
@@ -333,9 +341,6 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
         }
         case "delegation.turn.stop": {
           const args = yield* decode(ThreadIdArgs);
-          if (scope.principal.kind !== "global-assistant") {
-            return yield* Effect.fail(controlError("forbidden", "Delegation requires Quick Chat."));
-          }
           if (Option.isNone(projections)) {
             return yield* Effect.fail(controlError("unavailable", "Thread state is unavailable."));
           }
@@ -355,11 +360,10 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
           const latestDelegated = Option.getOrUndefined(target)?.messages.findLast(
             (message) => message.role === "user" && message.delegation !== undefined,
           );
-          if (
-            latestDelegated?.delegation?.assistantThreadId !== scope.principal.assistantThreadId
-          ) {
+          const originThreadId = delegationOriginThreadId(scope.principal);
+          if (latestDelegated?.delegation?.assistantThreadId !== originThreadId) {
             return yield* Effect.fail(
-              controlError("forbidden", "Quick Chat may stop only turns it delegated."),
+              controlError("forbidden", "A chat may stop only turns it delegated."),
             );
           }
           return {

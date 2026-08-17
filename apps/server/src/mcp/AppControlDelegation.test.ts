@@ -9,6 +9,7 @@ import {
 import {
   MAX_CONCURRENT_ASSISTANT_DELEGATIONS,
   activeDelegatedTurnCount,
+  delegationOriginThreadId,
   validateDelegationPrincipal,
   validateDelegationTarget,
 } from "./AppControlDelegation.ts";
@@ -37,14 +38,30 @@ const delegatedThread = (id: string, state: "running" | "completed" = "running")
     ],
   }) as unknown as OrchestrationThread;
 
-it("rejects delegated threads from delegating again", () => {
+it("allows regular chats but rejects delegated threads from delegating again", () => {
+  const regularPrincipal = {
+    kind: "thread-agent" as const,
+    threadId: ThreadId.make("regular-1"),
+    projectId: ProjectId.make("project-1"),
+  };
+  const regularSource = {
+    ...delegatedThread("regular-1"),
+    messages: [{ role: "user", createdAt: "2026-01-01", delegation: undefined }],
+  } as unknown as OrchestrationThread;
+  expect(
+    validateDelegationPrincipal({ principal: regularPrincipal, source: regularSource }),
+  ).toBeUndefined();
   expect(
     validateDelegationPrincipal({
-      kind: "thread-agent",
-      threadId: ThreadId.make("delegated-1"),
-      projectId: ProjectId.make("project-1"),
+      principal: {
+        kind: "thread-agent",
+        threadId: ThreadId.make("delegated-1"),
+        projectId: ProjectId.make("project-1"),
+      },
+      source: delegatedThread("delegated-1"),
     }),
-  ).toContain("only");
+  ).toContain("cannot delegate");
+  expect(delegationOriginThreadId(regularPrincipal)).toBe(regularPrincipal.threadId);
 });
 
 it("rejects assistant and self targets", () => {

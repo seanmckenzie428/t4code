@@ -15,6 +15,13 @@ outside projects and the sidebar. Press Escape to save and close it; saved conve
 
 Quick Chat requires an explicit Codex model selection. It refuses to start when the installed
 Codex runtime cannot prove enforcement of the control-only filesystem and network profile.
+Its T4 controls remain available when agent browser access is disabled; that setting controls
+browser tools only.
+
+Regular project chats can inspect and control any project or thread in the same environment. They
+can create a thread or start delegated work in another existing thread while you continue in the
+current chat when **Settings** → **Quick Chat** → **Chat delegation** is enabled. Delegated threads
+cannot delegate again, and no chat can control another environment.
 
 Agents can present generated views in the thread's right panel. Native views use bounded T3
 components and registered actions. Rich views run in an opaque-origin iframe with a default-deny

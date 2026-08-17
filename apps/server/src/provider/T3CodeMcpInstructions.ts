@@ -1,4 +1,4 @@
-export const T3_CODE_MCP_INSTRUCTIONS = `
+const T4_CODE_APP_CAPABILITIES_INSTRUCTIONS = `
 
 ## T4 Code app capabilities
 
@@ -14,6 +14,10 @@ Generated views may include bounded, native-styled launcher placements in the ch
 
 Users can right-click a custom launcher to open its generated view for management. That view provides Save personally and Manage controls; use personal scope when the user asks for persistence rather than assuming it.
 
+`;
+
+const T4_CODE_BROWSER_INSTRUCTIONS = `
+
 ### Collaborative browser
 
 The \`t3-code\` MCP server is also the product-native T4 collaborative browser shared with the user. When it exposes \`preview_*\` tools, prefer those tools for browser navigation, inspection, interaction, screenshots, and recordings.
@@ -24,3 +28,8 @@ When explaining visible UI, use \`preview_highlight_apply\` to place passive num
 
 Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Use an alternative browser system only when the T4 preview tools are absent, the user explicitly requests another browser, or \`preview_open\` returns an explicit unsupported/unavailable error. A failed T4 preview tool call should be inspected and retried with corrected arguments when the error is actionable.
 `;
+
+export const buildT3CodeMcpInstructions = (browserToolsAvailable: boolean): string =>
+  `${T4_CODE_APP_CAPABILITIES_INSTRUCTIONS}${browserToolsAvailable ? T4_CODE_BROWSER_INSTRUCTIONS : ""}`;
+
+export const T3_CODE_MCP_INSTRUCTIONS = buildT3CodeMcpInstructions(true);

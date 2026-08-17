@@ -20,6 +20,24 @@ const NOW = "2026-04-10T00:00:00.000Z";
 const FRESH = "2026-04-09T00:00:00.000Z";
 const STALE = "2026-04-06T23:59:59.999Z";
 
+describe("changeRequestAutoSettles", () => {
+  it.each([
+    ["open", 3, true, false],
+    ["merged", 3, true, true],
+    ["merged", 3, false, false],
+    ["closed", 3, false, true],
+    ["closed", null, true, false],
+    [null, 3, false, false],
+  ] as const)(
+    "state=%s autoSettleAfterDays=%s autoSettleOnMerge=%s returns %s",
+    (state, autoSettleAfterDays, autoSettleOnMerge, expected) => {
+      expect(changeRequestAutoSettles(state, autoSettleAfterDays, autoSettleOnMerge)).toBe(
+        expected,
+      );
+    },
+  );
+});
+
 function makeShell(input: {
   readonly settledOverride?: "settled" | "active" | null;
   readonly activityAt: string | null;
@@ -188,6 +206,27 @@ describe("effectiveSettled", () => {
         now: NOW,
         autoSettleAfterDays: null,
         changeRequestState: "merged",
+      }),
+    ).toBe(true);
+  });
+
+  it("can keep a merged change request active", () => {
+    const recentlyActive = makeShell({ activityAt: "2026-04-09T23:59:59.999Z" });
+    expect(
+      effectiveSettled(recentlyActive, {
+        now: NOW,
+        autoSettleAfterDays: 3,
+        autoSettleOnMerge: false,
+        changeRequestState: "merged",
+      }),
+    ).toBe(false);
+
+    expect(
+      effectiveSettled(recentlyActive, {
+        now: NOW,
+        autoSettleAfterDays: 3,
+        autoSettleOnMerge: false,
+        changeRequestState: "closed",
       }),
     ).toBe(true);
   });

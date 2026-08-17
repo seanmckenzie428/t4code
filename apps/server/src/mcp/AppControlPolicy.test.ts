@@ -68,19 +68,19 @@ it("requires the exact scoped grant for reversible mutations", () => {
   ).toEqual({ status: "allow" });
 });
 
-it("rejects cross-thread and cross-project targets", () => {
+it("allows regular chats to target any thread and project in their environment", () => {
   expect(
     evaluateAppControlAccess({
       scope: scope(["thread:mutate"]),
-      invocation: invocation("thread.rename", { threadId: "thread-2", title: "No" }),
+      invocation: invocation("thread.rename", { threadId: "thread-2", title: "Renamed" }),
     }),
-  ).toMatchObject({ status: "deny", error: { code: "forbidden" } });
+  ).toEqual({ status: "allow" });
   expect(
     evaluateAppControlAccess({
       scope: scope(["project:mutate"]),
-      invocation: invocation("project.rename", { projectId: "project-2", title: "No" }),
+      invocation: invocation("project.rename", { projectId: "project-2", title: "Renamed" }),
     }),
-  ).toMatchObject({ status: "deny", error: { code: "forbidden" } });
+  ).toEqual({ status: "allow" });
 });
 
 it("always confirms destructive and raw/external calls", () => {
@@ -198,7 +198,7 @@ it("binds imported-script grants to script ID and command hash", () => {
   });
 });
 
-it("confirms terminal-action imports and keeps them in the current project", () => {
+it("confirms terminal-action imports and keeps them in the originating project", () => {
   const command = invocation("script.import", {
     projectId: "project-1",
     script: {

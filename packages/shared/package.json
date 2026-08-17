@@ -11,6 +11,14 @@
       "types": "./src/assistantText.ts",
       "import": "./src/assistantText.ts"
     },
+    "./themePalettes": {
+      "types": "./src/themePalettes.ts",
+      "import": "./src/themePalettes.ts"
+    },
+    "./themePreview": {
+      "types": "./src/themePreview.ts",
+      "import": "./src/themePreview.ts"
+    },
     "./projectFavicon": {
       "types": "./src/projectFavicon.ts",
       "import": "./src/projectFavicon.ts"

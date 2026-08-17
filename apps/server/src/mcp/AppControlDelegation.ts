@@ -13,6 +13,10 @@ function latestDelegatedMessage(thread: OrchestrationThread) {
   );
 }
 
+function latestUserMessage(thread: OrchestrationThread) {
+  return thread.messages.findLast((message) => message.role === "user");
+}
+
 export function isActiveDelegatedTurn(
   thread: OrchestrationThread,
   assistantThreadId: ThreadId,
@@ -34,21 +38,32 @@ export function activeDelegatedTurnCount(
   ).length;
 }
 
-export function validateDelegationPrincipal(principal: AppControlPrincipal): string | undefined {
-  return principal.kind === "global-assistant"
+export function delegationOriginThreadId(principal: AppControlPrincipal): ThreadId {
+  return principal.kind === "thread-agent" ? principal.threadId : principal.assistantThreadId;
+}
+
+export function validateDelegationPrincipal(input: {
+  readonly principal: AppControlPrincipal;
+  readonly source?: OrchestrationThread | undefined;
+}): string | undefined {
+  if (input.principal.kind === "global-assistant") return undefined;
+  if (input.source === undefined || input.source.deletedAt !== null) {
+    return "Delegation source does not exist.";
+  }
+  return latestUserMessage(input.source)?.delegation === undefined
     ? undefined
-    : "Delegation is available only to Quick Chat.";
+    : "A delegated thread cannot delegate another turn.";
 }
 
 export function validateDelegationTarget(input: {
-  readonly principal: Extract<AppControlPrincipal, { kind: "global-assistant" }>;
+  readonly principal: AppControlPrincipal;
   readonly target: OrchestrationThread | undefined;
   readonly requireActive?: boolean;
 }): string | undefined {
   const target = input.target;
   if (target === undefined || target.deletedAt !== null) return "Delegation target does not exist.";
-  if (target.id === input.principal.assistantThreadId || target.kind === "assistant") {
-    return "Quick Chat cannot delegate to itself or another control thread.";
+  if (target.id === delegationOriginThreadId(input.principal) || target.kind === "assistant") {
+    return "A chat cannot delegate to itself or a control thread.";
   }
   if (target.kind !== "project") return "Delegation target must be a project thread.";
   if (

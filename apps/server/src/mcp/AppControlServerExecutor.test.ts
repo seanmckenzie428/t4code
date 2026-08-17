@@ -16,6 +16,7 @@ import * as AppControlServerExecutor from "./AppControlServerExecutor.ts";
 import { AppControlTerminalCommandRunner } from "./AppControlTerminalCommandRunner.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ServerSettingsService } from "../serverSettings.ts";
 
 const scope = {
   environmentId: EnvironmentId.make("environment-1"),
@@ -110,6 +111,68 @@ it.effect("maps a rename to the canonical orchestration command and returns its 
       status: "completed",
       receipt: { sequence: 42, revision: 42, idempotentReplay: false },
     });
+  }),
+);
+
+it.effect("lets a regular chat start work in another thread", () =>
+  Effect.gen(function* () {
+    const commands: OrchestrationCommand[] = [];
+    const source = {
+      id: ThreadId.make("thread-1"),
+      projectId: ProjectId.make("project-1"),
+      kind: "project",
+      deletedAt: null,
+      messages: [{ role: "user", text: "Start work elsewhere", delegation: undefined }],
+    };
+    const target = {
+      id: ThreadId.make("thread-2"),
+      projectId: ProjectId.make("project-2"),
+      kind: "project",
+      deletedAt: null,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      messages: [],
+      session: null,
+      latestTurn: null,
+    };
+    const projections = ProjectionSnapshotQuery.of({
+      getThreadDetailById: (threadId: ThreadId) =>
+        Effect.succeed(Option.some(threadId === source.id ? source : target)),
+      getSnapshot: () => Effect.succeed({ threads: [target] } as never),
+    } as never);
+    const settings = ServerSettingsService.of({
+      getSettings: Effect.succeed({ globalAssistant: { delegationEnabled: true } }),
+    } as never);
+    const executor = yield* makeExecutor(
+      (command) =>
+        Effect.sync(() => {
+          commands.push(command);
+          return { sequence: 46 };
+        }),
+      { projections },
+    ).pipe(Effect.provideService(ServerSettingsService, settings));
+
+    const result = yield* executor.execute({
+      scope: { ...scope, grants: new Set(["assistant:delegate"]) },
+      invocation: {
+        actionId: AppActionId.make("delegate-regular-chat"),
+        commandId: AppCommandId.make("delegation.turn.start"),
+        args: { threadId: "thread-2", text: "Continue the requested work." },
+      },
+    });
+
+    expect(result).toMatchObject({ status: "completed", receipt: { sequence: 46 } });
+    expect(commands).toEqual([
+      expect.objectContaining({
+        type: "thread.turn.start",
+        threadId: "thread-2",
+        delegation: {
+          assistantThreadId: "thread-1",
+          actionId: "delegate-regular-chat",
+          depth: 1,
+        },
+      }),
+    ]);
   }),
 );
 

@@ -27,7 +27,7 @@ const descriptor = (id: string, risk: AppCommandDescriptor["risk"]): AppCommandD
   outputSchema: {},
 });
 
-it("limits project-agent status to its own project and thread", () => {
+it("shows regular chats all projects and threads in their environment", () => {
   const ownProjectId = ProjectId.make("own-project");
   const ownThreadId = ThreadId.make("own-thread");
   const otherProjectId = ProjectId.make("other-project");
@@ -77,10 +77,10 @@ it("limits project-agent status to its own project and thread", () => {
     threadId: ownThreadId,
   });
 
-  expect(scoped.focusedClient).toBeNull();
-  expect(scoped.projects.map((project) => project.id)).toEqual([ownProjectId]);
-  expect(scoped.threads.map((thread) => thread.id)).toEqual([ownThreadId]);
-  expect(scoped.views.map((view) => view.id)).toEqual(["own"]);
+  expect(scoped.focusedClient?.threadId).toBe(otherThreadId);
+  expect(scoped.projects.map((project) => project.id)).toEqual([ownProjectId, otherProjectId]);
+  expect(scoped.threads.map((thread) => thread.id)).toEqual([ownThreadId, otherThreadId]);
+  expect(scoped.views.map((view) => view.id)).toEqual(["own", "other"]);
   expect(scoped.commands.map((command) => command.id)).toEqual(["thread.rename"]);
 });
 

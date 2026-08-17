@@ -60,6 +60,7 @@ import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ServerSettings from "../../serverSettings.ts";
 const isModelSelection = Schema.is(ModelSelection);
 
 /**
@@ -69,6 +70,15 @@ const isModelSelection = Schema.is(ModelSelection);
  */
 export interface ProviderServiceLiveOptions {
   readonly canonicalEventLogger?: EventNdjsonLogger;
+  /**
+   * Overrides MCP credential issuance. The real issuer reads a module-global
+   * registry that only a running MCP server installs, which makes the
+   * agent-browser-access gate unobservable from a unit test; this seam lets a
+   * test see whether a credential was requested at all.
+   */
+  readonly issueMcpCredential?: typeof McpSessionRegistry.issueActiveMcpCredential;
+  /** Same seam as `issueMcpCredential`, for observing the deny path's revoke. */
+  readonly revokeMcpCredential?: typeof McpSessionRegistry.revokeActiveMcpThread;
 }
 
 type ProviderServiceMethod<Name extends keyof ProviderService.ProviderService["Service"]> =
@@ -89,6 +99,14 @@ export function appControlPrincipalForThread(
   return thread.kind === "assistant" || thread.kind === "quick"
     ? { kind: "global-assistant", assistantThreadId: threadId }
     : { kind: "thread-agent", threadId, projectId: thread.projectId };
+}
+
+export function appControlGrantsForPrincipal(principal: AppControlPrincipal): ReadonlySet<string> {
+  return new Set(
+    principal.kind === "thread-agent"
+      ? ["thread:mutate", "view:mutate", "assistant:delegate"]
+      : ["view:mutate", "assistant:delegate"],
+  );
 }
 
 function toValidationError(
@@ -230,10 +248,40 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 
   const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistry;
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+  const serverSettings = yield* ServerSettings.ServerSettingsService;
+  const issueMcpCredential =
+    options?.issueMcpCredential ?? McpSessionRegistry.issueActiveMcpCredential;
+  const revokeMcpCredential =
+    options?.revokeMcpCredential ?? McpSessionRegistry.revokeActiveMcpThread;
   const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
+  /**
+   * Attach the `t3-code` MCP server to the session that is about to start.
+   *
+   * Preview access selects the full endpoint. T4 app-control principals still
+   * receive a restricted credential when preview access is disabled, so a
+   * browser preference cannot silently remove generated views and app control.
+   */
+  /**
+   * Deny on an unreadable settings file rather than letting the read failure
+   * escape: adding `ServerSettingsError` to `ProviderServiceError` would widen
+   * a union every caller handles, for a branch that only decides whether one
+   * optional toolset is attached. Denying is the safe direction — an explicit
+   * "off" silently becoming "on" would violate the user's stated choice.
+   */
+  const agentBrowserAccessEnabled = serverSettings.getSettings.pipe(
+    Effect.map((settings) => settings.enableAgentBrowserAccess),
+    Effect.catch((cause) =>
+      Effect.logWarning(
+        "Could not read server settings; withholding agent browser access for this session.",
+        { cause },
+      ).pipe(Effect.as(false)),
+    ),
+  );
+
   const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
     Effect.gen(function* () {
+      const previewEnabled = yield* agentBrowserAccessEnabled;
       const projectionSnapshotQuery = yield* Effect.serviceOption(
         ProjectionSnapshotQuery.ProjectionSnapshotQuery,
       );
@@ -245,27 +293,27 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const principal = Option.isNone(thread)
         ? undefined
         : appControlPrincipalForThread(threadId, thread.value);
-      return yield* McpSessionRegistry.issueActiveMcpCredential({
+      if (!previewEnabled && principal === undefined) {
+        yield* revokeMcpCredential(threadId);
+        yield* Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId));
+        return undefined;
+      }
+      const credential = yield* issueMcpCredential({
         threadId,
         providerInstanceId,
+        previewEnabled,
         ...(principal === undefined ? {} : { principal }),
         ...(principal === undefined
           ? {}
           : {
-              grants: new Set(
-                principal.kind === "thread-agent"
-                  ? ["thread:mutate", "view:mutate"]
-                  : ["view:mutate", "assistant:delegate"],
-              ),
+              grants: appControlGrantsForPrincipal(principal),
             }),
       });
-    }).pipe(
-      Effect.tap((credential) =>
-        credential
-          ? Effect.sync(() => McpProviderSession.setMcpProviderSession(credential.config))
-          : Effect.void,
-      ),
-    );
+      if (credential) {
+        yield* Effect.sync(() => McpProviderSession.setMcpProviderSession(credential.config));
+      }
+      return credential;
+    });
 
   const resolveSessionProfile = (threadId: ThreadId) =>
     Effect.gen(function* () {
@@ -282,7 +330,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         : undefined;
     });
   const clearMcpSession = (threadId: ThreadId) =>
-    McpSessionRegistry.revokeActiveMcpThread(threadId).pipe(
+    revokeMcpCredential(threadId).pipe(
       Effect.tap(() => Effect.sync(() => McpProviderSession.clearMcpProviderSession(threadId))),
     );
 

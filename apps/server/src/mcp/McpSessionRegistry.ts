@@ -17,6 +17,7 @@ export interface McpCredentialRequest {
   readonly providerInstanceId: ProviderInstanceId;
   readonly principal?: AppControlPrincipal;
   readonly grants?: ReadonlySet<string>;
+  readonly previewEnabled?: boolean;
 }
 
 export interface McpIssuedCredential {
@@ -101,10 +102,10 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
   const state = yield* SynchronizedRef.make<RegistryState>({ records: new Map() });
   const currentTimeMillis = options.now ? Effect.sync(options.now) : Clock.currentTimeMillis;
   const livenessWindowMs = options.livenessWindowMs ?? DEFAULT_LIVENESS_WINDOW_MS;
-  const endpoint =
+  const endpointBase =
     httpServer.address._tag === "TcpAddress"
-      ? `http://${getHttpMcpEndpointHost(httpServer.address.hostname)}:${httpServer.address.port}/mcp`
-      : "http://127.0.0.1/mcp";
+      ? `http://${getHttpMcpEndpointHost(httpServer.address.hostname)}:${httpServer.address.port}`
+      : "http://127.0.0.1";
 
   const hashToken = (token: string) =>
     crypto
@@ -133,15 +134,17 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
           : request.principal.assistantThreadId === request.threadId)
           ? request.principal
           : undefined;
+      const previewEnabled = request.previewEnabled !== false;
       const scope: McpInvocationContext.McpInvocationScope = {
         environmentId,
         threadId: ThreadId.make(request.threadId),
         providerSessionId,
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
         ...(principal === undefined ? {} : { principal }),
-        capabilities: new Set(
-          principal === undefined ? (["preview"] as const) : (["preview", "app-control"] as const),
-        ),
+        capabilities: new Set([
+          ...(previewEnabled ? (["preview"] as const) : []),
+          ...(principal === undefined ? [] : (["app-control"] as const)),
+        ]),
         grants: new Set(request.grants ?? []),
         issuedAt,
       };
@@ -156,8 +159,9 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
           threadId: scope.threadId,
           providerSessionId,
           providerInstanceId: scope.providerInstanceId,
-          endpoint,
+          endpoint: `${endpointBase}${previewEnabled ? "/mcp" : "/mcp/app-control"}`,
           authorizationHeader: `Bearer ${rawToken}`,
+          browserToolsAvailable: previewEnabled,
         },
       };
     },

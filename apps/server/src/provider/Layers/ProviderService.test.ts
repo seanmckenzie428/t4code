@@ -12,6 +12,7 @@ import type {
 } from "@t3tools/contracts";
 import {
   ApprovalRequestId,
+  EnvironmentId,
   EventId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -21,7 +22,7 @@ import {
   TurnId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
-import { it, assert, vi } from "@effect/vitest";
+import { it, assert, describe, vi } from "@effect/vitest";
 
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -47,7 +48,11 @@ import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.ts";
-import { appControlPrincipalForThread, makeProviderServiceLive } from "./ProviderService.ts";
+import {
+  appControlGrantsForPrincipal,
+  appControlPrincipalForThread,
+  makeProviderServiceLive,
+} from "./ProviderService.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -59,6 +64,8 @@ import {
 import * as ServerConfig from "../../config.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
+import type { McpCredentialRequest } from "../../mcp/McpSessionRegistry.ts";
+import * as ProjectionSnapshotQuery from "../../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
 
 const defaultServerSettingsLayer = ServerSettings.ServerSettingsService.layerTest();
@@ -88,6 +95,14 @@ it("derives app-control authority independently of provider driver", () => {
     kind: "global-assistant",
     assistantThreadId: threadId,
   });
+  assert.deepStrictEqual(
+    [
+      ...appControlGrantsForPrincipal(
+        appControlPrincipalForThread(threadId, { kind: "project", projectId }),
+      ),
+    ],
+    ["thread:mutate", "view:mutate", "assistant:delegate"],
+  );
 });
 
 type LegacyProviderRuntimeEvent = {
@@ -1970,5 +1985,132 @@ validation.layer("ProviderServiceLive validation", (it) => {
         assert.equal(runtime.value.threadId, session.threadId);
       }
     }),
+  );
+});
+
+describe("agent browser access", () => {
+  const revokedThreads: Array<ThreadId> = [];
+
+  const startSessionWith = (
+    enableAgentBrowserAccess: boolean,
+    threadId: ThreadId,
+    includeProjectedThread = false,
+  ) =>
+    Effect.gen(function* () {
+      const issued: Array<McpCredentialRequest> = [];
+      const codex = makeFakeCodexAdapter();
+      const providerAdapterLayer = Layer.succeed(
+        ProviderAdapterRegistry.ProviderAdapterRegistry,
+        makeAdapterRegistryMock({ [CODEX_DRIVER]: codex.adapter }),
+      );
+      const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
+        Layer.provide(SqlitePersistenceMemory),
+      );
+      const directoryLayer = ProviderSessionDirectoryLive.pipe(
+        Layer.provide(runtimeRepositoryLayer),
+      );
+      const providerLayerBase = makeProviderServiceLive({
+        issueMcpCredential: (request) =>
+          Effect.sync(() => {
+            issued.push(request);
+            return undefined;
+          }),
+        revokeMcpCredential: (revoked) => Effect.sync(() => void revokedThreads.push(revoked)),
+      }).pipe(
+        Layer.provide(providerAdapterLayer),
+        Layer.provide(directoryLayer),
+        Layer.provide(ServerSettings.ServerSettingsService.layerTest({ enableAgentBrowserAccess })),
+        Layer.provide(serverConfigTestLayer),
+        Layer.provide(AnalyticsService.layerTest),
+        Layer.provide(
+          Layer.succeed(
+            ProviderEventLoggers.ProviderEventLoggers,
+            ProviderEventLoggers.NoOpProviderEventLoggers,
+          ),
+        ),
+      );
+      const startSession = Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        return yield* provider.startSession(threadId, {
+          provider: CODEX_DRIVER,
+          providerInstanceId: codexInstanceId,
+          threadId,
+          runtimeMode: "full-access",
+        });
+      }).pipe(Effect.provide(providerLayerBase));
+      const projectionSnapshotQuery = ProjectionSnapshotQuery.ProjectionSnapshotQuery.of({
+        getThreadShellById: () =>
+          Effect.succeed(
+            Option.some({
+              id: threadId,
+              projectId: ProjectId.make("project-browser-tools"),
+              kind: "project",
+            } as never),
+          ),
+      } as never);
+
+      yield* includeProjectedThread
+        ? startSession.pipe(
+            Effect.provideService(
+              ProjectionSnapshotQuery.ProjectionSnapshotQuery,
+              projectionSnapshotQuery,
+            ),
+          )
+        : startSession;
+
+      return issued;
+    });
+
+  // Without a projected thread there is no app-control authority, so disabling
+  // preview access withholds the MCP credential entirely.
+  it.effect("requests no MCP credential when agent browser access is off", () =>
+    Effect.gen(function* () {
+      const issued = yield* startSessionWith(false, asThreadId("thread-browser-off"));
+
+      assert.deepEqual(issued, []);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("revokes an already-issued credential when access is off", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-browser-revoke");
+      revokedThreads.length = 0;
+
+      yield* startSessionWith(false, threadId);
+
+      // Clearing the in-memory map is not enough: a token issued before the
+      // toggle flipped stays valid against `/mcp` for its whole liveness
+      // window, and later turns refresh it.
+      assert.deepEqual(revokedThreads, [threadId]);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("requests an MCP credential when agent browser access is on", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-browser-on");
+
+      const issued = yield* startSessionWith(true, threadId);
+
+      assert.deepEqual(
+        issued.map((request) => request.threadId),
+        [threadId],
+      );
+      assert.equal(issued[0]?.previewEnabled, true);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+  it.effect("keeps app control when agent browser access is off", () =>
+    Effect.gen(function* () {
+      const threadId = asThreadId("thread-app-control-only");
+      const issued = yield* startSessionWith(false, threadId, true);
+
+      assert.equal(issued.length, 1);
+      assert.equal(issued[0]?.previewEnabled, false);
+      assert.deepEqual(issued[0]?.principal, {
+        kind: "thread-agent",
+        threadId,
+        projectId: ProjectId.make("project-browser-tools"),
+      });
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 });

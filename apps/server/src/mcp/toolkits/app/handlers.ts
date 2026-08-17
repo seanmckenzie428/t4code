@@ -51,26 +51,10 @@ export const isAgentInvocableCommandId = (commandId: string): boolean =>
 
 export function scopeAppControlSnapshot(
   snapshot: AppControlSnapshot,
-  principal: AppControlPrincipal,
+  _principal: AppControlPrincipal,
 ): AppControlSnapshot {
-  if (principal.kind === "global-assistant") {
-    return snapshot;
-  }
-  const focusedClient = snapshot.focusedClient;
   return {
     ...snapshot,
-    focusedClient:
-      focusedClient?.projectId === principal.projectId ||
-      focusedClient?.threadId === principal.threadId
-        ? focusedClient
-        : null,
-    projects: snapshot.projects.filter((project) => project.id === principal.projectId),
-    threads: snapshot.threads.filter((thread) => thread.id === principal.threadId),
-    views: snapshot.views.filter(
-      (view) =>
-        (view.scope.kind === "thread" && view.scope.threadId === principal.threadId) ||
-        (view.scope.kind === "project" && view.scope.projectId === principal.projectId),
-    ),
     commands: snapshot.commands.filter(isAgentDiscoverableCommand),
   };
 }

@@ -89,6 +89,8 @@ import {
   PullRequestReviewerCandidateList,
   PullRequestReviewerRequestInput,
   PullRequestSubmitReviewInput,
+  PullRequestThreadCommentsInput,
+  PullRequestThreadCommentsResult,
   PullRequestThreadReplyInput,
   PullRequestThreadResolutionInput,
   PullRequestUnavailableError,
@@ -132,6 +134,7 @@ import {
 } from "./terminal.ts";
 import {
   DiscoveredLocalServerList,
+  ConfiguredLocalServerUrls,
   PreviewCloseInput,
   PreviewError,
   PreviewEvent,
@@ -299,6 +302,7 @@ export const WS_METHODS = {
   pullRequestsListStats: "pullRequests.listStats",
   pullRequestsDetail: "pullRequests.detail",
   pullRequestsActivity: "pullRequests.activity",
+  pullRequestsThreadComments: "pullRequests.threadComments",
   pullRequestsDiffFileContents: "pullRequests.diffFileContents",
   pullRequestsRunAction: "pullRequests.runAction",
   pullRequestsUpdate: "pullRequests.update",
@@ -517,6 +521,12 @@ export const WsPullRequestsDetailRpc = Rpc.make(WS_METHODS.pullRequestsDetail, {
 export const WsPullRequestsActivityRpc = Rpc.make(WS_METHODS.pullRequestsActivity, {
   payload: PullRequestRef,
   success: PullRequestActivity,
+  error: PullRequestRpcError,
+});
+
+export const WsPullRequestsThreadCommentsRpc = Rpc.make(WS_METHODS.pullRequestsThreadComments, {
+  payload: PullRequestThreadCommentsInput,
+  success: PullRequestThreadCommentsResult,
   error: PullRequestRpcError,
 });
 
@@ -900,7 +910,9 @@ export const WsSubscribePreviewEventsRpc = Rpc.make(WS_METHODS.subscribePreviewE
 export const WsSubscribeDiscoveredLocalServersRpc = Rpc.make(
   WS_METHODS.subscribeDiscoveredLocalServers,
   {
-    payload: Schema.Struct({}),
+    payload: Schema.Struct({
+      configuredUrls: Schema.optional(ConfiguredLocalServerUrls),
+    }),
     success: DiscoveredLocalServerList,
     error: EnvironmentAuthorizationError,
     stream: true,
@@ -1049,6 +1061,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsPullRequestsListStatsRpc,
   WsPullRequestsDetailRpc,
   WsPullRequestsActivityRpc,
+  WsPullRequestsThreadCommentsRpc,
   WsPullRequestsDiffFileContentsRpc,
   WsPullRequestsRunActionRpc,
   WsPullRequestsUpdateRpc,

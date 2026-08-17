@@ -220,6 +220,15 @@ export const APP_COMMAND_CATALOG = [
     emptyInput,
   ),
   command(
+    "ui.right-panel.toggle-maximized",
+    "ui",
+    "client",
+    "navigate",
+    "Maximize or restore right panel",
+    null,
+    emptyInput,
+  ),
+  command(
     "ui.editor.open-favorite",
     "ui",
     "client",
@@ -801,6 +810,7 @@ const KEYBINDING_APP_COMMAND_ALIASES = {
   "terminal.new": "terminal.new",
   "terminal.close": "terminal.close",
   "rightPanel.toggle": "ui.right-panel.toggle",
+  "rightPanel.toggleMaximized": "ui.right-panel.toggle-maximized",
   "rightPanel.close": "ui.right-panel.close-surface",
   "diff.toggle": "ui.diff.toggle",
   "preview.open": "ui.preview.open",

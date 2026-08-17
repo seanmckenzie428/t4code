@@ -36,7 +36,7 @@ const controlTool = <T extends Tool.Any>(tool: T): T =>
 export const AppStatusTool = readonlyTool(
   Tool.make("app_status", {
     description:
-      'Inspect bounded T4 application state, including the focused client, projects, threads, current generated-view IDs/titles/revisions/scopes, and semantic commands available to this provider session. When the user says "add this to T4", "put this in T4", "show this in T4", or refers to "the app" for a view, dashboard, control, or interactive tool, interpret it as a generated in-app UI request. Inspect views metadata before presenting or updating generated UI; do not edit product source merely to fulfill that request unless the user explicitly asks to change the product itself.',
+      'Inspect bounded environment-wide T4 application state, including the focused client, projects, threads, current generated-view IDs/titles/revisions/scopes, and semantic commands available to this provider session. A regular project chat may inspect and control any project or thread in this environment, including starting delegated work in another thread; cross-environment control remains unavailable. When the user says "add this to T4", "put this in T4", "show this in T4", or refers to "the app" for a view, dashboard, control, or interactive tool, interpret it as a generated in-app UI request. Inspect views metadata before presenting or updating generated UI; do not edit product source merely to fulfill that request unless the user explicitly asks to change the product itself.',
     parameters: Schema.Struct({}),
     success: AppControlSnapshot,
     failure: AppControlError,
@@ -63,7 +63,7 @@ export const AppCommandsTool = readonlyTool(
 export const AppInvokeTool = controlTool(
   Tool.make("app_invoke", {
     description:
-      "Invoke one typed semantic T4 command by ID. Commands are scope checked and may require a grant or explicit human confirmation based on risk.",
+      "Invoke one typed semantic T4 command by ID. Commands stay inside this environment and may require a grant or explicit human confirmation based on risk. Regular project chats may target another project or thread in the environment.",
     parameters: AppCommandInvocation,
     success: AppCommandResult,
     failure: AppControlError,

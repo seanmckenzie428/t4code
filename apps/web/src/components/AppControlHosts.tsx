@@ -11,9 +11,11 @@ import {
   type EnvironmentId,
 } from "@t3tools/contracts";
 import { Atom } from "effect/unstable/reactivity";
+import { useParams } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { registerWebAppCommandHandler, webAppCommandRegistry } from "../appCommandRegistry";
+import { resolveAppControlFocusedThread } from "../appControlFocusedClient";
 import { randomHex } from "../lib/utils";
 import { useUpdateClientSettings } from "../hooks/useSettings";
 import { useQuickChatStore } from "../quickChatStore";
@@ -22,6 +24,7 @@ import { useEnvironments } from "../state/environments";
 import { useProjects, useThreadShells } from "../state/entities";
 import { appControlEnvironment } from "../state/appControl";
 import { useAtomCommand } from "../state/use-atom-command";
+import { resolveThreadRouteTarget } from "../threadRoutes";
 import { createAppControlRequestConsumerAtom } from "./appControlRequestConsumer";
 
 const RESERVED_COMMAND_IDS = ["app.status", "app.commands"] as const;
@@ -46,6 +49,15 @@ function AppControlHost({ environmentId }: { readonly environmentId: Environment
   const [clientId] = useState(() => AppControlClientId.make(`web-${randomHex(16)}`));
   const projects = useProjects().filter((project) => project.environmentId === environmentId);
   const threads = useThreadShells().filter((thread) => thread.environmentId === environmentId);
+  const routeTarget = useParams({
+    strict: false,
+    select: (params) => resolveThreadRouteTarget(params),
+  });
+  const focusedThread = resolveAppControlFocusedThread({
+    environmentId,
+    routeThreadRef: routeTarget?.kind === "server" ? routeTarget.threadRef : null,
+    threads,
+  });
   const quickChatOpen = useQuickChatStore(
     (state) => state.byEnvironment[String(environmentId)]?.open ?? false,
   );
@@ -103,13 +115,17 @@ function AppControlHost({ environmentId }: { readonly environmentId: Environment
       }
       const context = {
         environmentId,
-        ...(request.principal.kind === "thread-agent"
-          ? { projectId: String(request.principal.projectId) }
-          : {}),
-        threadId:
-          request.principal.kind === "thread-agent"
-            ? String(request.principal.threadId)
-            : String(request.principal.assistantThreadId),
+        ...(focusedThread
+          ? { projectId: String(focusedThread.projectId) }
+          : request.principal.kind === "thread-agent"
+            ? { projectId: String(request.principal.projectId) }
+            : {}),
+        threadId: String(
+          focusedThread?.threadId ??
+            (request.principal.kind === "thread-agent"
+              ? request.principal.threadId
+              : request.principal.assistantThreadId),
+        ),
         source: "mcp" as const,
       };
       if (request.commandId === "app.commands") {
@@ -118,12 +134,14 @@ function AppControlHost({ environmentId }: { readonly environmentId: Environment
           .map(({ descriptor }) => descriptor);
       }
       if (request.commandId === "app.status") {
+        const statusThreadId =
+          focusedThread?.threadId ??
+          (request.principal.kind === "thread-agent"
+            ? request.principal.threadId
+            : request.principal.assistantThreadId);
         const ref = {
           environmentId,
-          threadId:
-            request.principal.kind === "thread-agent"
-              ? request.principal.threadId
-              : request.principal.assistantThreadId,
+          threadId: statusThreadId,
         };
         return {
           sequence: 0,
@@ -131,12 +149,8 @@ function AppControlHost({ environmentId }: { readonly environmentId: Environment
           focusedClient: {
             clientId,
             surface: window.desktopBridge ? "desktop" : "web",
-            projectId:
-              request.principal.kind === "thread-agent" ? request.principal.projectId : null,
-            threadId:
-              request.principal.kind === "thread-agent"
-                ? request.principal.threadId
-                : request.principal.assistantThreadId,
+            projectId: focusedThread?.projectId ?? null,
+            threadId: statusThreadId,
             quickChatOpen,
             activePanel: null,
             revision: 0,
@@ -209,7 +223,7 @@ function AppControlHost({ environmentId }: { readonly environmentId: Environment
         result: result ?? null,
       };
     },
-    [appViewsByThread, clientId, environmentId, projects, quickChatOpen, threads],
+    [appViewsByThread, clientId, environmentId, focusedThread, projects, quickChatOpen, threads],
   );
   const [requestHandlerAtom] = useState(() => Atom.make({ handle: handleRequest }));
   const setRequestHandler = useAtomSet(requestHandlerAtom);

@@ -13,12 +13,14 @@ const showContextMenuFallbackMock =
       position?: { x: number; y: number },
     ) => Promise<T | null>
   >();
+const dismissContextMenuMock = vi.fn<() => void>();
 
 const requestConfirmDialogMock =
   vi.fn<(message: string, options?: ConfirmDialogOptions) => Promise<boolean> | undefined>();
 
 vi.mock("./contextMenuFallback", () => ({
   showContextMenuFallback: showContextMenuFallbackMock,
+  dismissContextMenu: dismissContextMenuMock,
 }));
 
 vi.mock("./confirmDialog", () => ({
@@ -98,6 +100,14 @@ describe("LocalApi", () => {
     await expect(api.shell.openExternal("https://example.com/blocked")).rejects.toThrow(
       "Allow popups",
     );
+  });
+
+  it("dismisses an open browser context menu without a desktop bridge", async () => {
+    const { createLocalApi } = await import("./localApi");
+
+    await createLocalApi().contextMenu.close();
+
+    expect(dismissContextMenuMock).toHaveBeenCalledOnce();
   });
 
   it("uses the themed confirmation host when it is available", async () => {
