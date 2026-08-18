@@ -368,11 +368,11 @@ describe("hasConfiguredMcpServer", () => {
 });
 
 describe("control-only Codex launch", () => {
-  it("places profile selection before the app-server subcommand", () => {
-    NodeAssert.deepStrictEqual(
-      codexSessionAppServerArgs(["--strict-config"], undefined, ["--profile", "t3-control-only"]),
-      ["--profile", "t3-control-only", "app-server", "--strict-config"],
-    );
+  it("uses the isolated base config without a runtime-only profile flag", () => {
+    NodeAssert.deepStrictEqual(codexSessionAppServerArgs(["--strict-config"], undefined), [
+      "app-server",
+      "--strict-config",
+    ]);
   });
 
   it.effect("omits legacy approval and sandbox overrides from assistant turns", () =>

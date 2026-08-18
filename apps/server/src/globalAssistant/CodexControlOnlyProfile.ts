@@ -7,9 +7,7 @@ import * as Schema from "effect/Schema";
 export const GLOBAL_ASSISTANT_CODEX_PROFILE = "t3-control-only";
 export const MINIMUM_GLOBAL_ASSISTANT_CODEX_VERSION = "0.146.0";
 
-const PROFILE_FILE_NAME = `${GLOBAL_ASSISTANT_CODEX_PROFILE}.config.toml`;
-
-const CONTROL_ONLY_PROFILE = `default_permissions = "${GLOBAL_ASSISTANT_CODEX_PROFILE}"
+const CONTROL_ONLY_CONFIG = `default_permissions = "${GLOBAL_ASSISTANT_CODEX_PROFILE}"
 approval_policy = "never"
 approvals_reviewer = "user"
 web_search = "disabled"
@@ -44,7 +42,7 @@ unified_exec = false
 
 export interface CodexControlOnlyProfile {
   readonly codexHome: string;
-  readonly profileFile: string;
+  readonly configFile: string;
   readonly profileName: typeof GLOBAL_ASSISTANT_CODEX_PROFILE;
 }
 
@@ -100,7 +98,6 @@ export const materializeCodexControlOnlyProfile = Effect.fn("materializeCodexCon
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const codexHome = path.join(input.assistantRoot, "codex-home");
-    const profileFile = path.join(codexHome, PROFILE_FILE_NAME);
     const configFile = path.join(codexHome, "config.toml");
     const sourceAuth = path.join(input.authHomePath, "auth.json");
     const assistantAuth = path.join(codexHome, "auth.json");
@@ -108,8 +105,7 @@ export const materializeCodexControlOnlyProfile = Effect.fn("materializeCodexCon
     yield* fileSystem.makeDirectory(codexHome, { recursive: true });
     // The isolated base intentionally contains no user MCP servers, apps,
     // hooks, skills, plugins, or project configuration.
-    yield* fileSystem.writeFileString(configFile, "");
-    yield* fileSystem.writeFileString(profileFile, CONTROL_ONLY_PROFILE);
+    yield* fileSystem.writeFileString(configFile, CONTROL_ONLY_CONFIG);
 
     const sourceAuthExists = yield* fileSystem.exists(sourceAuth);
     if (sourceAuthExists) {
@@ -139,7 +135,7 @@ export const materializeCodexControlOnlyProfile = Effect.fn("materializeCodexCon
 
     return {
       codexHome,
-      profileFile,
+      configFile,
       profileName: GLOBAL_ASSISTANT_CODEX_PROFILE,
     } satisfies CodexControlOnlyProfile;
   },
@@ -182,17 +178,17 @@ export function verifyCodexControlOnlyConfig(input: {
     return `Codex did not activate permission profile '${GLOBAL_ASSISTANT_CODEX_PROFILE}'.`;
   }
 
-  const profileLayer = input.config.layers?.find(
+  const configLayer = input.config.layers?.find(
     (layer) =>
       layer.name.type === "user" &&
       "file" in layer.name &&
-      layer.name.file === input.expected.profileFile &&
-      layer.name.profile === input.expected.profileName,
+      layer.name.file === input.expected.configFile &&
+      layer.name.profile == null,
   );
-  if (!profileLayer || !isRecord(profileLayer.config)) {
-    return `Codex did not report provenance for '${input.expected.profileFile}'.`;
+  if (!configLayer || !isRecord(configLayer.config)) {
+    return `Codex did not report provenance for '${input.expected.configFile}'.`;
   }
-  const permissions = profileLayer.config.permissions;
+  const permissions = configLayer.config.permissions;
   const namedPermissions = isRecord(permissions)
     ? permissions[GLOBAL_ASSISTANT_CODEX_PROFILE]
     : null;

@@ -1697,7 +1697,6 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
             ? {
                 homePath: controlOnlyProfile.codexHome,
                 controlOnlyProfile,
-                appServerRootArgs: ["--profile", controlOnlyProfile.profileName],
               }
             : codexConfig.homePath
               ? { homePath: codexConfig.homePath }

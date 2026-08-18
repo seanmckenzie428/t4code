@@ -42,8 +42,7 @@ export const codexExecLaunchArgs = (launchArgs?: string) => {
 export const codexSessionAppServerArgs = (
   appServerArgs: ReadonlyArray<string> | undefined,
   launchArgs: string | undefined,
-  rootArgs: ReadonlyArray<string> = [],
 ) => {
-  const launchAppServerArgs = [...rootArgs, ...codexAppServerArgs(launchArgs)];
+  const launchAppServerArgs = codexAppServerArgs(launchArgs);
   return appServerArgs ? [...launchAppServerArgs, ...appServerArgs] : launchAppServerArgs;
 };
