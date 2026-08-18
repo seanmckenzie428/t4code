@@ -33,15 +33,6 @@ export function resolveSidebarThreadLocationLabel(input: {
     : formatWorktreePathForDisplay(input.worktreePath);
 }
 
-export function resolveSidebarThreadBranchLabel(
-  input: Pick<SidebarThreadSummary, "branch" | "workspaceBinding">,
-): string | null {
-  const binding = input.workspaceBinding;
-  return binding?.extensionId === "lotus-runtime" && binding.providerId === "lotus"
-    ? binding.workspaceId
-    : input.branch;
-}
-
 type SidebarProject = {
   id: string;
   title: string;
