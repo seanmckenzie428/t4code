@@ -113,6 +113,7 @@ const historyGestureEvents = makeHistoryGestureEventController({
 const isMacPlatform = process.platform === "darwin";
 if (isMacPlatform) {
   window.addEventListener("mousedown", historyGestureEvents.handleMouseDown, true);
+  window.addEventListener("mouseup", historyGestureEvents.handleMouseUp, true);
   window.addEventListener("auxclick", historyGestureEvents.handleAuxClick, true);
   window.addEventListener("wheel", historyGestureEvents.handleWheel, {
     capture: true,

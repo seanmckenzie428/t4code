@@ -254,10 +254,12 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       },
     });
     document.addEventListener("mousedown", controller.handleMouseDown, true);
+    document.addEventListener("mouseup", controller.handleMouseUp, true);
     document.addEventListener("auxclick", controller.handleAuxClick, true);
     document.addEventListener("wheel", controller.handleWheel, { capture: true, passive: false });
     return () => {
       document.removeEventListener("mousedown", controller.handleMouseDown, true);
+      document.removeEventListener("mouseup", controller.handleMouseUp, true);
       document.removeEventListener("auxclick", controller.handleAuxClick, true);
       document.removeEventListener("wheel", controller.handleWheel, true);
     };

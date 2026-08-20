@@ -68,20 +68,26 @@ describe("history gesture DOM events", () => {
     }
   });
 
-  it("deduplicates mousedown and auxclick for one side-button press", () => {
+  it("owns the full side-button lifecycle and navigates once", () => {
     const navigate = vi.fn();
     let now = 100;
     const controller = makeHistoryGestureEventController({ navigate, now: () => now });
     const down = trustedMouseEvent(3);
+    const up = trustedMouseEvent(3);
     const click = trustedMouseEvent(3);
 
     controller.handleMouseDown(down);
+    now = 110;
+    controller.handleMouseUp(up);
     now = 120;
     controller.handleAuxClick(click);
 
     expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith("back");
     expect(down.preventDefault).toHaveBeenCalledOnce();
+    expect(up.preventDefault).toHaveBeenCalledOnce();
+    expect(up.stopPropagation).toHaveBeenCalledOnce();
+    expect(up.stopImmediatePropagation).toHaveBeenCalledOnce();
     expect(click.preventDefault).toHaveBeenCalledOnce();
   });
 

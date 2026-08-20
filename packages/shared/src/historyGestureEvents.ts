@@ -11,6 +11,7 @@ import {
 export interface HistoryGestureEventController {
   readonly handleAuxClick: (event: MouseEvent) => void;
   readonly handleMouseDown: (event: MouseEvent) => void;
+  readonly handleMouseUp: (event: MouseEvent) => void;
   readonly handleWheel: (event: WheelEvent) => void;
 }
 
@@ -77,6 +78,15 @@ export function makeHistoryGestureEventController(input: {
 
   return {
     handleMouseDown: (event) => handleSideButton(event, "mousedown"),
+    handleMouseUp: (event) => {
+      if (!event.isTrusted || historyDirectionFromMouseButton(event.button) === null) return;
+      // Chromium applies thumb-button history on release. The explicit
+      // mousedown route above already owns the action, so consume mouseup too
+      // before it can navigate whichever WebContents currently has focus.
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+    },
     handleAuxClick: (event) => handleSideButton(event, "auxclick"),
     handleWheel: (event) => {
       if (!event.isTrusted || event.ctrlKey || event.shiftKey || event.deltaMode !== 0) {
