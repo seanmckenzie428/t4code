@@ -1,5 +1,6 @@
 import {
   bootstrapRemoteBearerSession,
+  fetchRemoteSessionState,
   RemoteEnvironmentAuthTimeoutError,
 } from "@t3tools/client-runtime/authorization";
 import { PRIMARY_LOCAL_ENVIRONMENT_ID } from "@t3tools/contracts";
@@ -15,6 +16,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as HttpClient from "effect/unstable/http/HttpClient";
 
 import * as DesktopBackendPool from "./DesktopBackendPool.ts";
+import * as DesktopLocalEnvironmentAuthStore from "./DesktopLocalEnvironmentAuthStore.ts";
 
 // The primary server can advertise its readiness before its OAuth exchange is
 // schedulable during a cold boot. Retrying only that timeout keeps the renderer
@@ -56,6 +58,7 @@ export class DesktopLocalEnvironmentAuth extends Context.Service<
 export const make = Effect.gen(function* () {
   const pool = yield* DesktopBackendPool.DesktopBackendPool;
   const httpClient = yield* HttpClient.HttpClient;
+  const store = yield* DesktopLocalEnvironmentAuthStore.DesktopLocalEnvironmentAuthStore;
   const tokenRef = yield* Ref.make(Option.none<string>());
   const mutex = yield* Semaphore.make(1);
 
@@ -74,6 +77,34 @@ export const make = Effect.gen(function* () {
           return yield* new DesktopLocalEnvironmentAuthBackendNotConfiguredError();
         }
         const config = configOption.value;
+        const persistedToken = yield* store.get.pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("Could not restore the desktop local bearer session.", {
+              error,
+            }).pipe(Effect.as(Option.none<string>())),
+          ),
+        );
+        if (Option.isSome(persistedToken)) {
+          const sessionState = yield* fetchRemoteSessionState({
+            httpBaseUrl: config.httpBaseUrl.href,
+            bearerToken: persistedToken.value,
+          }).pipe(
+            Effect.retry({
+              schedule: Schedule.spaced(Duration.millis(LOCAL_BEARER_SESSION_RETRY_DELAY_MS)).pipe(
+                Schedule.upTo({ times: LOCAL_BEARER_SESSION_MAX_ATTEMPTS - 1 }),
+              ),
+              while: (error) => error instanceof RemoteEnvironmentAuthTimeoutError,
+            }),
+            Effect.provideService(HttpClient.HttpClient, httpClient),
+            Effect.option,
+          );
+          if (Option.isSome(sessionState) && sessionState.value.authenticated) {
+            yield* Ref.set(tokenRef, persistedToken);
+            return persistedToken.value;
+          }
+          yield* store.clear;
+        }
+
         const credential = config.bootstrap.desktopBootstrapToken;
         if (!credential) {
           return yield* new DesktopLocalEnvironmentAuthBackendNotConfiguredError();
@@ -101,6 +132,13 @@ export const make = Effect.gen(function* () {
           ),
         );
         yield* Ref.set(tokenRef, Option.some(session.access_token));
+        yield* store.set(session.access_token).pipe(
+          Effect.catch((error) =>
+            Effect.logWarning("Could not persist the desktop local bearer session.", {
+              error,
+            }).pipe(Effect.as(false)),
+          ),
+        );
         return session.access_token;
       }),
     )
