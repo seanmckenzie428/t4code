@@ -1137,7 +1137,7 @@ export default function DiffPanel({
                     const file = codeViewFiles.find(
                       (candidate) => candidate.filePath === headerFilePath,
                     );
-                    if (file) toggleDiffFileCollapsed(file.fileKey);
+                    if (file) toggleDiffFileCollapsed(file.filePath);
                   }}
                 >
                   <AnnotatableCodeView
@@ -1167,7 +1167,7 @@ export default function DiffPanel({
                                 aria-expanded={!collapsed}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  toggleDiffFileCollapsed(fileKey);
+                                  toggleDiffFileCollapsed(filePath);
                                 }}
                               />
                             }
