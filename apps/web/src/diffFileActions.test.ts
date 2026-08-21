@@ -2,7 +2,11 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { openDiffFilePrimaryAction, resolveDiffPathForWorkspace } from "./diffFileActions";
+import {
+  openDiffFilePrimaryAction,
+  resolveDiffPathForWorkspace,
+  resolveDiffWorkingTreeFileTarget,
+} from "./diffFileActions";
 import { selectThreadRightPanelState, useRightPanelStore } from "./rightPanelStore";
 
 const THREAD_REF = scopeThreadRef(
@@ -121,4 +125,31 @@ describe("openDiffFilePrimaryAction", () => {
       expect(openInEditor).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("resolveDiffWorkingTreeFileTarget", () => {
+  it("uses the repository root for repository-relative paths from a nested project", () => {
+    expect(
+      resolveDiffWorkingTreeFileTarget({
+        filePath: "packages/app/src/index.ts",
+        worktreePath: null,
+        repositoryRoot: "/repo",
+        previewCwd: "/repo/packages/app",
+      }),
+    ).toEqual({ cwd: "/repo", relativePath: "packages/app/src/index.ts" });
+  });
+
+  it("keeps a separate worktree ahead of the source repository root", () => {
+    expect(
+      resolveDiffWorkingTreeFileTarget({
+        filePath: "packages/app/src/index.ts",
+        worktreePath: "/worktrees/feature",
+        repositoryRoot: "/repo",
+        previewCwd: "/worktrees/feature",
+      }),
+    ).toEqual({
+      cwd: "/worktrees/feature",
+      relativePath: "packages/app/src/index.ts",
+    });
+  });
 });

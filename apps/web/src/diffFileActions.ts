@@ -12,6 +12,16 @@ interface OpenDiffFilePrimaryActionInput {
   readonly openInEditor: (targetPath: string) => void;
 }
 
+export function resolveDiffWorkingTreeFileTarget(input: {
+  readonly filePath: string;
+  readonly worktreePath: string | null | undefined;
+  readonly repositoryRoot: string | undefined;
+  readonly previewCwd: string | undefined;
+}): { readonly cwd: string; readonly relativePath: string } | null {
+  const cwd = input.worktreePath ?? input.repositoryRoot ?? input.previewCwd;
+  return cwd ? { cwd, relativePath: input.filePath } : null;
+}
+
 function normalizedRelativePathSegments(filePath: string): ReadonlyArray<string> | null {
   if (filePath.startsWith("/") || isWindowsAbsolutePath(filePath) || /^[a-zA-Z]:/.test(filePath)) {
     return null;

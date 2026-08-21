@@ -196,7 +196,6 @@ import {
   FileDiffIcon,
   GitBranchIcon,
   MessageSquareIcon,
-  TriangleAlertIcon,
   PaperclipIcon,
   WifiOffIcon,
 } from "lucide-react";
@@ -588,7 +587,7 @@ function MainViewTabs(props: {
     <div
       role="tablist"
       aria-label="Thread view"
-      className="surface-subheader gap-1 px-3 sm:px-5"
+      className="flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border/60 bg-background px-3 sm:px-5"
       data-main-view-tabs
     >
       {tabs.map((tab) => {
@@ -602,11 +601,6 @@ function MainViewTabs(props: {
             aria-selected={active}
             aria-controls={`main-${tab.id}-view`}
             disabled={!tab.available}
-            title={
-              tab.available
-                ? tab.label
-                : "Review is available for server threads in Git repositories."
-            }
             onClick={() => props.onSelect(tab.id)}
             className={cn(
               "flex h-7 items-center gap-1.5 rounded-md px-2 text-sm transition-colors",

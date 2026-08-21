@@ -18,8 +18,14 @@ const DEFAULT_WORKING_TREE_SELECTION: DiffPanelSelection = { kind: "unstaged" };
 interface DiffPanelStoreState {
   byThreadKey: Record<string, DiffPanelSelection>;
   branchBaseRefByThreadKey: Record<string, string | null>;
+  reviewedDiffFileRevisionsByScopeKey: Record<string, Record<string, string>>;
   diffRenderMode: DiffRenderMode;
   setDiffRenderMode: (mode: DiffRenderMode) => void;
+  setReviewedDiffFileRevision: (
+    scopeKey: string,
+    filePath: string,
+    revision: string | null,
+  ) => void;
   selectGitScope: (ref: ScopedThreadRef, scope: "branch" | "unstaged") => void;
   selectBranchBaseRef: (ref: ScopedThreadRef, baseRef: string | null) => void;
   selectTurn: (ref: ScopedThreadRef, turnId: TurnId, filePath?: string) => void;
@@ -37,8 +43,29 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
     (set) => ({
       byThreadKey: {},
       branchBaseRefByThreadKey: {},
+      reviewedDiffFileRevisionsByScopeKey: {},
       diffRenderMode: "stacked",
       setDiffRenderMode: (diffRenderMode) => set({ diffRenderMode }),
+      setReviewedDiffFileRevision: (scopeKey, filePath, revision) =>
+        set((state) => {
+          const currentScope = state.reviewedDiffFileRevisionsByScopeKey[scopeKey] ?? {};
+          if (revision !== null && currentScope[filePath] === revision) return state;
+          if (revision === null && !(filePath in currentScope)) return state;
+
+          const nextScope = { ...currentScope };
+          if (revision === null) delete nextScope[filePath];
+          else nextScope[filePath] = revision;
+
+          const reviewedDiffFileRevisionsByScopeKey = {
+            ...state.reviewedDiffFileRevisionsByScopeKey,
+          };
+          if (Object.keys(nextScope).length === 0) {
+            delete reviewedDiffFileRevisionsByScopeKey[scopeKey];
+          } else {
+            reviewedDiffFileRevisionsByScopeKey[scopeKey] = nextScope;
+          }
+          return { reviewedDiffFileRevisionsByScopeKey };
+        }),
       selectGitScope: (ref, scope) =>
         set((state) => {
           const threadKey = scopedThreadKey(ref);
@@ -114,13 +141,30 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
       removeThread: (ref) =>
         set((state) => {
           const threadKey = scopedThreadKey(ref);
-          if (!(threadKey in state.byThreadKey) && !(threadKey in state.branchBaseRefByThreadKey)) {
+          const reviewScopePrefix = `${threadKey}:`;
+          const hasReviewScopes = Object.keys(state.reviewedDiffFileRevisionsByScopeKey).some(
+            (scopeKey) => scopeKey.startsWith(reviewScopePrefix),
+          );
+          if (
+            !(threadKey in state.byThreadKey) &&
+            !(threadKey in state.branchBaseRefByThreadKey) &&
+            !hasReviewScopes
+          ) {
             return state;
           }
           const { [threadKey]: _removed, ...byThreadKey } = state.byThreadKey;
           const { [threadKey]: _removedBaseRef, ...branchBaseRefByThreadKey } =
             state.branchBaseRefByThreadKey;
-          return { byThreadKey, branchBaseRefByThreadKey };
+          const reviewedDiffFileRevisionsByScopeKey = Object.fromEntries(
+            Object.entries(state.reviewedDiffFileRevisionsByScopeKey).filter(
+              ([scopeKey]) => !scopeKey.startsWith(reviewScopePrefix),
+            ),
+          );
+          return {
+            byThreadKey,
+            branchBaseRefByThreadKey,
+            reviewedDiffFileRevisionsByScopeKey,
+          };
         }),
     }),
     {
@@ -132,6 +176,7 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
       partialize: (state) => ({
         byThreadKey: state.byThreadKey,
         branchBaseRefByThreadKey: state.branchBaseRefByThreadKey,
+        reviewedDiffFileRevisionsByScopeKey: state.reviewedDiffFileRevisionsByScopeKey,
         diffRenderMode: state.diffRenderMode,
       }),
     },

@@ -25,7 +25,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOpenInPreferredEditor } from "../editorPreferences";
 import { type DraftId } from "../composerDraftStore";
-import { openDiffFilePrimaryAction } from "../diffFileActions";
+import { openDiffFilePrimaryAction, resolveDiffWorkingTreeFileTarget } from "../diffFileActions";
 import { useCheckpointDiff } from "~/lib/checkpointDiffState";
 import { cn } from "~/lib/utils";
 import { selectThreadDiffPanelSelection, useDiffPanelStore } from "../diffPanelStore";
@@ -45,7 +45,6 @@ import {
   areAllDiffFilesCollapsed,
   getDiffFileReviewState,
   retainCurrentDiffFileKeys,
-  retainCurrentDiffFileRevisions,
   setDiffFileViewed,
   toggleAllDiffFiles,
 } from "../lib/diffCollapse";
@@ -94,7 +93,6 @@ const AUTOMATIC_BASE_REF = "__automatic_base_ref__";
 
 const EMPTY_COLLAPSED_DIFF_FILE_KEYS: ReadonlySet<string> = new Set();
 type DiffFilesByScope = ReadonlyMap<string, ReadonlySet<string>>;
-type ReviewedDiffFilesByScope = ReadonlyMap<string, ReadonlyMap<string, string>>;
 
 interface DiffPanelProps {
   mode?: DiffPanelMode;
@@ -128,14 +126,14 @@ export default function DiffPanel({
   const [initialGitScope] = useState(initialGitScopeProp);
   const diffRenderMode = useDiffPanelStore((state) => state.diffRenderMode);
   const setDiffRenderMode = useDiffPanelStore((state) => state.setDiffRenderMode);
+  const setReviewedDiffFileRevision = useDiffPanelStore(
+    (state) => state.setReviewedDiffFileRevision,
+  );
   const [wordWrap, setWordWrap] = useState(settings.wordWrap);
   const [diffIgnoreWhitespace, setDiffIgnoreWhitespace] = useState(settings.diffIgnoreWhitespace);
   const [fileListOpen, setFileListOpen] = useState(true);
   const [baseRefQuery, setBaseRefQuery] = useState("");
   const [collapsedDiffFiles, setCollapsedDiffFiles] = useState<DiffFilesByScope>(() => new Map());
-  const [reviewedDiffFiles, setReviewedDiffFiles] = useState<ReviewedDiffFilesByScope>(
-    () => new Map(),
-  );
   const [codeViewRevision, setCodeViewRevision] = useState(0);
   const codeViewRef = useRef<AnnotatableCodeViewHandle>(null);
   const lastCompletedTurnRefreshRef = useRef<{
@@ -249,9 +247,13 @@ export default function DiffPanel({
   const collapsedDiffFilePaths = collapseScopeKey
     ? (collapsedDiffFiles.get(collapseScopeKey) ?? EMPTY_COLLAPSED_DIFF_FILE_KEYS)
     : EMPTY_COLLAPSED_DIFF_FILE_KEYS;
-  const reviewedDiffFileRevisions = collapseScopeKey
-    ? (reviewedDiffFiles.get(collapseScopeKey) ?? new Map<string, string>())
-    : new Map<string, string>();
+  const reviewedDiffFileRevisionRecord = useDiffPanelStore((state) =>
+    collapseScopeKey ? state.reviewedDiffFileRevisionsByScopeKey[collapseScopeKey] : undefined,
+  );
+  const reviewedDiffFileRevisions = useMemo(
+    () => new Map(Object.entries(reviewedDiffFileRevisionRecord ?? {})),
+    [reviewedDiffFileRevisionRecord],
+  );
   const codeViewMountKey = `${collapseScopeKey ?? reviewSectionId}:${codeViewRevision}`;
   const reviewSectionTitle = selectedTurn
     ? `Turn ${selectedCheckpointTurnCount ?? "?"}`
@@ -495,13 +497,13 @@ export default function DiffPanel({
       const existing = current.get(collapseScopeKey);
       if (!existing) return current;
       const valid = new Set(retainCurrentDiffFileKeys(diffFilePathSet, existing));
-      const reviewed = reviewedDiffFiles.get(collapseScopeKey);
       for (const filePath of valid) {
         const currentRevision = currentDiffFileRevisions.get(filePath);
+        const reviewedRevision = reviewedDiffFileRevisions.get(filePath);
         if (
           currentRevision !== undefined &&
-          reviewed?.has(filePath) === true &&
-          reviewed.get(filePath) !== currentRevision
+          reviewedRevision !== undefined &&
+          reviewedRevision !== currentRevision
         ) {
           valid.delete(filePath);
         }
@@ -513,16 +515,7 @@ export default function DiffPanel({
       next.set(collapseScopeKey, valid);
       return next;
     });
-    setReviewedDiffFiles((current) => {
-      const existing = current.get(collapseScopeKey);
-      if (!existing) return current;
-      const valid = retainCurrentDiffFileRevisions(diffFilePathSet, existing);
-      if (valid.size === existing.size) return current;
-      const next = new Map(current);
-      next.set(collapseScopeKey, valid);
-      return next;
-    });
-  }, [collapseScopeKey, currentDiffFileRevisions, diffFilePathSet, reviewedDiffFiles]);
+  }, [collapseScopeKey, currentDiffFileRevisions, diffFilePathSet, reviewedDiffFileRevisions]);
 
   const openDiffFile = useCallback(
     (filePath: string) => {
@@ -584,18 +577,20 @@ export default function DiffPanel({
         reviewedDiffFileRevisions,
         collapsedDiffFilePaths,
       );
-      setReviewedDiffFiles((current) => {
-        const byScope = new Map(current);
-        byScope.set(collapseScopeKey, next.reviewedRevisions);
-        return byScope;
-      });
+      setReviewedDiffFileRevision(collapseScopeKey, filePath, viewed ? currentRevision : null);
       setCollapsedDiffFiles((current) => {
         const byScope = new Map(current);
         byScope.set(collapseScopeKey, next.collapsedFilePaths);
         return byScope;
       });
     },
-    [collapseScopeKey, collapsedDiffFilePaths, currentDiffFileRevisions, reviewedDiffFileRevisions],
+    [
+      collapseScopeKey,
+      collapsedDiffFilePaths,
+      currentDiffFileRevisions,
+      reviewedDiffFileRevisions,
+      setReviewedDiffFileRevision,
+    ],
   );
 
   const revealDiffFile = useCallback(
@@ -621,17 +616,21 @@ export default function DiffPanel({
   const loadEditableDiffFiles = useCallback(
     async (fileDiff: (typeof renderableFiles)[number]): Promise<FileDiffLoadedFiles> => {
       const environmentId = activeThread?.environmentId;
-      const cwd = branchDiffPreview.data?.cwd;
       const filePath = resolveFileDiffPath(fileDiff);
-      if (!environmentId || !cwd || fileDiff.type === "deleted") {
+      const target = resolveDiffWorkingTreeFileTarget({
+        filePath,
+        worktreePath: activeThread?.worktreePath,
+        repositoryRoot: activeRepositoryRoot,
+        previewCwd: branchDiffPreview.data?.cwd,
+      });
+      if (!environmentId || !target || fileDiff.type === "deleted") {
         throw new Error("This file cannot be edited from the current review scope.");
       }
       const previousPath = fileDiff.prevName?.replace(/^[ab]\//, "");
       const result = await loadWorkingTreeFileContents({
         environmentId,
         input: {
-          cwd,
-          relativePath: filePath,
+          ...target,
           changeType: fileDiff.type,
           ...(previousPath ? { previousPath } : {}),
         },
@@ -653,17 +652,28 @@ export default function DiffPanel({
         newFile: toPierreFile(result.value.newFile),
       };
     },
-    [activeThread?.environmentId, branchDiffPreview.data?.cwd, loadWorkingTreeFileContents],
+    [
+      activeRepositoryRoot,
+      activeThread?.environmentId,
+      activeThread?.worktreePath,
+      branchDiffPreview.data?.cwd,
+      loadWorkingTreeFileContents,
+    ],
   );
 
   const saveDiffFile = useCallback(
     async (filePath: string, contents: string) => {
       const environmentId = activeThread?.environmentId;
-      const cwd = branchDiffPreview.data?.cwd;
-      if (!environmentId || !cwd) throw new Error("The working tree is unavailable.");
+      const target = resolveDiffWorkingTreeFileTarget({
+        filePath,
+        worktreePath: activeThread?.worktreePath,
+        repositoryRoot: activeRepositoryRoot,
+        previewCwd: branchDiffPreview.data?.cwd,
+      });
+      if (!environmentId || !target) throw new Error("The working tree is unavailable.");
       const result = await writeProjectFile({
         environmentId,
-        input: { cwd, relativePath: filePath, contents },
+        input: { ...target, contents },
       });
       if (result._tag !== "Success") {
         const failure = squashAtomCommandFailure(result);
@@ -671,7 +681,13 @@ export default function DiffPanel({
       }
       branchDiffPreview.refresh();
     },
-    [activeThread?.environmentId, branchDiffPreview, writeProjectFile],
+    [
+      activeRepositoryRoot,
+      activeThread?.environmentId,
+      activeThread?.worktreePath,
+      branchDiffPreview,
+      writeProjectFile,
+    ],
   );
 
   const toggleDiffFileCollapse = useCallback(() => {
