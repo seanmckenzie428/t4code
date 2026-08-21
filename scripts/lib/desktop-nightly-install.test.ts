@@ -2,8 +2,10 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   DesktopNightlyArtifactResolutionError,
+  InvalidDesktopNightlySigningIdentityError,
   isExpectedDesktopNightlyBundle,
   resolveDesktopNightlyInstallArch,
+  resolveDesktopNightlySigningPlan,
   resolveDesktopNightlyZipArtifact,
   UnsupportedDesktopNightlyInstallHostError,
 } from "./desktop-nightly-install.ts";
@@ -70,5 +72,41 @@ describe("desktop-nightly-install", () => {
         version: "0.0.32-nightly.20260805.71636",
       }),
     ).toBe(false);
+  });
+
+  it("preserves a valid certificate-backed artifact signature", () => {
+    expect(
+      resolveDesktopNightlySigningPlan({
+        hasValidNonAdHocSignature: true,
+        configuredIdentity: "LOCAL_CERT",
+      }),
+    ).toEqual({ _tag: "Preserve" });
+  });
+
+  it("uses an explicitly configured identity for unsigned artifacts", () => {
+    expect(
+      resolveDesktopNightlySigningPlan({
+        hasValidNonAdHocSignature: false,
+        configuredIdentity: "  LOCAL_CERT  ",
+      }),
+    ).toEqual({ _tag: "Sign", identity: "LOCAL_CERT" });
+  });
+
+  it("falls back to ad-hoc signing when no identity is configured", () => {
+    expect(
+      resolveDesktopNightlySigningPlan({
+        hasValidNonAdHocSignature: false,
+        configuredIdentity: undefined,
+      }),
+    ).toEqual({ _tag: "Sign", identity: "-" });
+  });
+
+  it("rejects a blank configured signing identity", () => {
+    expect(() =>
+      resolveDesktopNightlySigningPlan({
+        hasValidNonAdHocSignature: false,
+        configuredIdentity: "   ",
+      }),
+    ).toThrow(InvalidDesktopNightlySigningIdentityError);
   });
 });

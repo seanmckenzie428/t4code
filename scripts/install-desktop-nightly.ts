@@ -13,12 +13,15 @@ import * as Effect from "effect/Effect";
 import {
   isExpectedDesktopNightlyBundle,
   resolveDesktopNightlyInstallArch,
+  resolveDesktopNightlySigningPlan,
   resolveDesktopNightlyZipArtifact,
 } from "./lib/desktop-nightly-install.ts";
 
 const APP_NAME = "T4 Code (Nightly).app";
 const SYSTEM_APPLICATIONS_DIRECTORY = "/Applications";
 const PLIST_BUDDY = "/usr/libexec/PlistBuddy";
+const LOCAL_SIGNING_IDENTITY_ENV = "T4CODE_DESKTOP_LOCAL_SIGNING_IDENTITY";
+const LOCAL_SIGNING_IDENTITY_GIT_CONFIG = "t4.desktopNightlySigningIdentity";
 
 function runChecked(command: string, args: ReadonlyArray<string>, stdio: "inherit" | "pipe") {
   const result = NodeChildProcess.spawnSync(command, [...args], {
@@ -40,6 +43,51 @@ function canWrite(path: string): boolean {
   } catch {
     return false;
   }
+}
+
+function readConfiguredSigningIdentity(repoRoot: string): string | undefined {
+  if (Object.hasOwn(process.env, LOCAL_SIGNING_IDENTITY_ENV)) {
+    return process.env[LOCAL_SIGNING_IDENTITY_ENV];
+  }
+
+  const result = NodeChildProcess.spawnSync(
+    "git",
+    ["config", "--local", "--get", LOCAL_SIGNING_IDENTITY_GIT_CONFIG],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      stdio: "pipe",
+    },
+  );
+  if (result.error) throw result.error;
+  if (result.status === 1) return undefined;
+  if (result.status !== 0) {
+    const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
+    throw new Error(`git config failed${stderr ? `: ${stderr}` : "."}`);
+  }
+  return typeof result.stdout === "string" ? result.stdout.trim() : undefined;
+}
+
+function hasValidNonAdHocSignature(appPath: string): boolean {
+  const verification = NodeChildProcess.spawnSync(
+    "codesign",
+    ["--verify", "--deep", "--strict", appPath],
+    { encoding: "utf8", stdio: "pipe" },
+  );
+  if (verification.error || verification.status !== 0) {
+    return false;
+  }
+
+  const description = NodeChildProcess.spawnSync(
+    "codesign",
+    ["--display", "--verbose=4", appPath],
+    { encoding: "utf8", stdio: "pipe" },
+  );
+  if (description.error || description.status !== 0) {
+    return false;
+  }
+  const output = `${description.stdout ?? ""}\n${description.stderr ?? ""}`;
+  return !output.includes("Signature=adhoc");
 }
 
 function resolveInstallTarget(): string {
@@ -150,7 +198,19 @@ function main(): void {
 
     const stagedApp = NodePath.join(extractedDirectory, APP_NAME);
     const version = validateNightlyApp(stagedApp);
-    runChecked("codesign", ["--force", "--deep", "--sign", "-", stagedApp], "inherit");
+    const signingPlan = resolveDesktopNightlySigningPlan({
+      hasValidNonAdHocSignature: hasValidNonAdHocSignature(stagedApp),
+      configuredIdentity: readConfiguredSigningIdentity(repoRoot),
+    });
+    if (signingPlan._tag === "Sign") {
+      runChecked(
+        "codesign",
+        ["--force", "--deep", "--timestamp=none", "--sign", signingPlan.identity, stagedApp],
+        "inherit",
+      );
+    } else {
+      Effect.runSync(Console.log("[desktop-nightly] Preserving artifact code signature."));
+    }
     runChecked("codesign", ["--verify", "--deep", "--strict", stagedApp], "pipe");
     installApp(stagedApp, targetApp);
     notifyInstalled(version, targetApp);

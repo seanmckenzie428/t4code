@@ -1,5 +1,9 @@
 export type DesktopNightlyInstallArch = "arm64" | "x64";
 
+export type DesktopNightlySigningPlan =
+  | { readonly _tag: "Preserve" }
+  | { readonly _tag: "Sign"; readonly identity: string };
+
 export class UnsupportedDesktopNightlyInstallHostError extends Error {
   constructor(platform: string, arch: string) {
     super(`Nightly desktop installation is unsupported on ${platform}/${arch}.`);
@@ -11,6 +15,13 @@ export class DesktopNightlyArtifactResolutionError extends Error {
   constructor(arch: DesktopNightlyInstallArch, count: number) {
     super(`Expected one T4 Code nightly ${arch} zip artifact, found ${count}.`);
     this.name = "DesktopNightlyArtifactResolutionError";
+  }
+}
+
+export class InvalidDesktopNightlySigningIdentityError extends Error {
+  constructor() {
+    super("Desktop nightly signing identity must not be blank.");
+    this.name = "InvalidDesktopNightlySigningIdentityError";
   }
 }
 
@@ -45,4 +56,23 @@ export function isExpectedDesktopNightlyBundle(input: {
   version: string;
 }): boolean {
   return input.bundleId === "com.t3tools.t3code" && input.version.includes("-nightly.");
+}
+
+export function resolveDesktopNightlySigningPlan(input: {
+  readonly hasValidNonAdHocSignature: boolean;
+  readonly configuredIdentity: string | undefined;
+}): DesktopNightlySigningPlan {
+  if (input.hasValidNonAdHocSignature) {
+    return { _tag: "Preserve" };
+  }
+
+  if (input.configuredIdentity === undefined) {
+    return { _tag: "Sign", identity: "-" };
+  }
+
+  const identity = input.configuredIdentity.trim();
+  if (identity.length === 0) {
+    throw new InvalidDesktopNightlySigningIdentityError();
+  }
+  return { _tag: "Sign", identity };
 }
