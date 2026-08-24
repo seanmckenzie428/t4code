@@ -34,7 +34,7 @@ layer("041_046_ForkCompatibility", (it) => {
           (40, 'ProjectionProjectFaviconPath', CURRENT_TIMESTAMP)
       `;
 
-      yield* runMigrations();
+      yield* runMigrations({ toMigrationInclusive: 46 });
 
       const projectColumns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_projects)

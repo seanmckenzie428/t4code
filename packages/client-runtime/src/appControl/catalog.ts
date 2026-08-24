@@ -503,7 +503,10 @@ export const APP_COMMAND_CATALOG = [
     "mutate",
     "Send thread message",
     "thread:mutate",
-    objectInput({ threadId: stringProperty, text: stringProperty }, ["threadId", "text"]),
+    objectInput({ threadId: stringProperty, text: stringProperty, intent: stringProperty }, [
+      "threadId",
+      "text",
+    ]),
   ),
   command(
     "thread.interrupt",

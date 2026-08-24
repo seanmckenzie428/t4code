@@ -199,6 +199,8 @@ describe("DesktopAppIdentity", () => {
         assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "T4 Code (Alpha)");
         assert.equal(calls.setAboutPanelOptions[0]?.applicationVersion, "1.2.3");
         assert.equal(calls.setAboutPanelOptions[0]?.version, "0123456789ab");
+        // Packaged: the bundle's own icon stands, so a custom one the user
+        // attached survives.
         assert.deepEqual(calls.setDockIcon, []);
       }),
       {
@@ -213,7 +215,7 @@ describe("DesktopAppIdentity", () => {
     );
   });
 
-  it.effect("sets the macOS Dock icon when unpackaged", () => {
+  it.effect("sets the dock icon only when running unpackaged", () => {
     const calls: ElectronAppCalls = {
       setAboutPanelOptions: [],
       setDockIcon: [],
@@ -225,6 +227,8 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         yield* identity.configure;
 
+        // Electron shows a generic icon for an unpackaged run, which is the
+        // reason this call exists at all.
         assert.deepEqual(calls.setDockIcon, ["/icon.png"]);
       }),
       {

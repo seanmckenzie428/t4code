@@ -1,4 +1,5 @@
 import * as React from "react";
+import { defaultAnimateLayoutChanges, type AnimateLayoutChanges } from "@dnd-kit/sortable";
 import type { ContextMenuItem } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import {
@@ -32,6 +33,12 @@ export function resolveSidebarThreadLocationLabel(input: {
     ? input.branch
     : formatWorktreePathForDisplay(input.worktreePath);
 }
+
+// The list already reaches its destination through sortable transforms while
+// the pointer is down. dnd-kit's default also animates the committed DOM order
+// after release, replaying the same movement across every affected row.
+export const animatePinnedLayoutChanges: AnimateLayoutChanges = (args) =>
+  args.isSorting ? defaultAnimateLayoutChanges(args) : false;
 
 type SidebarProject = {
   id: string;

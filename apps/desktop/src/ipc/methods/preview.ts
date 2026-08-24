@@ -16,6 +16,7 @@ import {
   DesktopPreviewRecordingSaveInputSchema,
   DesktopPreviewRegisterWebviewInputSchema,
   DesktopPreviewScreenshotArtifactSchema,
+  DesktopPreviewSetAudioMutedInputSchema,
   DesktopPreviewSetColorSchemeInputSchema,
   DesktopPreviewCreateTabInputSchema,
   DesktopPreviewTabInputSchema,
@@ -155,6 +156,15 @@ export const setColorScheme = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.preview.setColorScheme")(function* ({ tabId, colorScheme }) {
     const manager = yield* PreviewManager.PreviewManager;
     yield* manager.setColorScheme(tabId, colorScheme);
+  }),
+});
+export const setAudioMuted = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_SET_AUDIO_MUTED_CHANNEL,
+  payload: DesktopPreviewSetAudioMutedInputSchema,
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.preview.setAudioMuted")(function* ({ tabId, audioMuted }) {
+    const manager = yield* PreviewManager.PreviewManager;
+    yield* manager.setAudioMuted(tabId, audioMuted);
   }),
 });
 export const openDevTools = tabMethod(
@@ -406,6 +416,7 @@ export const methods = [
   resetZoom,
   hardReload,
   setColorScheme,
+  setAudioMuted,
   openDevTools,
   clearCookies,
   clearCache,

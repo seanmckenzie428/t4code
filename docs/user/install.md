@@ -37,6 +37,12 @@ T4 Code drives provider CLIs; it does not ship them.
 
 Run login commands on the machine running the T4 Code server. Each provider binary must be on that server's `PATH`, or configured through **Settings** → provider → **Binary path**.
 
+Codex and Claude are on by default. Cursor, Grok Build, and OpenCode are off by default; turn
+them on in **Settings** → the provider's card when you want to use them.
+
+Cursor is the one to watch: install Cursor CLI, which provides the `cursor-agent` binary that
+T4 Code looks for, but authenticate with `agent login`, not `cursor-agent login`.
+
 Provider authentication is required before starting a session with that provider, not before starting T4 Code.
 
 ## Next steps
