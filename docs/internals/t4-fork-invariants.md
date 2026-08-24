@@ -118,3 +118,21 @@ remain mandatory.
 - Validation: T4 invariant suite (14 files, 122 tests), focused merge/fix suites (67 files, 1,463
   tests), typechecks across server, web, desktop, mobile, marketing, contracts, client runtime,
   shared, and scripts, plus loopback-enabled MCP and server integration tests passed.
+
+### 2026-08-24 — T3 nightly 20260824.1176
+
+- T4 parent: `7528b00fa`
+- T3 parent: `f035a0f4c`
+- Merge: `37593fa2b`
+- Scope: 148 upstream commits, 502 changed files, 99 paths changed on both sides, 25 textual
+  conflict paths.
+- Explicit resolution: preserve T4 branding, icons, source-only distribution, generated views,
+  app control, main-view review, worktree labels, settlement master switch, and patched
+  `@pierre/diffs` 1.3.2; add upstream attachment uploads, client-origin tracking, macOS launchd
+  support, terminal close safeguards, background composer sends, provider defaults, passkey
+  updates, and mobile improvements. Preserve migration IDs 36-46 and map upstream
+  `AuthSessionClientConnection` to migration 47. Omit the T3-only triage command and issue-routing
+  assets because they clone and file against the fetch-only upstream project.
+- Validation: T4 invariant suite (14 files, 126 tests), focused merge/fix suite (32 files, 670
+  tests), typechecks across server, web, desktop, mobile, marketing, contracts, client runtime,
+  and shared, plus `git diff --check` passed.
