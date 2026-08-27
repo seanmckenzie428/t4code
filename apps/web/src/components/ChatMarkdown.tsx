@@ -48,6 +48,7 @@ import React, {
 import type { Components, Options as ReactMarkdownOptions } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import { defaultUrlTransform } from "react-markdown";
+import type { MermaidConfig } from "mermaid";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkBreaks from "remark-breaks";
@@ -869,17 +870,29 @@ function loadMermaidApi(): Promise<MermaidApi> {
   return mermaidApiPromise;
 }
 
+const MERMAID_FONT_FAMILY =
+  'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+export function mermaidRenderConfig(theme: "light" | "dark"): MermaidConfig {
+  return {
+    startOnLoad: false,
+    securityLevel: "strict",
+    suppressErrorRendering: true,
+    maxTextSize: 50_000,
+    maxEdges: 500,
+    theme: theme === "dark" ? "dark" : "default",
+    fontFamily: MERMAID_FONT_FAMILY,
+    themeVariables: { fontSize: "16px" },
+    // Responsive SVGs scale text whenever chat width changes. Keep flowcharts
+    // at their natural dimensions; the surrounding viewport provides scroll.
+    flowchart: { useMaxWidth: false },
+  };
+}
+
 function renderMermaidSvg(id: string, code: string, theme: "light" | "dark"): Promise<string> {
   const render = mermaidRenderQueue.then(async () => {
     const mermaid = await loadMermaidApi();
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: "strict",
-      suppressErrorRendering: true,
-      maxTextSize: 50_000,
-      maxEdges: 500,
-      theme: theme === "dark" ? "dark" : "default",
-    });
+    mermaid.initialize(mermaidRenderConfig(theme));
     const { svg } = await mermaid.render(id, code);
     return svg;
   });
@@ -957,7 +970,7 @@ function MermaidDiagram({
 
   return (
     <div
-      className="overflow-auto bg-background p-4 [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
+      className="overflow-auto bg-background p-4 [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-none!"
       aria-label="Mermaid diagram"
       data-mermaid-diagram=""
       dangerouslySetInnerHTML={{ __html: result.svg }}
@@ -2029,6 +2042,57 @@ function ChatMarkdown({
   /* eslint-disable react/no-unstable-nested-components -- ReactMarkdown requires component
    * renderers that close over this message's metadata. useMemo keeps them stable until that
    * metadata changes. */
+  const markdownPreComponent = useMemo<NonNullable<Components["pre"]>>(() => {
+    return function MarkdownPre({ node, children, ...props }) {
+      const codeBlock = extractCodeBlock(children);
+      if (!codeBlock) {
+        return <pre {...props}>{children}</pre>;
+      }
+
+      const language = extractFenceLanguage(codeBlock.className);
+      const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
+      const source = (
+        <RenderErrorBoundary fallback={<pre {...props}>{children}</pre>}>
+          <Suspense fallback={<pre {...props}>{children}</pre>}>
+            <SuspenseShikiCodeBlock
+              className={codeBlock.className}
+              code={codeBlock.code}
+              themeName={diffThemeName}
+              isStreaming={isStreaming}
+            />
+          </Suspense>
+        </RenderErrorBoundary>
+      );
+
+      if (shouldRenderMermaidDiagram(language, isStreaming)) {
+        return (
+          <MarkdownCodeBlock
+            code={codeBlock.code}
+            language={language}
+            fenceTitle={fenceTitle}
+            theme={resolvedTheme}
+            diagram={
+              <MermaidDiagram code={codeBlock.code} theme={resolvedTheme} sourceFallback={source} />
+            }
+          >
+            {source}
+          </MarkdownCodeBlock>
+        );
+      }
+
+      return (
+        <MarkdownCodeBlock
+          code={codeBlock.code}
+          language={language}
+          fenceTitle={fenceTitle}
+          theme={resolvedTheme}
+        >
+          {source}
+        </MarkdownCodeBlock>
+      );
+    };
+  }, [diffThemeName, isStreaming, resolvedTheme]);
+
   const markdownComponents = useMemo<Components>(() => {
     const fileLinkChip = (
       fileLinkMeta: MarkdownFileLinkMeta,
@@ -2317,66 +2381,14 @@ function ChatMarkdown({
       details({ node: _node, children, open: detailsOpen }) {
         return <MarkdownDetails open={detailsOpen}>{children}</MarkdownDetails>;
       },
-      pre({ node, children, ...props }) {
-        const codeBlock = extractCodeBlock(children);
-        if (!codeBlock) {
-          return <pre {...props}>{children}</pre>;
-        }
-
-        const language = extractFenceLanguage(codeBlock.className);
-        const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
-        const source = (
-          <RenderErrorBoundary fallback={<pre {...props}>{children}</pre>}>
-            <Suspense fallback={<pre {...props}>{children}</pre>}>
-              <SuspenseShikiCodeBlock
-                className={codeBlock.className}
-                code={codeBlock.code}
-                themeName={diffThemeName}
-                isStreaming={isStreaming}
-              />
-            </Suspense>
-          </RenderErrorBoundary>
-        );
-
-        if (shouldRenderMermaidDiagram(language, isStreaming)) {
-          return (
-            <MarkdownCodeBlock
-              code={codeBlock.code}
-              language={language}
-              fenceTitle={fenceTitle}
-              theme={resolvedTheme}
-              diagram={
-                <MermaidDiagram
-                  code={codeBlock.code}
-                  theme={resolvedTheme}
-                  sourceFallback={source}
-                />
-              }
-            >
-              {source}
-            </MarkdownCodeBlock>
-          );
-        }
-
-        return (
-          <MarkdownCodeBlock
-            code={codeBlock.code}
-            language={language}
-            fenceTitle={fenceTitle}
-            theme={resolvedTheme}
-          >
-            {source}
-          </MarkdownCodeBlock>
-        );
-      },
+      pre: markdownPreComponent,
     };
   }, [
     canUseShellActions,
     cwd,
-    diffThemeName,
     fileLinkParentSuffixByPath,
     inlineCodeFileLinkMetaByText,
-    isStreaming,
+    markdownPreComponent,
     markdownFileLinkMetaByHref,
     onTaskListChange,
     openFileInPanel,

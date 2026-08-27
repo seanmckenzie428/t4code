@@ -32,3 +32,18 @@ On web and desktop, completed `mermaid` code fences render as diagrams. Use **Sh
 inspect the Mermaid text or **Copy diagram source** to copy it. While a response is streaming, or if
 the diagram syntax is invalid, T3 Code shows the source instead. Mobile currently shows Mermaid
 fences as code.
+
+Mermaid's hand-drawn look is available through diagram frontmatter. Use a fixed seed so the drawing
+stays visually stable:
+
+````markdown
+```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 42
+---
+flowchart LR
+  Plan --> Build --> Verify
+```
+````

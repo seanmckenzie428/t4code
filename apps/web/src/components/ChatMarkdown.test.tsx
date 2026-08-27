@@ -31,6 +31,7 @@ vi.mock("~/lib/openPullRequestLink", () => ({
 import ChatMarkdown, {
   canUseMarkdownFileShellActions,
   hasMarkdownFilePrimaryAction,
+  mermaidRenderConfig,
   orderedListGutterStyle,
   shouldRenderMermaidDiagram,
   shouldUseMarkdownFileBrowserPrimaryAction,
@@ -45,6 +46,15 @@ describe("Mermaid diagrams", () => {
   it("keeps streaming and non-Mermaid fences on the code path", () => {
     expect(shouldRenderMermaidDiagram("mermaid", true)).toBe(false);
     expect(shouldRenderMermaidDiagram("typescript", false)).toBe(false);
+  });
+
+  it("keeps flowchart dimensions and fonts stable", () => {
+    const config = mermaidRenderConfig("dark");
+
+    expect(config.theme).toBe("dark");
+    expect(config.flowchart?.useMaxWidth).toBe(false);
+    expect(config.fontFamily).toContain("system-ui");
+    expect(config.themeVariables).toMatchObject({ fontSize: "16px" });
   });
 
   it("renders a Mermaid diagram shell without loading Mermaid during SSR", () => {
