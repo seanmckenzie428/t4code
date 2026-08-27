@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   CheckIcon,
   ChevronRightIcon,
+  Code2Icon,
   CopyIcon,
   GlobeIcon,
   InfoIcon,
@@ -12,6 +13,7 @@ import {
   OctagonAlertIcon,
   TriangleAlertIcon,
   WrapTextIcon,
+  WorkflowIcon,
 } from "lucide-react";
 import type {
   EnvironmentId,
@@ -37,6 +39,7 @@ import React, {
   useCallback,
   memo,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -347,6 +350,10 @@ function extractFenceLanguage(className: string | undefined): string {
   const raw = match?.[1] ?? "text";
   // Shiki doesn't bundle a gitignore grammar; ini is a close match (#685)
   return raw === "gitignore" ? "ini" : raw;
+}
+
+export function shouldRenderMermaidDiagram(language: string, isStreaming: boolean): boolean {
+  return !isStreaming && language.toLowerCase() === "mermaid";
 }
 
 const FENCE_TITLE_ATTR_REGEX = /(?:^|\s)(?:title|file(?:name)?)=(?:"([^"]+)"|'([^']+)'|(\S+))/i;
@@ -718,18 +725,22 @@ function MarkdownCodeBlock({
   fenceTitle,
   theme,
   children,
+  diagram,
 }: {
   code: string;
   language: string;
   fenceTitle: string | null;
   theme: "light" | "dark";
   children: ReactNode;
+  diagram?: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
   const [wrapped, setWrapped] = useState(readInitialWordWrapSetting);
+  const [showDiagramSource, setShowDiagramSource] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapLabel = wrapped ? "Disable line wrap" : "Wrap lines";
-  const copyLabel = copied ? "Copied" : "Copy code";
+  const sourceLabel = showDiagramSource ? "Show diagram" : "Show source";
+  const copyLabel = copied ? "Copied" : diagram ? "Copy diagram source" : "Copy code";
 
   const handleCopy = useCallback(() => {
     if (typeof navigator === "undefined" || navigator.clipboard == null) {
@@ -773,7 +784,8 @@ function MarkdownCodeBlock({
     <div
       className="chat-markdown-codeblock my-[0.65rem] overflow-hidden rounded-[var(--radius)] border border-border/70 bg-secondary leading-snug dark:border-transparent dark:bg-input/32"
       data-language={language}
-      data-wrap={wrapped ? "true" : "false"}
+      data-wrap={diagram ? undefined : wrapped ? "true" : "false"}
+      data-mermaid-block={diagram ? "" : undefined}
     >
       <div className="chat-markdown-codeblock-header flex items-center justify-between gap-2 pt-1.5 pr-1.5 pb-0 pl-3 select-none">
         <span className="inline-flex min-w-0 items-center gap-[0.4rem] [font-family:var(--font-mono,ui-monospace,SFMono-Regular,monospace)] [font-size:0.6875rem]">
@@ -783,7 +795,11 @@ function MarkdownCodeBlock({
             theme={theme}
           />
         </span>
-        <span className="flex items-center gap-0.5" role="toolbar" aria-label="Code block actions">
+        <span
+          className="flex items-center gap-0.5"
+          role="toolbar"
+          aria-label={diagram ? "Diagram actions" : "Code block actions"}
+        >
           <Tooltip>
             <TooltipTrigger
               render={
@@ -792,15 +808,27 @@ function MarkdownCodeBlock({
                   variant="ghost"
                   size="icon-xs"
                   className="chat-markdown-chrome-action"
-                  aria-pressed={wrapped}
-                  onClick={() => setWrapped((value) => !value)}
-                  aria-label={wrapLabel}
+                  aria-pressed={diagram ? showDiagramSource : wrapped}
+                  onClick={() =>
+                    diagram
+                      ? setShowDiagramSource((value) => !value)
+                      : setWrapped((value) => !value)
+                  }
+                  aria-label={diagram ? sourceLabel : wrapLabel}
                 />
               }
             >
-              <WrapTextIcon className="size-3" />
+              {diagram ? (
+                showDiagramSource ? (
+                  <WorkflowIcon className="size-3" />
+                ) : (
+                  <Code2Icon className="size-3" />
+                )
+              ) : (
+                <WrapTextIcon className="size-3" />
+              )}
             </TooltipTrigger>
-            <TooltipPopup side="top">{wrapLabel}</TooltipPopup>
+            <TooltipPopup side="top">{diagram ? sourceLabel : wrapLabel}</TooltipPopup>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger
@@ -821,8 +849,119 @@ function MarkdownCodeBlock({
           </Tooltip>
         </span>
       </div>
-      {children}
+      {diagram && !showDiagramSource ? diagram : children}
     </div>
+  );
+}
+
+type MermaidApi = (typeof import("mermaid"))["default"];
+
+let mermaidApiPromise: Promise<MermaidApi> | null = null;
+let mermaidRenderQueue: Promise<void> = Promise.resolve();
+
+function loadMermaidApi(): Promise<MermaidApi> {
+  mermaidApiPromise ??= import("mermaid")
+    .then((module) => module.default)
+    .catch((cause) => {
+      mermaidApiPromise = null;
+      throw cause;
+    });
+  return mermaidApiPromise;
+}
+
+function renderMermaidSvg(id: string, code: string, theme: "light" | "dark"): Promise<string> {
+  const render = mermaidRenderQueue.then(async () => {
+    const mermaid = await loadMermaidApi();
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      suppressErrorRendering: true,
+      maxTextSize: 50_000,
+      maxEdges: 500,
+      theme: theme === "dark" ? "dark" : "default",
+    });
+    const { svg } = await mermaid.render(id, code);
+    return svg;
+  });
+  mermaidRenderQueue = render.then(
+    () => undefined,
+    () => undefined,
+  );
+  return render;
+}
+
+function mermaidErrorMessage(cause: unknown): string {
+  const message = cause instanceof Error ? cause.message.split("\n")[0]?.trim() : "";
+  return message ? `Unable to render diagram: ${message}` : "Unable to render Mermaid diagram.";
+}
+
+function MermaidDiagram({
+  code,
+  theme,
+  sourceFallback,
+}: {
+  code: string;
+  theme: "light" | "dark";
+  sourceFallback: ReactNode;
+}) {
+  const reactId = useId().replaceAll(":", "");
+  const renderCountRef = useRef(0);
+  const [result, setResult] = useState<
+    | { readonly status: "loading" }
+    | { readonly status: "rendered"; readonly svg: string }
+    | { readonly status: "failed"; readonly message: string }
+  >({ status: "loading" });
+
+  useEffect(() => {
+    let active = true;
+    renderCountRef.current += 1;
+    const renderId = `mermaid-${reactId}-${renderCountRef.current}`;
+    setResult({ status: "loading" });
+
+    void renderMermaidSvg(renderId, code, theme).then(
+      (svg) => {
+        if (active) setResult({ status: "rendered", svg });
+      },
+      (cause) => {
+        console.warn("Mermaid diagram rendering failed.", cause);
+        if (active) setResult({ status: "failed", message: mermaidErrorMessage(cause) });
+      },
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [code, reactId, theme]);
+
+  if (result.status === "loading") {
+    return (
+      <div
+        className="flex min-h-28 items-center justify-center p-4 text-xs text-muted-foreground"
+        role="status"
+      >
+        Rendering diagram…
+      </div>
+    );
+  }
+
+  if (result.status === "failed") {
+    return (
+      <div>
+        <div className="border-b border-border/60 px-3 py-2 text-xs text-destructive" role="alert">
+          {result.message}
+        </div>
+        {sourceFallback}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="overflow-auto bg-background p-4 [&_svg]:mx-auto [&_svg]:h-auto [&_svg]:max-w-full"
+      aria-label="Mermaid diagram"
+      data-mermaid-diagram=""
+      dangerouslySetInnerHTML={{ __html: result.svg }}
+    />
   );
 }
 
@@ -2186,6 +2325,39 @@ function ChatMarkdown({
 
         const language = extractFenceLanguage(codeBlock.className);
         const fenceTitle = extractFenceTitle(extractPreCodeMeta(node));
+        const source = (
+          <RenderErrorBoundary fallback={<pre {...props}>{children}</pre>}>
+            <Suspense fallback={<pre {...props}>{children}</pre>}>
+              <SuspenseShikiCodeBlock
+                className={codeBlock.className}
+                code={codeBlock.code}
+                themeName={diffThemeName}
+                isStreaming={isStreaming}
+              />
+            </Suspense>
+          </RenderErrorBoundary>
+        );
+
+        if (shouldRenderMermaidDiagram(language, isStreaming)) {
+          return (
+            <MarkdownCodeBlock
+              code={codeBlock.code}
+              language={language}
+              fenceTitle={fenceTitle}
+              theme={resolvedTheme}
+              diagram={
+                <MermaidDiagram
+                  code={codeBlock.code}
+                  theme={resolvedTheme}
+                  sourceFallback={source}
+                />
+              }
+            >
+              {source}
+            </MarkdownCodeBlock>
+          );
+        }
+
         return (
           <MarkdownCodeBlock
             code={codeBlock.code}
@@ -2193,16 +2365,7 @@ function ChatMarkdown({
             fenceTitle={fenceTitle}
             theme={resolvedTheme}
           >
-            <RenderErrorBoundary fallback={<pre {...props}>{children}</pre>}>
-              <Suspense fallback={<pre {...props}>{children}</pre>}>
-                <SuspenseShikiCodeBlock
-                  className={codeBlock.className}
-                  code={codeBlock.code}
-                  themeName={diffThemeName}
-                  isStreaming={isStreaming}
-                />
-              </Suspense>
-            </RenderErrorBoundary>
+            {source}
           </MarkdownCodeBlock>
         );
       },

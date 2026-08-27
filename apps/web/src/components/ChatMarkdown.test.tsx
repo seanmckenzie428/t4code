@@ -32,8 +32,31 @@ import ChatMarkdown, {
   canUseMarkdownFileShellActions,
   hasMarkdownFilePrimaryAction,
   orderedListGutterStyle,
+  shouldRenderMermaidDiagram,
   shouldUseMarkdownFileBrowserPrimaryAction,
 } from "./ChatMarkdown";
+
+describe("Mermaid diagrams", () => {
+  it("renders completed Mermaid fences as diagrams", () => {
+    expect(shouldRenderMermaidDiagram("mermaid", false)).toBe(true);
+    expect(shouldRenderMermaidDiagram("MERMAID", false)).toBe(true);
+  });
+
+  it("keeps streaming and non-Mermaid fences on the code path", () => {
+    expect(shouldRenderMermaidDiagram("mermaid", true)).toBe(false);
+    expect(shouldRenderMermaidDiagram("typescript", false)).toBe(false);
+  });
+
+  it("renders a Mermaid diagram shell without loading Mermaid during SSR", () => {
+    const html = renderToStaticMarkup(
+      <ChatMarkdown cwd="/tmp/project" text={"```mermaid\ngraph TD\n  A --> B\n```"} />,
+    );
+
+    expect(html).toContain('data-mermaid-block=""');
+    expect(html).toContain("Rendering diagram…");
+    expect(html).not.toContain("chat-markdown-shiki");
+  });
+});
 
 describe("canUseMarkdownFileShellActions", () => {
   const environmentId = EnvironmentId.make("environment-1");
