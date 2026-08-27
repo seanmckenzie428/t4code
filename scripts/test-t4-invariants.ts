@@ -6,7 +6,7 @@ import * as NodeChildProcess from "node:child_process";
 const invariantTests = [
   "packages/shared/src/branding.test.ts",
   "apps/desktop/src/app/DesktopAppIdentity.test.ts",
-  "apps/server/src/persistence/Migrations/041_046_ForkCompatibility.test.ts",
+  "apps/server/src/persistence/Migrations/041_049_ForkCompatibility.test.ts",
   "apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.test.ts",
   "apps/server/src/quickChat/QuickChat.test.ts",
   "apps/server/src/mcp/AppControlPolicy.test.ts",

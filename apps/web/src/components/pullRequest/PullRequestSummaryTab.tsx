@@ -1,6 +1,7 @@
 import type {
   EnvironmentId,
   PullRequestActor,
+  PullRequestCheck,
   PullRequestComment,
   PullRequestDetailView,
   PullRequestRef,
@@ -70,6 +71,16 @@ function labelDotColor(color: string | null): string | null {
   return /^[0-9a-fA-F]{6}$/.test(hex) ? `#${hex}` : null;
 }
 
+function keyedPullRequestChecks(checks: ReadonlyArray<PullRequestCheck>) {
+  const occurrences = new Map<string, number>();
+  return checks.map((check) => {
+    const baseKey = JSON.stringify([check.name, check.status, check.description, check.url]);
+    const occurrence = occurrences.get(baseKey) ?? 0;
+    occurrences.set(baseKey, occurrence + 1);
+    return { check, key: `${baseKey}:${occurrence}` };
+  });
+}
+
 /** The avatar carries the attribution alone; who it is arrives on hover, like the reviewer row. */
 function CommentAuthor({ actor }: { actor: PullRequestActor | null }) {
   const login = actor?.login ?? "ghost";
@@ -94,6 +105,7 @@ function reviewStateLabel(state: string): string {
 /** What every remark in the conversation needs to be rewritten where it sits. */
 interface CommentEditing {
   readonly cwd: string;
+  readonly environmentId: EnvironmentId;
   readonly canEdit: (comment: PullRequestComment) => boolean;
   readonly editingId: string | null;
   readonly saving: boolean;
@@ -120,6 +132,7 @@ function CommentBody({
         className={className}
         value={comment.body}
         cwd={editing.cwd}
+        environmentId={editing.environmentId}
         label="Edit comment"
         saving={editing.saving}
         onSave={(body) => editing.onSave(comment, body)}
@@ -129,7 +142,12 @@ function CommentBody({
   }
   return (
     <div className={cn("flex items-start gap-1", className)}>
-      <PullRequestMarkdown className="min-w-0 flex-1" text={comment.body} cwd={editing.cwd} />
+      <PullRequestMarkdown
+        className="min-w-0 flex-1"
+        text={comment.body}
+        cwd={editing.cwd}
+        environmentId={editing.environmentId}
+      />
       {editing.canEdit(comment) ? (
         <Button
           size="icon-xs"
@@ -489,6 +507,7 @@ export function PullRequestSummaryTab({
 
   const commentEditing: CommentEditing = {
     cwd: detail.workspaceRoot,
+    environmentId,
     canEdit: (comment) => canEditPullRequestComment(detail, comment),
     editingId: editingCommentId,
     saving: commentSaving,
@@ -649,6 +668,7 @@ export function PullRequestSummaryTab({
               allowEmpty
               value={detail.body}
               cwd={detail.workspaceRoot}
+              environmentId={environmentId}
               label="Pull request description"
               placeholder="Describe this pull request"
               saving={bodySaving}
@@ -661,6 +681,7 @@ export function PullRequestSummaryTab({
                 className="min-w-0 flex-1"
                 text={detail.body.trim().length > 0 ? detail.body : "_No description provided._"}
                 cwd={detail.workspaceRoot}
+                environmentId={environmentId}
               />
               {canEditPullRequestChangeRequest(detail) ? (
                 <Button
@@ -691,14 +712,12 @@ export function PullRequestSummaryTab({
           <p className="text-xs text-muted-foreground">No checks reported.</p>
         ) : (
           <div className="space-y-0.5">
-            {detail.checks.map((check, index) => {
+            {keyedPullRequestChecks(detail.checks).map(({ check, key }) => {
               const finding = { kind: "check", check } as const;
               const failing = check.status === "failure" || check.status === "cancelled";
               return (
                 <div
-                  // Position too: the host decides how many runs share a name, and a repeated
-                  // key would be a rendering fault on top of whatever the list already says.
-                  key={`${index}:${check.name}:${check.url ?? ""}`}
+                  key={key}
                   className="group flex items-center gap-1 rounded-md pr-1 hover:bg-accent/60"
                 >
                   <button
