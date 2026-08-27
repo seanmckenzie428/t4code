@@ -136,3 +136,23 @@ remain mandatory.
 - Validation: T4 invariant suite (14 files, 126 tests), focused merge/fix suite (32 files, 670
   tests), typechecks across server, web, desktop, mobile, marketing, contracts, client runtime,
   and shared, plus `git diff --check` passed.
+
+### 2026-08-27 — T3 nightly 20260827.1206
+
+- T4 parent: `efe941e8b`
+- T3 parent: `f6f2be32d`
+- Merge: `c83e8f7a5`
+- Scope: 41 upstream commits, 215 changed files, 54 paths changed on both sides, 6 textual
+  conflict paths.
+- Explicit resolution: preserve T4 branding, source-only distribution, generated views, app
+  control, Quick Chat, main-view review, workspace bindings, delegation, terminal-close
+  confirmation, sidebar shelf preferences, and patched `@pierre/diffs` 1.3.2; add upstream linked
+  pull requests, active-list re-entry ordering, Claude resume compaction, model manifests, Grok
+  skills, mobile improvements, and faster macOS signing. Preserve migration IDs 36-47 and map
+  upstream `ProjectionThreadLinkedPullRequest` and `ProjectionThreadsUnsettledAt` to migrations
+  48-49. Omit the T3 preview-release workflow because T4 remains source-only, and keep all
+  remaining release jobs gated to the upstream repository.
+- Validation: T4 invariant suite (14 files, 126 tests), focused merge/fix suite (24 files, 584
+  tests), typechecks across server, web, desktop, mobile, contracts, client runtime, shared,
+  scripts, and the Codex app-server schema package, targeted lint/format checks, and
+  `git diff --check` passed.
