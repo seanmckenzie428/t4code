@@ -2,6 +2,7 @@ import { expect, it } from "@effect/vitest";
 import {
   AppControlUnavailableError,
   EnvironmentId,
+  McpCapabilityUnavailableError,
   PreviewAutomationUnavailableError,
   ProviderInstanceId,
   ThreadId,
@@ -57,5 +58,32 @@ it.effect("requires both an app-control capability and typed principal", () => {
     );
     expect(error).toBeInstanceOf(AppControlUnavailableError);
     expect(error.message).toBe("MCP credential does not grant the app-control capability.");
+  });
+});
+
+it.effect("reports other missing capabilities with the neutral error", () => {
+  const invocation: McpInvocationContext.McpInvocationScope = {
+    environmentId: EnvironmentId.make("environment-1"),
+    threadId: ThreadId.make("thread-1"),
+    providerSessionId: "provider-session-1",
+    providerInstanceId: ProviderInstanceId.make("codex"),
+    capabilities: new Set(["preview"]),
+    grants: new Set<string>(),
+    issuedAt: 1,
+  };
+
+  return Effect.gen(function* () {
+    const error = yield* McpInvocationContext.requireMcpCapability("pull-requests").pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+      Effect.flip,
+    );
+
+    expect(error).toBeInstanceOf(McpCapabilityUnavailableError);
+    expect(error).toMatchObject({ capability: "pull-requests", threadId: invocation.threadId });
+
+    const scope = yield* McpInvocationContext.requireMcpCapability("preview").pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, invocation),
+    );
+    expect(scope).toBe(invocation);
   });
 });

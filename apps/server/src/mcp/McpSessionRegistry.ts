@@ -17,6 +17,7 @@ export interface McpCredentialRequest {
   readonly providerInstanceId: ProviderInstanceId;
   readonly principal?: AppControlPrincipal;
   readonly grants?: ReadonlySet<string>;
+  readonly capabilities?: ReadonlySet<McpInvocationContext.McpCapability>;
 }
 
 export interface McpIssuedCredential {
@@ -71,7 +72,7 @@ export interface McpSessionRegistryOptions {
  *
  * The bound matters because `/mcp` is mounted outside the environment auth
  * stack and is reachable on whatever host the server binds to, so this token is
- * the only thing guarding the preview toolkit on a remote-reachable server.
+ * the only thing guarding the `t3-code` toolkits on a remote-reachable server.
  */
 const DEFAULT_LIVENESS_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
@@ -139,9 +140,11 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         providerSessionId,
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
         ...(principal === undefined ? {} : { principal }),
-        capabilities: new Set(
-          principal === undefined ? (["preview"] as const) : (["preview", "app-control"] as const),
-        ),
+        capabilities: new Set<McpInvocationContext.McpCapability>([
+          "pull-requests",
+          ...(request.capabilities ?? ["preview"]),
+          ...(principal === undefined ? [] : ["app-control" as const]),
+        ]),
         grants: new Set(request.grants ?? []),
         issuedAt,
       };
@@ -158,6 +161,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
           providerInstanceId: scope.providerInstanceId,
           endpoint,
           authorizationHeader: `Bearer ${rawToken}`,
+          capabilities: scope.capabilities,
         },
       };
     },

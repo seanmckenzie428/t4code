@@ -1,12 +1,18 @@
+import { retainCurrentDiffFileRevisions, toggleAllDiffFiles } from "./diffCollapse";
 import { describe, expect, it } from "vite-plus/test";
 import {
+  buildFileDiffContentVersion,
+  buildFileDiffIdentityKey,
   buildFileDiffRenderKey,
   buildPatchCacheKey,
   buildFileReviewRevision,
+  buildDiffFileReviewSnapshot,
   getDiffLineStat,
   getRenderablePatch,
   resolveDiffFontFamily,
   resolveDiffTheme,
+  resolveFileDiffPath,
+  resolveFileDiffPreviousPath,
 } from "./diffRendering";
 
 describe("review diff presentation", () => {
@@ -34,12 +40,6 @@ describe("review diff presentation", () => {
 });
 
 describe("buildPatchCacheKey", () => {
-  it("returns a stable cache key for identical content", () => {
-    const patch = "diff --git a/a.ts b/a.ts\n+console.log('hello')";
-
-    expect(buildPatchCacheKey(patch)).toBe(buildPatchCacheKey(patch));
-  });
-
   it("normalizes outer whitespace before hashing", () => {
     const patch = "diff --git a/a.ts b/a.ts\n+console.log('hello')";
 
@@ -63,6 +63,34 @@ describe("buildPatchCacheKey", () => {
 });
 
 describe("getRenderablePatch", () => {
+  it.each([
+    ["a/example.ts", "a/example.ts"],
+    ["b/example.ts", "b/example.ts"],
+    ["a/before.ts", "b/after.ts"],
+  ])("preserves repository paths from %s to %s", (previousPath, path) => {
+    const parsed = getRenderablePatch(
+      [
+        `diff --git a/${previousPath} b/${path}`,
+        ...(previousPath === path
+          ? []
+          : ["similarity index 50%", `rename from ${previousPath}`, `rename to ${path}`]),
+        `--- a/${previousPath}`,
+        `+++ b/${path}`,
+        "@@ -1 +1 @@",
+        "-before",
+        "+after",
+      ].join("\n"),
+    );
+    expect(parsed?.kind).toBe("files");
+    if (parsed?.kind !== "files") return;
+    const file = parsed.files[0];
+    expect(file).toBeDefined();
+    if (!file) return;
+    expect(resolveFileDiffPath(file)).toBe(path);
+    expect(resolveFileDiffPreviousPath(file)).toBe(previousPath);
+    expect(buildFileDiffIdentityKey(file)).toBe(`${previousPath}\0${path}`);
+  });
+
   it("compacts partial hunk render offsets for virtualized review diffs", () => {
     const patch = [
       "diff --git a/example.ts b/example.ts",
@@ -115,6 +143,29 @@ describe("getRenderablePatch", () => {
   });
 });
 
+describe("lazy diff review state", () => {
+  it("keeps unloaded files in review membership without inventing their revision", () => {
+    const patch = (path: string, contents: string) => [
+      `diff --git a/${path} b/${path}`,
+      `--- a/${path}`,
+      `+++ b/${path}`,
+      "@@ -1 +1 @@",
+      "-before",
+      `+${contents}`,
+    ].join("\n");
+    const parsed = getRenderablePatch(`${patch("first.ts", "after")}\n${patch("later.ts", "after")}`);
+    if (parsed?.kind !== "files") throw new Error("Expected file diffs");
+    const complete = buildDiffFileReviewSnapshot(parsed.files, null);
+    const reloading = buildDiffFileReviewSnapshot(parsed.files, new Set(["first.ts"]));
+    expect(reloading.filePaths).toEqual(["first.ts", "later.ts"]);
+    expect(reloading.revisions.get("first.ts")).toBe(complete.revisions.get("first.ts"));
+    expect(reloading.revisions.has("later.ts")).toBe(false);
+    const paths = new Set(reloading.filePaths);
+    expect(retainCurrentDiffFileRevisions(paths, complete.revisions)).toEqual(complete.revisions);
+    expect(toggleAllDiffFiles(reloading.filePaths, new Set())).toEqual(paths);
+  });
+});
+
 describe("buildFileReviewRevision", () => {
   const parseFile = (replacement: string, scope: string) => {
     const parsed = getRenderablePatch(
@@ -164,6 +215,48 @@ describe("buildFileDiffRenderKey", () => {
     file.cacheKey = `${file.cacheKey}:hydrated`;
 
     expect(buildFileDiffRenderKey(file)).toBe(key);
+  });
+
+  it("keeps identities stable and versions local to the changed file", () => {
+    const patch = (secondLine: string) =>
+      [
+        "diff --git a/unchanged.ts b/unchanged.ts",
+        "--- a/unchanged.ts",
+        "+++ b/unchanged.ts",
+        "@@ -1 +1 @@",
+        "-before",
+        "+after",
+        "diff --git a/changed.ts b/changed.ts",
+        "--- a/changed.ts",
+        "+++ b/changed.ts",
+        "@@ -1 +1 @@",
+        "-old",
+        `+${secondLine}`,
+      ].join("\n");
+    const before = getRenderablePatch(patch("new"), "before");
+    const after = getRenderablePatch(patch("newer"), "after");
+    expect(before?.kind).toBe("files");
+    expect(after?.kind).toBe("files");
+    if (before?.kind !== "files" || after?.kind !== "files") return;
+
+    const [beforeUnchanged, beforeChanged] = before.files;
+    const [afterUnchanged, afterChanged] = after.files;
+    expect(beforeUnchanged).toBeDefined();
+    expect(beforeChanged).toBeDefined();
+    expect(afterUnchanged).toBeDefined();
+    expect(afterChanged).toBeDefined();
+    if (!beforeUnchanged || !beforeChanged || !afterUnchanged || !afterChanged) return;
+
+    expect(buildFileDiffIdentityKey(afterUnchanged)).toBe(
+      buildFileDiffIdentityKey(beforeUnchanged),
+    );
+    expect(buildFileDiffIdentityKey(afterChanged)).toBe(buildFileDiffIdentityKey(beforeChanged));
+    expect(buildFileDiffContentVersion(afterUnchanged)).toBe(
+      buildFileDiffContentVersion(beforeUnchanged),
+    );
+    expect(buildFileDiffContentVersion(afterChanged)).not.toBe(
+      buildFileDiffContentVersion(beforeChanged),
+    );
   });
 });
 

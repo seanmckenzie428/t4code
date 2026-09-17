@@ -80,6 +80,8 @@ it.effect("runs through the bounded one-shot process path", () => {
           code: 0 as never,
           timedOut: false,
           stdoutTruncated: false,
+          stdoutInvalidUtf8: false,
+          stderrInvalidUtf8: false,
           stderrTruncated: false,
         };
       }),

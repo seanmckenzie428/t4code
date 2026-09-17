@@ -45,6 +45,10 @@ const makeExecutor = (
       OrchestrationEngineService.of({
         dispatch,
         readEvents: () => Stream.empty,
+        readThreadEvents: () => Stream.empty,
+        getThreadReplayStats: () =>
+          Effect.succeed({ eventCount: 0, payloadBytes: 0, hasCreateEvent: false }),
+        subscribeDomainEvents: Effect.succeed(Stream.empty),
         streamDomainEvents: Stream.empty,
         latestSequence: Effect.succeed(0),
       }),

@@ -24,6 +24,8 @@ describe("resolveSnoozePresets", () => {
     ]);
     const afternoon = presets.find((preset) => preset.id === "afternoon");
     expect(new Date(afternoon!.snoozedUntil).getHours()).toBe(13);
+    const threeHours = presets.find((preset) => preset.id === "three-hours");
+    expect(new Date(threeHours!.snoozedUntil).getHours()).toBe(13);
     const evening = presets.find((preset) => preset.id === "evening");
     expect(new Date(evening!.snoozedUntil).getHours()).toBe(18);
     const tomorrow = presets.find((preset) => preset.id === "tomorrow");

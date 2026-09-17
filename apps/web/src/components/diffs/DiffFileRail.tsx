@@ -17,6 +17,7 @@ export interface DiffFileRailEntry {
   readonly fileKey: string;
   readonly filePath: string;
   readonly reviewState: DiffFileReviewState;
+  readonly reviewable?: boolean;
 }
 
 interface DiffFileRailProps {
@@ -156,7 +157,7 @@ export function DiffFileRail(props: DiffFileRailProps) {
         <DiffFileTree {...props} />
       ) : (
         <nav className="min-h-0 flex-1 overflow-y-auto p-1.5">
-          {props.files.map(({ fileDiff, filePath, fileKey, reviewState }) => {
+          {props.files.map(({ fileDiff, filePath, fileKey, reviewState, reviewable = true }) => {
             const viewed = reviewState === "viewed";
             return (
               <div
@@ -181,6 +182,7 @@ export function DiffFileRail(props: DiffFileRailProps) {
                   type="button"
                   className="mr-1 inline-flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-70 outline-none transition-colors hover:bg-foreground/10 hover:text-foreground group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label={viewed ? `Mark ${filePath} unviewed` : `Mark ${filePath} viewed`}
+                  disabled={!reviewable}
                   aria-pressed={viewed}
                   onClick={() => props.onToggleViewed(filePath, !viewed)}
                 >

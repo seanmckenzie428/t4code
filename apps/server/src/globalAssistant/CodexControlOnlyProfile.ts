@@ -75,7 +75,7 @@ export function isSupportedGlobalAssistantPlatform(platform: string = process.pl
   );
 }
 
-export class CodexControlOnlyProfileError extends Schema.TaggedErrorClass<CodexControlOnlyProfileError>()(
+export class CodexControlOnlyProfileError extends Schema.TaggedError<CodexControlOnlyProfileError>()(
   "CodexControlOnlyProfileError",
   { message: Schema.String },
 ) {}

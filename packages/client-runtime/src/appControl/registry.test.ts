@@ -106,6 +106,26 @@ describe("AppCommandRegistry", () => {
 });
 
 describe("APP_COMMAND_CATALOG", () => {
+  it("validates queued and background sends through the same command", async () => {
+    const entry = APP_COMMAND_CATALOG.find(({ id }) => id === "thread.send")!;
+    const registry = new AppCommandRegistry([{ ...entry, execute: (request) => request.args }]);
+    const args = {
+      threadId: "thread-1",
+      text: "Follow up",
+      submissionIntent: "background",
+      queuedMessageId: "queued-1",
+    };
+    const request = AppCommandInvocation.make({
+      actionId: AppActionId.make("send-1"),
+      commandId: entry.descriptor.id,
+      args,
+    });
+    await expect(registry.invoke(request, context)).resolves.toEqual(args);
+    await expect(
+      registry.invoke({ ...request, args: { ...args, submissionIntent: "unknown" } }, context),
+    ).rejects.toMatchObject({ code: "invalid-arguments" });
+  });
+
   it("publishes unique, policy-complete V1 descriptors", () => {
     expect(new Set(APP_COMMAND_IDS).size).toBe(APP_COMMAND_IDS.length);
     for (const { descriptor: entry } of APP_COMMAND_CATALOG) {

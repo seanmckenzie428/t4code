@@ -1,3 +1,4 @@
+import * as NodePath from "@effect/platform-node/NodePath";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -40,6 +41,7 @@ const makeElectronAppLayer = (calls: ElectronAppCalls) =>
   Layer.succeed(ElectronApp.ElectronApp, {
     metadata: Effect.die("unexpected metadata read"),
     name: Effect.succeed("T4 Code"),
+    systemLocale: Effect.succeed("en-US"),
     whenReady: Effect.void,
     quit: Effect.void,
     exit: () => Effect.void,
@@ -87,6 +89,7 @@ const makeEnvironmentLayer = (overrides: TestEnvironmentInput = {}) => {
     Layer.provide(
       Layer.mergeAll(
         NodeServices.layer,
+        NodePath.layerPosix,
         DesktopConfig.layerTest({
           ...env,
         }),
@@ -198,6 +201,8 @@ describe("DesktopAppIdentity", () => {
         assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "T4 Code (Alpha)");
         assert.equal(calls.setAboutPanelOptions[0]?.applicationVersion, "1.2.3");
         assert.equal(calls.setAboutPanelOptions[0]?.version, "0123456789ab");
+        // Packaged: the bundle's own icon stands, so a custom one the user
+        // attached survives.
         assert.deepEqual(calls.setDockIcon, []);
       }),
       {
@@ -224,6 +229,8 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         yield* identity.configure;
 
+        // Electron shows a generic icon for an unpackaged run, which is the
+        // reason this call exists at all.
         assert.deepEqual(calls.setDockIcon, ["/icon.png"]);
       }),
       {

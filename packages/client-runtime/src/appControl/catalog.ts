@@ -465,7 +465,11 @@ export const APP_COMMAND_CATALOG = [
     "Change thread model",
     "thread:mutate",
     objectInput(
-      { threadId: stringProperty, modelSelection: { type: "object", additionalProperties: true } },
+      {
+        threadId: stringProperty,
+        modelSelection: { type: "object", additionalProperties: true },
+        focusComposer: booleanProperty,
+      },
       ["threadId", "modelSelection"],
     ),
   ),
@@ -485,7 +489,15 @@ export const APP_COMMAND_CATALOG = [
     "mutate",
     "Send thread message",
     "thread:mutate",
-    objectInput({ threadId: stringProperty, text: stringProperty }, ["threadId", "text"]),
+    objectInput(
+      {
+        threadId: stringProperty,
+        text: stringProperty,
+        submissionIntent: { type: "string", enum: ["foreground", "background"] },
+        queuedMessageId: stringProperty,
+      },
+      ["threadId", "text"],
+    ),
   ),
   command(
     "thread.interrupt",
@@ -512,10 +524,10 @@ export const APP_COMMAND_CATALOG = [
     "destructive",
     "Revert checkpoint",
     null,
-    objectInput({ threadId: stringProperty, turnCount: integerProperty }, [
-      "threadId",
-      "turnCount",
-    ]),
+    objectInput(
+      { threadId: stringProperty, turnCount: integerProperty, messageId: stringProperty },
+      ["threadId", "turnCount"],
+    ),
   ),
   command(
     "thread.delete",
@@ -543,7 +555,15 @@ export const APP_COMMAND_CATALOG = [
     "mutate",
     "Start delegated turn",
     "assistant:delegate",
-    objectInput({ threadId: stringProperty, text: stringProperty }, ["threadId", "text"]),
+    objectInput(
+      {
+        threadId: stringProperty,
+        text: stringProperty,
+        submissionIntent: { type: "string", enum: ["foreground", "background"] },
+        queuedMessageId: stringProperty,
+      },
+      ["threadId", "text"],
+    ),
   ),
   command(
     "delegation.turn.stop",

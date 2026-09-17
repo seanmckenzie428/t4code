@@ -27,7 +27,7 @@ merge cleanly while omitting a required T4 field or bypassing a T4 policy.
 | Workspace preferences         | T4 workspace appearance preferences and expanded chat snooze options remain available and stable.                                                                                                                                                     | settings, UI-state, sidebar snooze, and `threadSnoozed.test.ts`                                                                                 |
 | Desktop/nightly               | T4 icons, safe state-directory locking, release dependency handling, local nightly build/install flow, and packaged macOS Dock icon behavior remain intact.                                                                                           | desktop identity/lock tests and desktop-nightly script tests                                                                                    |
 | Lotus integration             | Optional Lotus Runtime extension and project custom actions remain additive; Lotus owns its runtime lifecycle.                                                                                                                                        | integration provider/MCP tests and project custom-action tests                                                                                  |
-| Persistence ledger            | T4 migrations 36-38 keep shipped meanings. Upstream migrations formerly numbered 36-38 run as 41-43; T4 compatibility reruns remain 44-46.                                                                                                            | `041_046_ForkCompatibility.test.ts`                                                                                                             |
+| Persistence ledger            | T4 migration IDs 36-46 keep shipped meanings. Upstream migrations formerly numbered 36-38 run as 41-43; compatibility reruns remain 44-46; upstream 41-52 run as 47-58.                                                                               | `041_046_ForkCompatibility.test.ts`                                                                                                             |
 
 When a T3 change creates another read, write, transport, cache, pagination, or fallback path in one
 of these areas, extend that path with every T4 field and policy. Add a regression using non-default
@@ -75,6 +75,43 @@ No-overlap preflight is not proof of compatibility. Contracts can cross files, s
 remain mandatory.
 
 ## Sync records
+
+### 2026-09-17 — T3 nightly 20260917.1866
+
+- T4 parent: `80b2a458d5a7f4f3cd26ce118e10a1c43bc3e7f0`
+- T3 parent: `d4d5d12e8ba086cfbf79ca3adeb4156b46ead665`
+- Upstream tag: `v0.0.43-nightly.20260917.1866`
+- Scope: 1,671 upstream commits since common ancestor `78f462c4e18c8ea5e5037dc916389a3b72246025`,
+  237 paths changed on both sides, 133 unmerged index paths requiring explicit resolution.
+- Preflight: the package runner initially lacked its installed Vite dependency. After fetching the
+  exact tag, direct execution of `scripts/check-t4-upstream-overlap.ts` produced the overlap report;
+  every overlap was reviewed before committing.
+- Persistence: preserve all shipped T4 migration IDs 36-46; assign new upstream migrations 41-52
+  runtime IDs 47-58. New message context, turn-start lookup, stream append, and snapshot paths keep
+  T4 delegation and system-entity fields. Non-default regression data covers these parallel paths.
+- Providers and app control: retain T4 typed principals, grants, audits, Quick Chat, delegation,
+  generated views, project custom actions, and optional Lotus integration alongside upstream device,
+  pull-request, provider, and command changes. Quick Chat remains Codex-only. Legacy pending forms
+  and approvals still block settling; newly introduced asynchronous message requests can be dismissed.
+- Clients: retain main-view Review, Viewed state, full file navigation, workspace preferences,
+  expanded snooze controls, generated-view placement controls, and active-worktree resolution.
+  Upstream lazy diff loading and new right-panel capabilities coexist with these flows. File
+  membership survives lazy patch loading; read-only expansion remains available when editing is
+  unavailable. Background refreshes preserve active edits.
+- Dependencies: retain T4's stable `@pierre/diffs` 1.3.2 and port compatible upstream virtualization,
+  highlighting, cache, and resize fixes. Keep stable editor behavior and correct wrapped EOF range
+  calculation with existing assertions. Adapt T4 Effect code to the upstream RC API.
+- Distribution: retain T4 names, icons, compatibility identifiers, macOS Dock behavior, state
+  safeguards, and local build/install scripts. Newly introduced publishing workflows are guarded
+  against running on the fork; source-only T4 distribution remains explicit in user docs.
+- Validation: all 14 required invariant files passed (136 tests), including a populated T4 ledger
+  46-to-58 upgrade with unchanged prior ledger/data and an idempotent rerun. Focused server,
+  contracts, client-runtime, web, desktop, mobile, marketing, and packaging tests passed. Scoped
+  typechecks, lint, formatting, and production web build passed; lint/build retain nonblocking
+  warnings. Loopback tests passed with local socket permissions; path fixtures passed with
+  canonical `TMPDIR=/private/tmp`. Source whitespace checks passed; full-tree checking reports
+  unchanged upstream reference/patch whitespace and unified-diff context indentation. Browser/native
+  interactive testing and app installation were outside this merge request.
 
 ### 2026-08-10 — T3 nightly 20260810.1059
 

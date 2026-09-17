@@ -57,7 +57,7 @@ export function useCloudLinkController() {
     setOperationError(traceId ? `${message} Trace ID: ${traceId}` : message);
     toastManager.add({
       type: "error",
-      title: "Could not update T3 Connect",
+      title: "Could not update T4 Connect",
       description: message,
       data: traceId
         ? {
@@ -93,7 +93,7 @@ export function useCloudLinkController() {
     // actually holds now.
     if (!wantsLink) {
       // Unlink works without a relay token — a failed token read must not
-      // leave the user unable to turn T3 Connect off.
+      // leave the user unable to turn T4 Connect off.
       const unlinkResult = await unlinkPrimaryEnvironment({
         target,
         clerkToken: tokenResult._tag === "Success" ? (tokenResult.value ?? null) : null,
@@ -112,7 +112,7 @@ export function useCloudLinkController() {
       }
       const clerkToken = tokenResult.value;
       if (!clerkToken) {
-        reportUpdateFailure(new Error("Sign in to T3 Connect before enabling this."));
+        reportUpdateFailure(new Error("Sign in to T4 Connect before enabling this."));
         return false;
       }
       if (!linked || managedTunnelActive !== desired.managedTunnel) {
