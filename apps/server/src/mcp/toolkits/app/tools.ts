@@ -37,7 +37,7 @@ export const AppStatusTool = readonlyTool(
   Tool.make("app_status", {
     description:
       'Inspect bounded T4 application state, including the focused client, projects, threads, current generated-view IDs/titles/revisions/scopes, and semantic commands available to this provider session. When the user says "add this to T4", "put this in T4", "show this in T4", or refers to "the app" for a view, dashboard, control, or interactive tool, interpret it as a generated in-app UI request. Inspect views metadata before presenting or updating generated UI; do not edit product source merely to fulfill that request unless the user explicitly asks to change the product itself.',
-    parameters: Schema.Struct({}),
+    parameters: Tool.EmptyParams,
     success: AppControlSnapshot,
     failure: AppControlError,
     dependencies,
