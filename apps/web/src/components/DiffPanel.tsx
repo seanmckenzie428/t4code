@@ -48,6 +48,7 @@ import {
 import {
   areAllDiffFilesCollapsed,
   getDiffFileReviewState,
+  getDefaultCollapsedDiffFilePaths,
   retainCurrentDiffFileKeys,
   setDiffFileViewed,
   toggleAllDiffFiles,
@@ -118,7 +119,6 @@ function getCachedFileEntry(fileDiff: FileDiffMetadata) {
   return entry;
 }
 
-const EMPTY_COLLAPSED_DIFF_FILE_KEYS: ReadonlySet<string> = new Set();
 type DiffFilesByScope = ReadonlyMap<string, ReadonlySet<string>>;
 
 interface DiffPanelProps {
@@ -499,12 +499,24 @@ export default function DiffPanel({
     () => renderableFiles.map(getCachedFileEntry),
     [renderableFiles],
   );
+  const { filePaths: diffFilePaths, revisions: currentDiffFileRevisions } = useMemo(
+    () => buildDiffFileReviewSnapshot(renderableFiles, lazySource ? readyFilePaths : null),
+    [renderableFiles, lazySource, readyFilePaths],
+  );
   const defaultCollapsedDiffFilePaths = useMemo(
     () =>
-      settings.diffFilesCollapsed
-        ? new Set(renderableFileEntries.map((file) => resolveFileDiffPath(file.fileDiff)))
-        : EMPTY_COLLAPSED_DIFF_FILE_KEYS,
-    [renderableFileEntries, settings.diffFilesCollapsed],
+      getDefaultCollapsedDiffFilePaths(
+        diffFilePaths,
+        currentDiffFileRevisions,
+        reviewedDiffFileRevisions,
+        settings.diffFilesCollapsed,
+      ),
+    [
+      diffFilePaths,
+      currentDiffFileRevisions,
+      reviewedDiffFileRevisions,
+      settings.diffFilesCollapsed,
+    ],
   );
   const collapsedDiffFilePaths = collapseScopeKey
     ? (collapsedDiffFiles.get(collapseScopeKey) ?? defaultCollapsedDiffFilePaths)
@@ -535,10 +547,6 @@ export default function DiffPanel({
           };
         }),
     [canEditWorkingTree, collapsedDiffFilePaths, renderableFileEntries, lazySource, readyFilePaths],
-  );
-  const { filePaths: diffFilePaths, revisions: currentDiffFileRevisions } = useMemo(
-    () => buildDiffFileReviewSnapshot(renderableFiles, lazySource ? readyFilePaths : null),
-    [renderableFiles, lazySource, readyFilePaths],
   );
   const diffFilePathSet = useMemo(() => new Set(diffFilePaths), [diffFilePaths]);
   const allDiffFilesCollapsed = areAllDiffFilesCollapsed(diffFilePaths, collapsedDiffFilePaths);

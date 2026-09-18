@@ -59,3 +59,20 @@ export function retainCurrentDiffFileRevisions(
 ): ReadonlyMap<string, string> {
   return new Map([...currentRevisions].filter(([filePath]) => filePaths.has(filePath)));
 }
+
+/** Restore review-driven collapse when a panel opens or its files finish loading. */
+export function getDefaultCollapsedDiffFilePaths(
+  filePaths: ReadonlyArray<string>,
+  currentRevisions: ReadonlyMap<string, string>,
+  reviewedRevisions: ReadonlyMap<string, string>,
+  collapsedByDefault: boolean,
+): ReadonlySet<string> {
+  return new Set(
+    filePaths.filter((filePath) => {
+      const reviewedRevision = reviewedRevisions.get(filePath);
+      if (reviewedRevision === undefined) return collapsedByDefault;
+      const currentRevision = currentRevisions.get(filePath);
+      return currentRevision === undefined || currentRevision === reviewedRevision;
+    }),
+  );
+}
