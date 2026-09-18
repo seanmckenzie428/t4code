@@ -49,7 +49,6 @@ import {
   areAllDiffFilesCollapsed,
   getDiffFileReviewState,
   retainCurrentDiffFileKeys,
-  retainCurrentDiffFileRevisions,
   setDiffFileViewed,
   toggleAllDiffFiles,
 } from "../lib/diffCollapse";
@@ -121,7 +120,6 @@ function getCachedFileEntry(fileDiff: FileDiffMetadata) {
 
 const EMPTY_COLLAPSED_DIFF_FILE_KEYS: ReadonlySet<string> = new Set();
 type DiffFilesByScope = ReadonlyMap<string, ReadonlySet<string>>;
-type ReviewedDiffFilesByScope = ReadonlyMap<string, ReadonlyMap<string, string>>;
 
 interface DiffPanelProps {
   mode?: DiffPanelMode;
@@ -161,8 +159,8 @@ export default function DiffPanel({
   const [fileListOpen, setFileListOpen] = useState(true);
   const [baseRefQuery, setBaseRefQuery] = useState("");
   const [collapsedDiffFiles, setCollapsedDiffFiles] = useState<DiffFilesByScope>(() => new Map());
-  const [reviewedDiffFiles, setReviewedDiffFiles] = useState<ReviewedDiffFilesByScope>(
-    () => new Map(),
+  const setReviewedDiffFileRevision = useDiffPanelStore(
+    (state) => state.setReviewedDiffFileRevision,
   );
   const [codeViewRevision, setCodeViewRevision] = useState(0);
   const [codeView, setCodeView] = useState<AnnotatableCodeViewHandle | null>(null);
@@ -270,9 +268,13 @@ export default function DiffPanel({
   const collapseScopeKey = routeThreadRef
     ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}:${reviewSectionId}`
     : null;
-  const reviewedDiffFileRevisions = collapseScopeKey
-    ? (reviewedDiffFiles.get(collapseScopeKey) ?? new Map<string, string>())
-    : new Map<string, string>();
+  const reviewedDiffFileRevisionRecord = useDiffPanelStore((state) =>
+    collapseScopeKey ? state.reviewedDiffFileRevisionsByScopeKey[collapseScopeKey] : undefined,
+  );
+  const reviewedDiffFileRevisions = useMemo(
+    () => new Map(Object.entries(reviewedDiffFileRevisionRecord ?? {})),
+    [reviewedDiffFileRevisionRecord],
+  );
   const codeViewMountKey = `${collapseScopeKey ?? reviewSectionId}:${codeViewRevision}`;
   const reviewSectionTitle = selectedTurn
     ? `Turn ${selectedCheckpointTurnCount ?? "?"}`
@@ -619,13 +621,12 @@ export default function DiffPanel({
       const existing = current.get(collapseScopeKey);
       if (!existing) return current;
       const valid = new Set(retainCurrentDiffFileKeys(diffFilePathSet, existing));
-      const reviewed = reviewedDiffFiles.get(collapseScopeKey);
       for (const filePath of valid) {
         const currentRevision = currentDiffFileRevisions.get(filePath);
         if (
           currentRevision !== undefined &&
-          reviewed?.has(filePath) === true &&
-          reviewed.get(filePath) !== currentRevision
+          reviewedDiffFileRevisions.has(filePath) &&
+          reviewedDiffFileRevisions.get(filePath) !== currentRevision
         ) {
           valid.delete(filePath);
         }
@@ -637,16 +638,7 @@ export default function DiffPanel({
       next.set(collapseScopeKey, valid);
       return next;
     });
-    setReviewedDiffFiles((current) => {
-      const existing = current.get(collapseScopeKey);
-      if (!existing) return current;
-      const valid = retainCurrentDiffFileRevisions(diffFilePathSet, existing);
-      if (valid.size === existing.size) return current;
-      const next = new Map(current);
-      next.set(collapseScopeKey, valid);
-      return next;
-    });
-  }, [collapseScopeKey, currentDiffFileRevisions, diffFilePathSet, reviewedDiffFiles]);
+  }, [collapseScopeKey, currentDiffFileRevisions, diffFilePathSet, reviewedDiffFileRevisions]);
 
   const openDiffFile = useCallback(
     (filePath: string) => {
@@ -710,18 +702,20 @@ export default function DiffPanel({
         reviewedDiffFileRevisions,
         collapsedDiffFilePaths,
       );
-      setReviewedDiffFiles((current) => {
-        const byScope = new Map(current);
-        byScope.set(collapseScopeKey, next.reviewedRevisions);
-        return byScope;
-      });
+      setReviewedDiffFileRevision(collapseScopeKey, filePath, viewed ? currentRevision : null);
       setCollapsedDiffFiles((current) => {
         const byScope = new Map(current);
         byScope.set(collapseScopeKey, next.collapsedFilePaths);
         return byScope;
       });
     },
-    [collapseScopeKey, collapsedDiffFilePaths, currentDiffFileRevisions, reviewedDiffFileRevisions],
+    [
+      collapseScopeKey,
+      collapsedDiffFilePaths,
+      currentDiffFileRevisions,
+      reviewedDiffFileRevisions,
+      setReviewedDiffFileRevision,
+    ],
   );
 
   const loadEditableDiffFiles = useCallback(
@@ -1361,9 +1355,7 @@ export default function DiffPanel({
                       preferredHighlighter: PREFERRED_HIGHLIGHTER,
                       themeType: codeTheme.type,
                       stickyHeaders: true,
-                      ...(canEditWorkingTree || currentLoadDiffFiles
-                        ? { loadDiffFiles }
-                        : {}),
+                      ...(canEditWorkingTree || currentLoadDiffFiles ? { loadDiffFiles } : {}),
                     }}
                   />
                 </div>
@@ -1376,7 +1368,8 @@ export default function DiffPanel({
                       reviewState: getDiffFileReviewState(
                         resolveFileDiffPath(file.fileDiff),
                         currentDiffFileRevisions.get(resolveFileDiffPath(file.fileDiff)) ??
-                          reviewedDiffFileRevisions.get(resolveFileDiffPath(file.fileDiff)) ?? "",
+                          reviewedDiffFileRevisions.get(resolveFileDiffPath(file.fileDiff)) ??
+                          "",
                         reviewedDiffFileRevisions,
                       ),
                     }))}

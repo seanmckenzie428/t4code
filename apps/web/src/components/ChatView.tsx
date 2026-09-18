@@ -806,7 +806,7 @@ function MainViewTabs(props: {
     <div
       role="tablist"
       aria-label="Thread view"
-      className="surface-subheader gap-1 px-3 sm:px-5"
+      className="flex h-10 min-h-10 shrink-0 flex-row items-center gap-1 border-b border-border/60 bg-background px-3 sm:px-5"
       data-main-view-tabs
     >
       {tabs.map((tab) => {

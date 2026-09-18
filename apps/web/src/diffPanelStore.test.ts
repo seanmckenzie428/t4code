@@ -6,11 +6,19 @@ import { selectThreadDiffPanelSelection, useDiffPanelStore } from "./diffPanelSt
 
 const THREAD_REF = scopeThreadRef(EnvironmentId.make("environment-1"), ThreadId.make("thread-1"));
 
+const OTHER_THREAD_REF = scopeThreadRef(
+  EnvironmentId.make("environment-1"),
+  ThreadId.make("thread-2"),
+);
+const REVIEW_SCOPE = "environment-1:thread-1:unstaged";
+const OTHER_REVIEW_SCOPE = "environment-1:thread-2:unstaged";
+
 describe("diffPanelStore", () => {
   beforeEach(() =>
     useDiffPanelStore.setState({
       byThreadKey: {},
       branchBaseRefByThreadKey: {},
+      reviewedDiffFileRevisionsByScopeKey: {},
       diffRenderMode: "stacked",
     }),
   );
@@ -33,6 +41,51 @@ describe("diffPanelStore", () => {
     await useDiffPanelStore.persist.rehydrate();
 
     expect(useDiffPanelStore.getState().diffRenderMode).toBe("split");
+  });
+
+  it("persists reviewed file revisions across thread switches and rehydration", async () => {
+    useDiffPanelStore
+      .getState()
+      .setReviewedDiffFileRevision(REVIEW_SCOPE, "src/app.ts", "revision-1");
+    useDiffPanelStore
+      .getState()
+      .setReviewedDiffFileRevision(OTHER_REVIEW_SCOPE, "src/other.ts", "revision-2");
+
+    expect(useDiffPanelStore.getState().reviewedDiffFileRevisionsByScopeKey).toMatchObject({
+      [REVIEW_SCOPE]: { "src/app.ts": "revision-1" },
+      [OTHER_REVIEW_SCOPE]: { "src/other.ts": "revision-2" },
+    });
+
+    const { name, storage } = useDiffPanelStore.persist.getOptions();
+    if (!name) throw new Error("Expected diff panel persistence to have a storage name");
+    const persisted = await storage?.getItem(name);
+    expect(persisted?.state).toMatchObject({
+      reviewedDiffFileRevisionsByScopeKey: {
+        [REVIEW_SCOPE]: { "src/app.ts": "revision-1" },
+      },
+    });
+
+    useDiffPanelStore.setState({ reviewedDiffFileRevisionsByScopeKey: {} });
+    if (persisted) await storage?.setItem(name, persisted);
+    await useDiffPanelStore.persist.rehydrate();
+
+    expect(useDiffPanelStore.getState().reviewedDiffFileRevisionsByScopeKey[REVIEW_SCOPE]).toEqual({
+      "src/app.ts": "revision-1",
+    });
+  });
+
+  it("removes reviewed revisions with their thread only", () => {
+    const store = useDiffPanelStore.getState();
+    store.setReviewedDiffFileRevision(REVIEW_SCOPE, "src/app.ts", "revision-1");
+    store.setReviewedDiffFileRevision(OTHER_REVIEW_SCOPE, "src/other.ts", "revision-2");
+    store.removeThread(THREAD_REF);
+
+    expect(useDiffPanelStore.getState().reviewedDiffFileRevisionsByScopeKey).toEqual({
+      [OTHER_REVIEW_SCOPE]: { "src/other.ts": "revision-2" },
+    });
+
+    useDiffPanelStore.getState().removeThread(OTHER_THREAD_REF);
+    expect(useDiffPanelStore.getState().reviewedDiffFileRevisionsByScopeKey).toEqual({});
   });
 
   it("defaults each thread to branch changes when the working tree is clean", () => {
