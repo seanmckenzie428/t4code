@@ -183,6 +183,7 @@ function Sidebar({
   side = "left",
   variant = "sidebar",
   collapsible = "offcanvas",
+  hoverExpand = false,
   resizable = false,
   className,
   children,
@@ -191,9 +192,13 @@ function Sidebar({
   side?: "left" | "right";
   variant?: "sidebar" | "floating" | "inset";
   collapsible?: "offcanvas" | "icon" | "none";
+  hoverExpand?: boolean;
   resizable?: boolean | SidebarResizableOptions;
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+  const [isHovering, setIsHovering] = React.useState(false);
+  const canHoverExpand = hoverExpand && collapsible === "icon";
+  const isHoverExpanded = canHoverExpand && state === "collapsed" && isHovering;
   const resolvedResizable = React.useMemo<SidebarResolvedResizableOptions | null>(() => {
     if (isMobile || collapsible === "none" || !resizable) {
       return null;
@@ -272,11 +277,15 @@ function Sidebar({
     <SidebarInstanceContext value={instanceContextValue}>
       <div
         className="group peer hidden text-sidebar-foreground md:block"
-        data-collapsible={state === "collapsed" ? collapsible : ""}
+        data-collapsible={state === "collapsed" && !isHoverExpanded ? collapsible : ""}
+        data-hover-expand={canHoverExpand ? "" : undefined}
+        data-hover-expanded={isHoverExpanded ? "" : undefined}
         data-side={side}
         data-slot="sidebar"
         data-state={state}
         data-variant={variant}
+        onPointerEnter={() => setIsHovering(true)}
+        onPointerLeave={() => setIsHovering(false)}
       >
         {/* This is what handles the sidebar gap on desktop */}
         <div
@@ -289,10 +298,11 @@ function Sidebar({
               : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)",
           )}
           data-slot="sidebar-gap"
+          style={isHoverExpanded ? { width: "var(--sidebar-width-icon)" } : undefined}
         />
         <div
           className={cn(
-            "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
+            "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex group-data-[collapsible=icon]:top-[var(--workspace-topbar-height)] group-data-[collapsible=icon]:bottom-0 group-data-[collapsible=icon]:h-auto",
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
@@ -695,7 +705,9 @@ function SidebarContent({
 }) {
   return (
     <>
-      {fixedHeader ? <div className="w-full shrink-0">{fixedHeader}</div> : null}
+      {fixedHeader ? (
+        <div className="w-full shrink-0 group-data-[collapsible=icon]:hidden">{fixedHeader}</div>
+      ) : null}
       <ScrollArea hideScrollbars scrollFade className="h-auto min-h-0 flex-1">
         <div
           className={cn(
