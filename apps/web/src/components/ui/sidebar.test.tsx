@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  Sidebar,
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuSubButton,
@@ -37,6 +38,38 @@ describe("sidebar interactive cursors", () => {
     );
 
     expect(html).toContain('data-sidebar-state="collapsed"');
+  });
+
+  it("keeps an icon rail for an opted-in collapsed sidebar", () => {
+    const html = renderToStaticMarkup(
+      <SidebarProvider defaultOpen={false}>
+        <Sidebar collapsible="icon" hoverExpand>
+          Threads
+        </Sidebar>
+      </SidebarProvider>,
+    );
+
+    expect(html).toContain('data-hover-expand=""');
+    expect(html).toContain("--sidebar-width-icon:3rem");
+    expect(html).toContain('data-collapsible="icon"');
+    expect(html).toContain("group-data-[collapsible=icon]:w-(--sidebar-width-icon)");
+    expect(html).toContain("group-data-[collapsible=icon]:top-[var(--workspace-topbar-height)]");
+    expect(html).toContain("group-data-[collapsible=icon]:h-auto");
+    expect(html).toContain('data-state="collapsed"');
+  });
+
+  it("fully hides a collapsed offcanvas sidebar by default", () => {
+    const html = renderToStaticMarkup(
+      <SidebarProvider defaultOpen={false}>
+        <Sidebar>Threads</Sidebar>
+      </SidebarProvider>,
+    );
+
+    expect(html).not.toContain("data-hover-expand");
+    expect(html).toContain("group-data-[collapsible=offcanvas]:w-0");
+    expect(html).toContain(
+      "group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]",
+    );
   });
 
   it("keeps the sidebar trigger interactive inside Electron drag regions", () => {
