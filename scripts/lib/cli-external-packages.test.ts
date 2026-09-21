@@ -8,10 +8,12 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
 import serverPackageJson from "../../apps/server/package.json" with { type: "json" };
+import desktopPackageJson from "../../apps/desktop/package.json" with { type: "json" };
+
+import { findEsmImportsOfExternalPackages } from "./cli-executable-imports.ts";
 
 import {
   CLI_RUNTIME_EXTERNAL_PREFIXES,
-  findEsmImportsOfExternalPackages,
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
   shouldBundleCliDependency,
@@ -20,8 +22,8 @@ import {
 // Only the field this test cares about; decoding ignores everything else.
 // optionalDependencies matter as much as dependencies here: every native family
 // in the list declares its actual platform bindings there (ffi-rs -> @yuuang/*,
-// msgpackr-extract -> @msgpackr-extract/*, fff-node -> @ff-labs/fff-bin-*), so
-// reading only `dependencies` would check nothing for exactly those packages.
+// fff-node -> @ff-labs/fff-bin-*), so reading only `dependencies` would check
+// nothing for exactly those packages.
 const PackageManifest = Schema.Struct({
   dependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   optionalDependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
@@ -30,6 +32,56 @@ const PackageManifest = Schema.Struct({
 type PackageManifest = typeof PackageManifest.Type;
 
 const decodeManifest = Schema.decodeUnknownSync(Schema.fromJsonString(PackageManifest));
+
+const runtimeExternalRoots = Object.keys(
+  selectCliRuntimeExternalDependencies({
+    ...serverPackageJson.dependencies,
+    ...desktopPackageJson.dependencies,
+  }),
+);
+
+function findRuntimeClosureViolations(
+  installed: ReadonlyMap<string, PackageManifest>,
+  roots: readonly string[],
+): string[] {
+  const violations: string[] = [];
+  const seen = new Set<string>();
+  const queue = [...roots];
+  for (const name of queue) {
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const manifest = installed.get(name);
+    if (!manifest) continue;
+    const declared = {
+      ...(manifest.dependencies ?? {}),
+      ...(manifest.optionalDependencies ?? {}),
+      ...(manifest.peerDependencies ?? {}),
+    };
+    for (const dependency of Object.keys(declared)) {
+      if (!CLI_RUNTIME_EXTERNAL_PREFIXES.some((prefix) => dependency.startsWith(prefix))) {
+        violations.push(`${name} -> ${dependency}`);
+      }
+      if (!seen.has(dependency)) queue.push(dependency);
+    }
+  }
+  return violations;
+}
+
+it("ignores orphaned store packages but checks them when reachable from a staged root", () => {
+  const installed = new Map<string, PackageManifest>([
+    ["node-pty", { dependencies: { "node-addon-api": "1.0.0" } }],
+    ["node-addon-api", {}],
+    ["node-gyp-build-optional-packages", { dependencies: { "detect-libc": "2.0.0" } }],
+    ["detect-libc", {}],
+  ]);
+  assert.deepStrictEqual(findRuntimeClosureViolations(installed, ["node-pty"]), []);
+  installed.set("node-pty", {
+    dependencies: { "node-gyp-build-optional-packages": "5.0.0" },
+  });
+  assert.deepStrictEqual(findRuntimeClosureViolations(installed, ["node-pty"]), [
+    "node-gyp-build-optional-packages -> detect-libc",
+  ]);
+});
 
 describe("shouldBundleCliDependency", () => {
   it("bundles ordinary runtime dependencies", () => {
@@ -49,8 +101,7 @@ describe("shouldBundleCliDependency", () => {
       "@yuuang/ffi-rs-win32-x64-msvc",
       "@ff-labs/fff-node",
       "@clerk/electron-passkeys",
-      "msgpackr-extract",
-      "@msgpackr-extract/msgpackr-extract-win32-x64",
+      "node-addon-api",
     ]) {
       assert.strictEqual(shouldBundleCliDependency(id), false, id);
     }
@@ -82,7 +133,7 @@ describe("selectCliRuntimeExternalDependencies", () => {
   it("selects every external root declared by the server", () => {
     assert.deepStrictEqual(
       Object.keys(selectCliRuntimeExternalDependencies(serverPackageJson.dependencies)).sort(),
-      ["@ff-labs/fff-node", "msgpackr-extract", "node-pty"],
+      ["@ff-labs/fff-node", "node-pty"],
     );
   });
 });
@@ -92,12 +143,13 @@ describe("selectCliRuntimeExternalDependencies", () => {
 // bundled away instead of left external, that dependency does not follow the
 // selected root into the sidecar.
 //
-// Found the hard way: node-gyp-build-optional-packages requires detect-libc,
-// which was bundled. Windows was fine; WSL got MODULE_NOT_FOUND.
+// Found the hard way: msgpackr-extract's node-gyp-build-optional-packages
+// required detect-libc, which was bundled. Windows was fine; WSL got
+// MODULE_NOT_FOUND.
 it.layer(NodeServices.layer)("external package dependency closure", (it) => {
   // Read manifests off disk from the pnpm store rather than resolving them.
   // `require("<name>/package.json")` cannot do this job: under pnpm isolation a
-  // transitive package (detect-libc, msgpackr-extract, ffi-rs) is not reachable
+  // transitive package (node-addon-api, ffi-rs) is not reachable
   // by name from this file at all, and an `exports` map can refuse the
   // `/package.json` subpath outright (@ff-labs/fff-node). Both surface as "not
   // installed", which would let this test skip everything and pass while
@@ -158,9 +210,10 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
         const found = [...installed.keys()].filter(isRuntimeExternal);
 
         // Without this the closure check below can pass vacuously: if nothing is
-        // read, nothing is checked. These are the packages whose closure actually
-        // broke WSL, so require them by name.
-        for (const required of ["node-pty", "node-gyp-build-optional-packages", "detect-libc"]) {
+        // read, nothing is checked. node-pty is the one native root every
+        // platform ships, and node-addon-api is its transitive runtime
+        // dependency, so require them by name.
+        for (const required of [...runtimeExternalRoots, "node-addon-api"]) {
           assert.ok(
             found.includes(required),
             `expected ${required} in the pnpm store; the closure check is only meaningful if it can read these (found ${found.length})`,
@@ -173,33 +226,10 @@ it.layer(NodeServices.layer)("external package dependency closure", (it) => {
   it.effect("keeps every runtime dependency of an external package external too", () =>
     Effect.gen(function* () {
       const installed = yield* readInstalledPackages;
-      const violations: string[] = [];
-      const seen = new Set<string>();
-      // Seeded from what is actually installed and matches a prefix, so scoped
-      // prefixes like "@yuuang/" and "@ff-labs/" are covered too. Seeding from
-      // the prefix strings themselves would skip every scoped entry, since a
-      // prefix is not a package name.
-      const queue = [...installed.keys()].filter(isRuntimeExternal);
-
-      for (const name of queue) {
-        if (seen.has(name)) continue;
-        seen.add(name);
-
-        const manifest = installed.get(name);
-        if (!manifest) continue;
-
-        const declared = {
-          ...(manifest.dependencies ?? {}),
-          ...(manifest.optionalDependencies ?? {}),
-          ...(manifest.peerDependencies ?? {}),
-        };
-        for (const dependency of Object.keys(declared)) {
-          if (!isRuntimeExternal(dependency)) {
-            violations.push(`${name} -> ${dependency}`);
-          }
-          if (!seen.has(dependency)) queue.push(dependency);
-        }
-      }
+      // pnpm retains removed packages in its store. Only roots selected for
+      // today's package manifests can enter the staged runtime; follow every
+      // declared dependency from those roots, including scoped platform packages.
+      const violations = findRuntimeClosureViolations(installed, runtimeExternalRoots);
 
       assert.deepStrictEqual(
         violations,
@@ -220,13 +250,13 @@ var x = 1;
 
   it("flags an external package that was inlined", () => {
     const source =
-      region("../../node_modules/.pnpm/detect-libc@2.1.2/node_modules/detect-libc/lib/process.js") +
+      region("../../node_modules/.pnpm/node-addon-api@7.1.1/node_modules/node-addon-api/index.js") +
       region(
-        "../../node_modules/.pnpm/msgpackr-extract@3.0.4/node_modules/msgpackr-extract/index.js",
+        "../../node_modules/.pnpm/node-gyp-build-optional-packages@5.2.2/node_modules/node-gyp-build-optional-packages/index.js",
       );
     const result = findInlinedExternalPackages(source);
 
-    assert.deepStrictEqual(result.inlined, ["detect-libc", "msgpackr-extract"]);
+    assert.deepStrictEqual(result.inlined, ["node-addon-api", "node-gyp-build-optional-packages"]);
     assert.strictEqual(result.regionCount, 2);
   });
 
@@ -271,7 +301,7 @@ var x = 1;
   });
 
   it("reports no regions when the marker format is absent", () => {
-    const result = findInlinedExternalPackages("var x = 1; // node_modules/detect-libc/lib.js");
+    const result = findInlinedExternalPackages("var x = 1; // node_modules/node-pty/lib.js");
     assert.strictEqual(result.regionCount, 0);
     assert.deepStrictEqual(result.inlined, []);
   });
@@ -307,6 +337,27 @@ describe("findEsmImportsOfExternalPackages", () => {
       "ffi-rs",
       "msgpackr-extract",
     ]);
+  });
+
+  it("ignores imports inside generated extension source and comments", () => {
+    const source = [
+      'const extension = `import { Type } from "typebox";\nimport type { ExtensionAPI } from "@earendil-works/pi-coding-agent";`;',
+      '// import "comment-only";',
+      "const example = 'import(\"string-only\")';",
+      'const interpolated = `source ${import("real-package")}`;',
+    ].join("\n");
+    assert.deepStrictEqual(findEsmImportsOfExternalPackages(source), ["real-package"]);
+  });
+
+  it("allows optional dynamic Bun built-ins but rejects static imports", () => {
+    assert.deepStrictEqual(
+      findEsmImportsOfExternalPackages('const load = () => import("bun:sqlite");'),
+      [],
+    );
+    assert.deepStrictEqual(
+      findEsmImportsOfExternalPackages('import { Database } from "bun:sqlite";'),
+      ["bun:sqlite"],
+    );
   });
 
   it("does not mistake createRequire calls for imports", () => {

@@ -1,5 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vite-plus/test";
+import { afterEach, describe, expect, vi } from "vite-plus/test";
+import { it } from "@effect/vitest";
 import { EnvironmentId } from "@t3tools/contracts";
+import { exchangeRemoteDpopAccessToken } from "@t3tools/client-runtime/authorization";
+import { remoteHttpClientLayer } from "@t3tools/client-runtime/rpc";
+import * as Effect from "effect/Effect";
 
 import { isRelayManagedConnection, toStableSavedRemoteConnection } from "./connection";
 import { authClientMetadata } from "./authClientMetadata";
@@ -60,6 +64,35 @@ describe("mobile remote connection records", () => {
       deviceModel: "Pixel 9",
     });
   });
+
+  it.effect("preserves T4 mobile metadata in managed token exchanges", () =>
+    Effect.gen(function* () {
+      const requestBodies: string[] = [];
+      const httpLayer = remoteHttpClientLayer(async (input, init) => {
+        requestBodies.push(await new Request(input, init).text());
+        return Response.json({
+          access_token: "dpop-access-token",
+          issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
+          token_type: "DPoP",
+          expires_in: 3600,
+          scope: "orchestration:read orchestration:operate terminal:operate review:write",
+        });
+      });
+
+      yield* exchangeRemoteDpopAccessToken({
+        httpBaseUrl: "https://desktop.example.test/",
+        credential: "managed-credential",
+        dpopProof: "token-proof",
+        clientMetadata: authClientMetadata(),
+      }).pipe(Effect.provide(httpLayer));
+
+      expect(requestBodies).toHaveLength(1);
+      const body = new URLSearchParams(requestBodies[0]);
+      expect(body.get("client_label")).toBe("T4 Code Mobile");
+      expect(body.get("client_device_type")).toBe("mobile");
+      expect(body.get("client_os")).toBe("iOS");
+    }),
+  );
 
   it("identifies native tablets separately from phones", () => {
     mobileDevice.deviceType = mobileDevice.DeviceType.TABLET;

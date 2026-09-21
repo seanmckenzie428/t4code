@@ -27,7 +27,7 @@ merge cleanly while omitting a required T4 field or bypassing a T4 policy.
 | Workspace preferences         | T4 workspace appearance preferences and expanded chat snooze options remain available and stable.                                                                                                                                                                             | settings, UI-state, sidebar snooze, and `threadSnoozed.test.ts`                                                                                 |
 | Desktop/nightly               | T4 icons, safe state-directory locking, release dependency handling, local nightly build/install flow, and packaged macOS Dock icon behavior remain intact.                                                                                                                   | desktop identity/lock tests and desktop-nightly script tests                                                                                    |
 | Lotus integration             | Optional Lotus Runtime extension and project custom actions remain additive; Lotus owns its runtime lifecycle.                                                                                                                                                                | integration provider/MCP tests and project custom-action tests                                                                                  |
-| Persistence ledger            | T4 migration IDs 36-46 keep shipped meanings. Upstream migrations formerly numbered 36-38 run as 41-43; compatibility reruns remain 44-46; upstream 41-52 run as 47-58.                                                                                                       | `041_049_ForkCompatibility.test.ts`                                                                                                             |
+| Persistence ledger            | T4 migration IDs 36-46 keep shipped meanings. Upstream migrations formerly numbered 36-38 run as 41-43; compatibility reruns remain 44-46; upstream 41-53 run as 47-59.                                                                                                       | `041_049_ForkCompatibility.test.ts`                                                                                                             |
 
 When a T3 change creates another read, write, transport, cache, pagination, or fallback path in one
 of these areas, extend that path with every T4 field and policy. Add a regression using non-default
@@ -75,6 +75,33 @@ No-overlap preflight is not proof of compatibility. Contracts can cross files, s
 remain mandatory.
 
 ## Sync records
+
+### 2026-09-21 — T3 nightly 20260921.2058 after T4 recovery
+
+- T4 parent: `c0afb5c4f18b62c0f300d372c34ef84e0ffc490c` (recovered reviewed T4 source
+  before updating upstream). T3 parent: `1de563c1491c7d82563e4553bf5bf689ce6adbb9`;
+  tag `v0.0.43-nightly.20260921.2058`.
+- Exact-SHA preflight identified 131 overlapping paths; reviewed clean merges as well as
+  42 unmerged paths. Preserved the 3rem hover rail and native titlebar clearance, horizontal
+  Chat/Review, scoped persistent Viewed revisions, Mermaid, Lotus labels/launchers,
+  Quick Chat, app-control policies, manual settlement, preview history/highlights/new tabs,
+  and human shortcuts isolated from automated preview keys.
+- Added compatible upstream recording, PR Viewed persistence, responsive header controls,
+  and lifecycle Undo. Batch settle/snooze and Undo reversals retain T4 command routing;
+  renderer-only options stay outside wire arguments. The new collapsed thought preview
+  strips unsupported assistant directives, with rendered streaming/nonstreaming regressions.
+- Migration IDs, names, and modules 1–58 remain unchanged. Upstream migration 53 appends
+  as runtime 59 (`PullRequestFilesViewed`); a populated 58-to-59 upgrade preserves prior
+  ledger entries, T4 rows, and Viewed records on rerun. Test-only SQLite constructors use
+  the current API. The intentionally omitted upstream triage command remains omitted.
+- Retained T4 direct simulator workflows alongside upstream Browser/Device panel guidance
+  and dual-mode mobile pairing. Kept publishing upstream-gated and T4 artifact branding.
+  The native dependency closure test now starts from declared runtime roots, ignoring
+  removed packages left in pnpm's store while still rejecting reachable missing externals.
+- Validation: 61 focused files / 1,860 tests passed; T4 invariants passed (15 files / 158 tests).
+  Web, desktop, server, mobile, and build-script typechecks passed. Scoped formatting/lint
+  passed with existing warnings; release smoke and five isolated pairing-helper cases passed.
+  No live database writes, browser/native UI verification, push, or app restart performed.
 
 ### 2026-09-21 — recover reviewed T4 Nightly on main
 

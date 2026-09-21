@@ -1,3 +1,4 @@
+import { ConnectionTraceId } from "./ConnectionTraceId";
 import { useAuth } from "@clerk/expo";
 import { SymbolView } from "../../components/AppSymbol";
 import {
@@ -40,16 +41,14 @@ interface CloudEnvironmentRowsProps {
   readonly showcaseAvailableEnvironments?: ReadonlyArray<RelayEnvironmentView>;
   readonly showcaseSignedIn?: boolean;
   /**
-   * Hide the "T4 Connect" section title + refresh button for hosts that
-   * provide their own chrome (the onboarding sheet's native header and
-   * pull-to-refresh).
+   * Hide the "T4 Connect" section title when the host provides its own header.
    */
   readonly showHeader?: boolean;
 }
 
 /**
  * "T4 Connect" section: every environment published to the signed-in account,
- * with connect switches, availability status, refresh, and loading/error
+ * with connect switches, availability status, and loading/error
  * states. Shared between the Settings environments screen and the T4 Connect
  * onboarding sheet.
  *
@@ -119,29 +118,8 @@ function CloudEnvironmentRowsContent(
   return (
     <View collapsable={false} className={cn("gap-3", showHeader && "mt-5")}>
       {showHeader ? (
-        <View className="flex-row items-center justify-between px-1">
+        <View className="px-1">
           <Text className="text-sm font-t3-bold uppercase text-foreground-muted">T4 Connect</Text>
-          {discoveryAvailable ? (
-            <Pressable
-              accessibilityRole="button"
-              disabled={controller.relayDiscovery.isRefreshing}
-              onPress={() => {
-                void controller.refreshRelayEnvironments();
-              }}
-              className="h-9 w-9 items-center justify-center rounded-full bg-subtle active:opacity-70 disabled:opacity-50"
-            >
-              {controller.relayDiscovery.isRefreshing ? (
-                <ActivityIndicator colorClassName={"accent-icon"} size="small" />
-              ) : (
-                <SymbolView
-                  name="arrow.clockwise"
-                  size={14}
-                  tintColorClassName={"accent-icon"}
-                  type="monochrome"
-                />
-              )}
-            </Pressable>
-          ) : null}
         </View>
       ) : null}
 
@@ -216,7 +194,7 @@ function CloudEnvironmentRowsContent(
 }
 
 /**
- * A saved T3 Connect environment. The switch turns it on or off; off keeps the
+ * A saved T4 Connect environment. The switch turns it on or off; off keeps the
  * registration and cache but drops the connection and hides its errors.
  * Long-press removes it from this device.
  */
@@ -405,23 +383,15 @@ function CloudEnvironmentRowShell(props: {
           >
             {statusText}
             {errorTraceId ? (
-              <>
-                {" Trace ID: "}
-                <Text
-                  accessibilityHint="Copies the trace ID"
-                  accessibilityRole="button"
-                  className={cn("text-xs underline decoration-dotted", statusClassName)}
-                  onLongPress={(event) => {
-                    event.stopPropagation();
-                    copyTextWithHaptic(errorTraceId, { target: "connection-trace-id" });
-                  }}
-                  onPress={(event) => {
-                    event.stopPropagation();
-                  }}
-                >
-                  {errorTraceId}
-                </Text>
-              </>
+              <ConnectionTraceId
+                traceId={errorTraceId}
+                tone={
+                  props.connectionError && props.connectionState !== "unsupported"
+                    ? "danger"
+                    : "muted"
+                }
+                activation="longPress"
+              />
             ) : null}
           </Text>
           {errorCanExpand ? (

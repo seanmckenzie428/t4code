@@ -16,6 +16,11 @@ import { randomHex } from "./lib/utils";
 
 export interface WebAppCommandContext extends AppCommandContext {
   readonly environmentId: string;
+  /** Renderer-only feedback/navigation options; never part of command arguments. */
+  readonly threadLifecycleOptions?: {
+    readonly undoToast?: boolean;
+    readonly navigate?: boolean;
+  };
 }
 
 type WebAppCommandHandler = (

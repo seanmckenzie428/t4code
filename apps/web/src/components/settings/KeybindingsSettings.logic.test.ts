@@ -215,6 +215,8 @@ describe("KeybindingsSettings.logic", () => {
         "terminalFocus",
         "terminalOpen",
         "rightPanelFocus",
+        "isWeb",
+        "isDesktop",
         "modelPickerOpen",
         "true",
         "false",

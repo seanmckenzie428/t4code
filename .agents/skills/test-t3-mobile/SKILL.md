@@ -9,6 +9,31 @@ Run one focused, end-to-end mobile verification pass against disposable T4 state
 
 Command examples use POSIX shell syntax. On Windows, use PowerShell equivalents: set variables with `$env:NAME = "value"`, use an explicit temporary directory from `[System.IO.Path]::GetTempPath()`, and run multiline examples on one line or with PowerShell backticks. Use `$env:ANDROID_HOME\platform-tools\adb.exe` when `adb` is not already on `PATH`.
 
+## Use the built-in Device panel when available
+
+Ask permission before simulator UI or browser verification. Call `device_list`,
+then `device_open` with the selected host and device IDs. Follow its returned
+`quickStart`, using the exact `agentDevice.command` and all `targetArgs` on
+every operation. Use `device_screenshot` for screen evidence.
+
+Use the isolated backend, native-client compatibility checks, and Metro ownership
+rules below. With the returned executable and target arguments stored in
+`agent_device_command` and the Bash array `agent_device_target_args`, pair with:
+
+```bash
+.agents/skills/test-t3-mobile/scripts/pair-client.sh \
+  <server-port> <base-dir> <device-reachable-backend-origin> \
+  "$agent_device_command" "${agent_device_target_args[@]}"
+```
+
+Use a fresh credential for each client. Retain the app and environment while
+iterating. At teardown, remove the disposable connection, close the AgentDevice
+session, call `device_close`, and stop only owned backend and Metro processes.
+
+If panel tools are unavailable, report the gap. The existing direct simulator
+workflow below remains available when explicitly authorized; do not silently
+install or switch automation systems.
+
 ## Select a viable platform
 
 Inspect the host and the affected code before launching processes:
@@ -170,7 +195,7 @@ Android does not use serve-sim. Use a browser-compatible Android mirror when the
 
 ## Verify and clean up
 
-Exercise only the affected flow on one representative device unless the change specifically concerns platform, OS version, or screen size. Before finishing:
+Exercise only the affected flow on one representative device unless the change specifically concerns platform, OS version, or screen size. Retain the environment while the user is inspecting or iterating. When the testing loop is finished:
 
 1. Confirm the app connected to the intended disposable environment instead of merely rendering an empty disconnected state.
 2. Capture the relevant final state.

@@ -49,7 +49,7 @@ class ConnectPublicConfigMissingError extends CliError.UserError {
 
 const makeConnectUnavailableCommand = (commandName: CliName) =>
   Command.make("connect", {
-    command: Argument.string("command").pipe(Argument.variadic),
+    command: Argument.String("command").pipe(Argument.variadic),
   }).pipe(
     Command.withDescription(
       `${CONNECT_PRODUCT_NAME} is unavailable in builds without public configuration.`,
