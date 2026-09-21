@@ -22,7 +22,7 @@ import * as Schema from "effect/Schema";
 
 import { ServerSettingsService } from "../serverSettings.ts";
 
-export class ExtensionHostError extends Schema.TaggedErrorClass<ExtensionHostError>()(
+export class ExtensionHostError extends Schema.TaggedError<ExtensionHostError>()(
   "ExtensionHostError",
   {
     operation: Schema.Literals([
@@ -542,12 +542,10 @@ export const make = Effect.gen(function* ExtensionHostMake() {
             (projection) =>
               input.extensionId === undefined || projection.extensionId === input.extensionId,
           )
-          .map(
-            (projection): ObservedWorkspaceProjection => ({
-              ...projection,
-              stale: now - Date.parse(projection.observedAt) > staleAfterMs,
-            }),
-          );
+          .map((projection): ObservedWorkspaceProjection => ({
+            ...projection,
+            stale: now - Date.parse(projection.observedAt) > staleAfterMs,
+          }));
       }),
     );
 

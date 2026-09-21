@@ -9,6 +9,8 @@ function runGit(args: ReadonlyArray<string>): string {
   const result = NodeChildProcess.spawnSync("git", args, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    // Vendored reference updates can exceed spawnSync's default 1 MiB path buffer.
+    maxBuffer: 64 * 1024 * 1024,
   });
   if (result.error) {
     throw result.error;

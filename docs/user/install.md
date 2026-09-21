@@ -4,9 +4,9 @@ T4 Code is a web and desktop GUI for running coding agents. This personal fork i
 
 ## Requirements
 
-- Node.js `^22.16 || ^23.11 || >=24.10`
+- Node.js `^24.13.1`
 - The Vite+ `vp` command
-- At least one installed and authenticated provider CLI
+- At least one installed and authenticated provider
 
 ## Start from source
 
@@ -23,35 +23,52 @@ There is no T4 npm package, signed desktop release, hosted web app, mobile-store
 
 Local server builds expose `t4` as the canonical executable and retain `t3` as a compatibility alias. Published-package installation, SSH bootstrap, self-update, and the Linux service continue to use package/service name `t3` until independent T4 distribution exists.
 
+## Open a project from a terminal
+
+With the local desktop app running, use `t4 app` to open the current directory, or
+`t4 app ../my-project` for another directory. The app adds the project if needed.
+
 ## Providers
 
-T4 Code drives provider CLIs; it does not ship them.
+Open **Settings → Providers** in the web or desktop app, select the environment,
+and enable the provider you want. Installation, login, and configuration belong
+to that environment's machine, even when you connect from a phone or another
+computer.
 
-| Provider   | CLI                                                   | Default binary | Log in with           |
-| ---------- | ----------------------------------------------------- | -------------- | --------------------- |
-| Codex      | [Codex CLI](https://developers.openai.com/codex/cli)  | `codex`        | `codex login`         |
-| Claude     | [Claude Code](https://claude.com/product/claude-code) | `claude`       | `claude auth login`   |
-| Cursor     | [Cursor CLI](https://cursor.com/cli)                  | `cursor-agent` | `agent login`         |
-| Grok Build | [Grok Build CLI](https://x.ai/cli)                    | `grok`         | `grok login`          |
-| OpenCode   | [OpenCode](https://opencode.ai)                       | `opencode`     | `opencode auth login` |
+| Provider    | Install and authenticate                                                                     |
+| ----------- | -------------------------------------------------------------------------------------------- |
+| Codex       | Install [Codex CLI](https://developers.openai.com/codex/cli), then run `codex login`.        |
+| Claude      | Install [Claude Code](https://claude.com/product/claude-code), then run `claude auth login`. |
+| Cursor      | Install [Cursor CLI](https://cursor.com/cli), then run `agent login`.                        |
+| Grok Build  | Install [Grok Build CLI](https://x.ai/cli), then run `grok login`.                           |
+| OpenCode    | Install [OpenCode](https://opencode.ai), then run `opencode auth login`.                     |
+| Antigravity | Install and sign in with Google from T4 Code's provider settings.                            |
 
-Run login commands on the machine running the T4 Code server. Each provider binary must be on that server's `PATH`, or configured through **Settings** → provider → **Binary path**.
+Provider CLIs must be on the server's `PATH`. If T4 Code cannot find one, set its
+**Binary path** in provider settings, especially when using a version manager.
+Cursor's executable is `cursor-agent`, although its login command is
+`agent login`. Antigravity can use its managed runtime without a `PATH` entry.
 
-Codex and Claude are on by default. Cursor, Grok Build, and OpenCode are off by default; turn
-them on in **Settings** → the provider's card when you want to use them.
+When a provider CLI is behind its latest release, its provider card shows the
+available version. **Update now** appears only when T4 Code can tell which
+installer owns the CLI (its own update command, Homebrew, or a global npm, pnpm,
+bun, or Vite+ install) and runs that installer. Otherwise update the CLI the same
+way you installed it. Homebrew installs compare against the version Homebrew
+offers, which can trail the npm release by a few hours.
 
-Cursor is the one to watch: install Cursor CLI, which provides the `cursor-agent` binary that
-T4 Code looks for, but authenticate with `agent login`, not `cursor-agent login`.
+Add another provider instance for a separate account or configuration. Each
+instance can have its own environment variables, such as API keys or a custom
+base URL. Mark secret values as sensitive; after saving, T4 Code does not display
+their original values.
 
-Grok models that support adjustable reasoning show a **Reasoning** control beside the model picker.
-The available levels and default come from the installed Grok Build CLI, so they can vary by model
-and CLI version.
-
-Provider authentication is required before starting a session with that provider, not before starting T4 Code.
+For provider-specific setup and accounts, see [Codex](./providers-codex.md),
+[Claude](./providers-claude.md), [OpenCode](./providers-opencode.md), and
+[Antigravity](./providers-antigravity.md).
 
 ## Next steps
 
-- [Compatibility identifiers](../internals/t4-compatibility.md)
-- [Permission modes](./permission-modes.md)
-- [Remote access](./remote-access.md)
-- [Source control integrations](./source-control.md)
+- [Working with threads](./thread-sidebar.md): start tasks and organize parallel work.
+- [Permission modes](./permission-modes.md): choose when agents ask before acting.
+- [Remote access](./remote-access.md): connect from another device.
+- [Running in the background](./background-service.md): keep a Linux or macOS host available.
+- [Updating T4 Code](./updating.md): update the app and connected servers.

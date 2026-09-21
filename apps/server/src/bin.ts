@@ -9,6 +9,7 @@ import * as NetService from "@t3tools/shared/Net";
 import { CONNECT_PRODUCT_NAME, PRODUCT_NAME } from "@t3tools/shared/branding";
 import packageJson from "../package.json" with { type: "json" };
 import { authCommand } from "./cli/auth.ts";
+import { appCommand } from "./cli/app.ts";
 import { connectCommand } from "./cli/connect.ts";
 import { pairCommand } from "./cli/pair.ts";
 import { hasCloudPublicConfig } from "./cloud/publicConfig.ts";
@@ -17,7 +18,13 @@ import { isEntrypoint } from "./entrypoint.ts";
 import { projectCommand } from "./cli/project.ts";
 import { runServerCommand, serveCommand, startCommand } from "./cli/server.ts";
 import { serviceCommand } from "./cli/service.ts";
+import { uninstallCommand } from "./cli/uninstall.ts";
+import { updateCommand } from "./cli/update.ts";
+import { claudeHistoryCommand } from "./cli/claudeHistory.ts";
+import { serviceLauncherCommand } from "./cli/serviceLauncher.ts";
 import { servicePreflightCommand } from "./cli/servicePreflight.ts";
+import { sshHelperCommand } from "./cli/sshHelper.ts";
+import { themeCommand } from "./cli/theme.ts";
 
 const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 
@@ -47,7 +54,7 @@ const makeConnectUnavailableCommand = (commandName: CliName) =>
     Command.withDescription(
       `${CONNECT_PRODUCT_NAME} is unavailable in builds without public configuration.`,
     ),
-    Command.withHidden,
+    Command.unlisted,
     Command.withHandler(() =>
       Effect.fail(
         new CliError.ShowHelp({
@@ -70,11 +77,18 @@ export const makeCli = ({
     Command.withSubcommands([
       startCommand,
       serveCommand,
+      appCommand,
       pairCommand,
       authCommand,
       projectCommand,
       serviceCommand,
+      updateCommand,
+      uninstallCommand,
+      serviceLauncherCommand,
+      claudeHistoryCommand,
       servicePreflightCommand,
+      sshHelperCommand,
+      themeCommand,
       cloudEnabled ? connectCommand : makeConnectUnavailableCommand(commandName),
     ]),
   );

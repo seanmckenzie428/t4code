@@ -15,6 +15,7 @@ const invariantTests = [
   "apps/web/src/components/app-views/AppViewPlacements.logic.test.ts",
   "apps/web/src/hooks/useT3ProjectFileAppViews.test.ts",
   "apps/web/src/lib/diffCollapse.test.ts",
+  "apps/web/src/diffPanelStore.test.ts",
   "packages/client-runtime/src/state/threadSnoozed.test.ts",
   "scripts/lib/desktop-nightly-install.test.ts",
   "scripts/lib/t4-upstream-overlap.test.ts",

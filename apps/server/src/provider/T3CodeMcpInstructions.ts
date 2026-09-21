@@ -29,7 +29,24 @@ When explaining visible UI, use \`preview_highlight_apply\` to place passive num
 Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Use an alternative browser system only when the T4 preview tools are absent, the user explicitly requests another browser, or \`preview_open\` returns an explicit unsupported/unavailable error. A failed T4 preview tool call should be inspected and retried with corrected arguments when the error is actionable.
 `;
 
-export const buildT3CodeMcpInstructions = (browserToolsAvailable: boolean): string =>
-  `${T4_CODE_APP_CAPABILITIES_INSTRUCTIONS}${browserToolsAvailable ? T4_CODE_BROWSER_INSTRUCTIONS : ""}`;
+const T3_CODE_DEVICE_TOOL_INSTRUCTIONS = `
+
+## T4 Code devices
+
+The \`t3-code\` MCP server also exposes \`device_*\` tools for iOS Simulators and Android Emulators on this environment. For mobile verification, call \`device_list\`, then \`device_open\` so the user can watch the device in their Device panel; its result explains how to drive the device. Driving happens through the \`agent-device\` CLI, which is on PATH. Keep the host config and session flags returned by \`device_open\` on every command so concurrent devices stay independent: prefer \`agent-device snapshot -i\` refs over coordinates, and use \`device_screenshot\` when you need to see the screen. Do not call simctl, adb, xcrun, or serve-sim directly while these tools are present. If \`device_list\` reports a platform as unavailable, say so instead of trying another route.
+`;
+
+const T4_CODE_APP_CONTROL_INSTRUCTIONS = `
+
+### App control
+
+When the user asks you to inspect or control T4 Code itself, inspect with \`app_status\`, discover semantic actions with \`app_commands\`, and execute them with \`app_invoke\`. Project chats may inspect and control projects and threads within their current environment, including delegated work in another thread. Cross-environment control remains unavailable. Persistent, destructive, or external actions still require the configured grant or user confirmation.
+`;
+
+export const buildT3CodeMcpInstructions = (
+  browserToolsAvailable: boolean,
+  deviceToolsAvailable = false,
+): string =>
+  `${T4_CODE_APP_CAPABILITIES_INSTRUCTIONS}${T4_CODE_APP_CONTROL_INSTRUCTIONS}${browserToolsAvailable ? T4_CODE_BROWSER_INSTRUCTIONS : ""}${deviceToolsAvailable ? T3_CODE_DEVICE_TOOL_INSTRUCTIONS : ""}`;
 
 export const T3_CODE_MCP_INSTRUCTIONS = buildT3CodeMcpInstructions(true);

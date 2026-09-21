@@ -42,7 +42,7 @@ const DesktopLocalEnvironmentAuthStoreOperation = Schema.Literals([
   "replace-file",
 ]);
 
-export class DesktopLocalEnvironmentAuthStoreError extends Schema.TaggedErrorClass<DesktopLocalEnvironmentAuthStoreError>()(
+export class DesktopLocalEnvironmentAuthStoreError extends Schema.TaggedError<DesktopLocalEnvironmentAuthStoreError>()(
   "DesktopLocalEnvironmentAuthStoreError",
   {
     operation: DesktopLocalEnvironmentAuthStoreOperation,

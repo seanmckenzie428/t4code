@@ -18,6 +18,7 @@ export interface McpCredentialRequest {
   readonly principal?: AppControlPrincipal;
   readonly grants?: ReadonlySet<string>;
   readonly previewEnabled?: boolean;
+  readonly capabilities?: ReadonlySet<McpInvocationContext.McpCapability>;
 }
 
 export interface McpIssuedCredential {
@@ -72,7 +73,7 @@ export interface McpSessionRegistryOptions {
  *
  * The bound matters because `/mcp` is mounted outside the environment auth
  * stack and is reachable on whatever host the server binds to, so this token is
- * the only thing guarding the preview toolkit on a remote-reachable server.
+ * the only thing guarding the `t3-code` toolkits on a remote-reachable server.
  */
 const DEFAULT_LIVENESS_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
@@ -134,16 +135,21 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
           : request.principal.assistantThreadId === request.threadId)
           ? request.principal
           : undefined;
-      const previewEnabled = request.previewEnabled !== false;
+      const capabilities = new Set<McpInvocationContext.McpCapability>(
+        request.capabilities ?? ["preview"],
+      );
+      if (request.previewEnabled === false) capabilities.delete("preview");
+      const previewEnabled = capabilities.has("preview");
       const scope: McpInvocationContext.McpInvocationScope = {
         environmentId,
         threadId: ThreadId.make(request.threadId),
         providerSessionId,
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
         ...(principal === undefined ? {} : { principal }),
-        capabilities: new Set([
-          ...(previewEnabled ? (["preview"] as const) : []),
-          ...(principal === undefined ? [] : (["app-control"] as const)),
+        capabilities: new Set<McpInvocationContext.McpCapability>([
+          "pull-requests",
+          ...capabilities,
+          ...(principal === undefined ? [] : ["app-control" as const]),
         ]),
         grants: new Set(request.grants ?? []),
         issuedAt,
@@ -162,6 +168,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
           endpoint: `${endpointBase}${previewEnabled ? "/mcp" : "/mcp/app-control"}`,
           authorizationHeader: `Bearer ${rawToken}`,
           browserToolsAvailable: previewEnabled,
+          capabilities: scope.capabilities,
         },
       };
     },

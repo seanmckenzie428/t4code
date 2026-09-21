@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
@@ -80,13 +81,14 @@ it.effect("runs through the bounded one-shot process path", () => {
           code: 0 as never,
           timedOut: false,
           stdoutTruncated: false,
-          stderrTruncated: false,
           stdoutInvalidUtf8: false,
           stderrInvalidUtf8: false,
+          stderrTruncated: false,
         };
       }),
   });
   return Effect.gen(function* () {
+    const platform = yield* HostProcessPlatform;
     const fileSystem = yield* FileSystem.FileSystem;
     const root = yield* fileSystem.makeTempDirectoryScoped({
       prefix: "t3-app-control-command-",
@@ -100,7 +102,7 @@ it.effect("runs through the bounded one-shot process path", () => {
 
     expect(processInput).toMatchObject({
       args:
-        process.platform === "win32"
+        platform === "win32"
           ? ["/d", "/s", "/c", "lotus tableplus dev"]
           : ["-lc", "lotus tableplus dev"],
       cwd: yield* fileSystem.realPath(root),

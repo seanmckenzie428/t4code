@@ -63,6 +63,18 @@ it.effect("derives a strict local nightly version from the next patch and curren
     assert.equal(yield* resolveLocalNightlyVersion("0.0.31", now), "0.0.32-nightly.20260804.50707");
   }),
 );
+it("derives preview metadata under its own prerelease identifier", () => {
+  assert.deepStrictEqual(
+    resolveNightlyReleaseMetadata("9.9.10", "20260413", 321, "abcdef1234567890", "preview"),
+    {
+      baseVersion: "9.9.10",
+      version: "9.9.10-preview.20260413.321",
+      tag: "v9.9.10-preview.20260413.321",
+      name: "T4 Code Preview (maintainer test build, do not install) 9.9.10-preview.20260413.321 (abcdef123456)",
+      shortSha: "abcdef123456",
+    },
+  );
+});
 
 it.effect("preserves the GITHUB_OUTPUT configuration cause", () => {
   const metadata = resolveNightlyReleaseMetadata("1.2.4", "20260620", 42, "abcdef1234567890");

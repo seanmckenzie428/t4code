@@ -1,11 +1,209 @@
+diff --git a/dist/components/VirtualizedFile.d.ts b/dist/components/VirtualizedFile.d.ts
+--- a/dist/components/VirtualizedFile.d.ts
++++ b/dist/components/VirtualizedFile.d.ts
+@@ -41,7 +41,7 @@
+   private computeApproximateSize;
+   setVisibility(visible: boolean): void;
+   rerender(): void;
+-  applyDocumentChange(textDocument: DiffsTextDocument, newLineAnnotations?: LineAnnotation<LAnnotation>[], shouldUpdateBuffer?: boolean): void;
++  applyDocumentChange(textDocument: DiffsTextDocument, newLineAnnotations?: LineAnnotation<LAnnotation>[], shouldUpdateBuffer?: boolean, startLine?: number): void;
+   protected renderPreparedFile({
+     fileContainer,
+     file,
+diff --git a/dist/components/VirtualizedFile.js b/dist/components/VirtualizedFile.js
+--- a/dist/components/VirtualizedFile.js
++++ b/dist/components/VirtualizedFile.js
+@@ -20,6 +20,7 @@
+ 	cache = {
+ 		heights: /* @__PURE__ */ new Map(),
+ 		checkpoints: [],
++		codeWidth: void 0,
+ 		fileAnnotationHeight: 0
+ 	};
+ 	isVisible = false;
+@@ -31,6 +32,8 @@
+ 		super(options, workerManager, isContainerManaged);
+ 		this.virtualizer = virtualizer;
+ 		this.metrics = metrics;
++		const simpleVirtualizer = this.getSimpleVirtualizer();
++		if (simpleVirtualizer != null) this.resizeManager.onResize = () => simpleVirtualizer.requestHeightReconcile(this);
+ 	}
+ 	setMetrics(metrics, force = false) {
+ 		const nextMetrics = computeVirtualFileMetrics(metrics);
+@@ -71,10 +74,12 @@
+ 		if (this.isAdvancedMode()) throw new Error("VirtualizedFile.setThemeType cannot be used inside CodeView. Update CodeView options instead.");
+ 		super.setThemeType(themeType);
+ 	}
+-	resetLayoutCache(recompute = false, resetRenderRange = true) {
++	resetLayoutCache(recompute = false, resetRenderRange = true, startLine = 0) {
+ 		this.layoutDirty = true;
+-		this.cache.fileAnnotationHeight = 0;
+-		if (this.cache.heights.size > 0) this.cache.heights.clear();
++		if (startLine === 0) this.cache.fileAnnotationHeight = 0;
++		// Dropping unchanged wrapped rows moves the viewport before they can be remeasured.
++		if (startLine === 0) this.cache.heights.clear();
++		else for (const lineIndex of this.cache.heights.keys()) if (lineIndex >= startLine) this.cache.heights.delete(lineIndex);
+ 		if (this.cache.checkpoints.length > 0) this.cache.checkpoints.length = 0;
+ 		if (this.renderRange != null && resetRenderRange) this.renderRange = void 0;
+ 		if (recompute && this.isSimpleMode()) this.computeApproximateSize();
+@@ -92,6 +97,13 @@
+ 		if (this.code == null) return hasHeightChange;
+ 		const content = this.code.children[1];
+ 		if (!(content instanceof HTMLElement)) return hasHeightChange;
++		const codeWidth = this.code.getBoundingClientRect().width;
++		if (!(codeWidth > 0)) return hasHeightChange;
++		if (this.cache.codeWidth != null && this.cache.codeWidth !== codeWidth) {
++			this.resetLayoutCache(false, false);
++			hasHeightChange = true;
++		}
++		this.cache.codeWidth = codeWidth;
+ 		const hasFileAnnotations = includesFileAnnotations(this.lineAnnotations);
+ 		if (this.renderRange != null && hasFileAnnotations && shouldRenderFileAnnotations(this.renderRange)) {
+ 			const nextFileAnnotationHeight = measureFileAnnotationHeight(content) ?? 0;
+@@ -288,12 +300,12 @@
+ 		this.forceRenderOverride = true;
+ 		this.virtualizer.instanceChanged(this, false);
+ 	}
+-	applyDocumentChange(textDocument, newLineAnnotations, shouldUpdateBuffer = false) {
++	applyDocumentChange(textDocument, newLineAnnotations, shouldUpdateBuffer = false, startLine = 0) {
+ 		const { renderRange: previousRenderRange } = this;
+ 		this.getAdvancedVirtualizer()?.capturePendingLayoutAnchor();
+ 		super.applyDocumentChange(textDocument, newLineAnnotations);
+ 		this.getSimpleVirtualizer()?.markDOMDirty();
+-		this.resetLayoutCache(this.isSimpleMode(), false);
++		this.resetLayoutCache(this.isSimpleMode(), false, startLine);
+ 		if (!this.isSimpleMode()) this.computeApproximateSize(true);
+ 		else if (shouldUpdateBuffer && previousRenderRange !== void 0 && this.file !== void 0) {
+ 			const windowSpecs = this.virtualizer.getWindowSpecs();
+@@ -481,6 +493,7 @@
+ 		let absoluteLineTop = fileTop + (checkpoint?.top ?? codeRegionTop);
+ 		let currentLine = checkpoint?.lineIndex ?? 0;
+ 		let firstVisibleHunk;
++		let lastVisibleHunk;
+ 		let centerHunk;
+ 		let overflowCounter;
+ 		const startingLineIndex = checkpoint?.lineIndex ?? 0;
+@@ -495,7 +508,10 @@
+ 				}
+ 			}
+ 			const lineHeight = this.getLineHeight(lineIndex, false);
+-			if (absoluteLineTop > top - lineHeight && absoluteLineTop < bottom) firstVisibleHunk ??= currentHunk;
++			if (absoluteLineTop > top - lineHeight && absoluteLineTop < bottom) {
++				firstVisibleHunk ??= currentHunk;
++				lastVisibleHunk = currentHunk;
++			}
+ 			if (absoluteLineTop + lineHeight > viewportCenter) centerHunk ??= currentHunk;
+ 			if (overflowCounter == null && absoluteLineTop >= bottom && isAtHunkBoundary) overflowCounter = overflowHunks;
+ 			currentLine++;
+@@ -515,7 +531,8 @@
+ 		const maxStartHunk = Math.max(0, Math.ceil(lineCount / hunkLineCount) - totalHunks);
+ 		const startHunk = Math.max(0, Math.min(idealStartHunk, maxStartHunk));
+ 		const startingLine = startHunk * hunkLineCount;
+-		const clampedTotalLines = idealStartHunk < 0 ? totalLines + idealStartHunk * hunkLineCount : totalLines;
++		// Wrapped rows can put visible trailing hunks beyond the estimated window.
++		const clampedTotalLines = Math.max(idealStartHunk < 0 ? totalLines + idealStartHunk * hunkLineCount : totalLines, lastVisibleHunk == null ? 0 : (lastVisibleHunk + 1) * hunkLineCount - startingLine);
+ 		const codeBufferBefore = hunkOffsets[startHunk] ?? 0;
+ 		const bufferBefore = startingLine === 0 ? 0 : fileAnnotationHeight + codeBufferBefore;
+ 		const finalHunkIndex = startHunk + clampedTotalLines / hunkLineCount;
+diff --git a/dist/editor/editor.js b/dist/editor/editor.js
+--- a/dist/editor/editor.js
++++ b/dist/editor/editor.js
+@@ -1633,7 +1633,12 @@
+ 			shouldRefreshDiffsView: this.#isDiff && !didLineCountChange,
+ 			lineCountChangeInFlight: didLineCountChange
+ 		});
+-		if (didLineCountChange) fileInstance.applyDocumentChange(textDocument, newLineAnnotations, shouldUpdateBuffer);
++		if (didLineCountChange) {
++			const previousLineCount = change.lineCount - change.lineDelta;
++			// A wider or narrower line-number gutter can rewrap unchanged rows.
++			const layoutStartLine = String(previousLineCount).length === String(change.lineCount).length ? change.startLine : 0;
++			fileInstance.applyDocumentChange(textDocument, newLineAnnotations, shouldUpdateBuffer, layoutStartLine);
++		}
+ 		if (didLineCountChange || this.#isDiff && this.#diffSyle === "unified") this.#resetCache();
+ 		if (newLineAnnotations !== void 0) {
+ 			this.#lineAnnotations = newLineAnnotations;
+diff --git a/dist/managers/ResizeManager.d.ts b/dist/managers/ResizeManager.d.ts
+--- a/dist/managers/ResizeManager.d.ts
++++ b/dist/managers/ResizeManager.d.ts
+@@ -5,6 +5,8 @@
+   columnVariables?: ResizeManagerColumnVariableMode;
+ }
+ declare class ResizeManager {
++  /** Schedule owner measurement after an observed code or gutter size change. */
++  onResize?: () => void;
+   private static resizeObserver;
+   private static managersByElement;
+   private static getResizeObserver;
+diff --git a/dist/managers/ResizeManager.js b/dist/managers/ResizeManager.js
+--- a/dist/managers/ResizeManager.js
++++ b/dist/managers/ResizeManager.js
+@@ -19,6 +19,7 @@
+ 		for (const [manager, managerEntries] of entriesByManager) manager.handleResizeEntries(managerEntries);
+ 	}
+ 	observedNodes = /* @__PURE__ */ new Map();
++	onResize;
+ 	setup(pre, { disableAnnotations, columnVariables = "apply" }) {
+ 		const annotationUpdates = /* @__PURE__ */ new Set();
+ 		const applyColumnVariables = columnVariables === "apply";
+@@ -212,6 +213,7 @@
+ 		this.applyAnnotationUpdates(annotationUpdates);
+ 		annotationUpdates.clear();
+ 		this.applyColumnUpdates(codeUpdates);
++		if (codeUpdates.size > 0) this.onResize?.();
+ 		codeUpdates.clear();
+ 	}
+ 	applyAnnotationUpdates(annotationUpdates) {
+diff --git a/dist/renderers/FileRenderer.js b/dist/renderers/FileRenderer.js
+--- a/dist/renderers/FileRenderer.js
++++ b/dist/renderers/FileRenderer.js
+@@ -129,10 +129,10 @@
+ 			result: massiveFile ? void 0 : cache?.result,
+ 			renderRange: void 0
+ 		};
++		this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+ 		if (!this.editSessionActive && this.workerManager?.isWorkingPool() === true) {
+ 			if (this.renderCache.result == null && !massiveFile) this.workerManager.highlightFileAST(this, file);
+ 		} else if (this.highlighter == null) {
+-			this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+ 			this.initializeHighlighter();
+ 		}
+ 	}
+@@ -198,6 +198,8 @@
+ 		if (this.renderCache == null) return;
+ 		const { file, result } = this.renderCache;
+ 		if (result == null) return;
++		this.workerManager?.cleanUpTasks(this);
++		if (file.cacheKey != null) this.workerManager?.evictFileFromCache(file.cacheKey);
+ 		const pendingStructuralRows = lineCountChangeInFlight ? /* @__PURE__ */ new Map() : void 0;
+ 		this.pendingStructuralRows = pendingStructuralRows;
+ 		const lineCache = this.lineCache != null && isLineCacheForFile(this.lineCache, file) ? this.lineCache : void 0;
+@@ -335,6 +337,7 @@
+ 		const forcePlainText = !hasContent || isFilePlainText(file) || isFileMassive(lines.length, this.getTokenizeMaxLength());
+ 		const newContent = !areFilesEqual(file, this.renderCache.file);
+ 		const newRenderRange = !areRenderRangesEqual(this.renderCache.renderRange, renderRange);
++		this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+ 		if (!this.editSessionActive && this.workerManager?.isWorkingPool() === true) {
+ 			if (forcePlainText || this.renderCache.result == null || !this.renderCache.highlighted && (newContent || newRenderRange)) {
+ 				this.renderCache.file = file;
+@@ -345,7 +348,6 @@
+ 			}
+ 			if (!forcePlainText && hasContent && (!this.renderCache.highlighted || forceHighlight)) this.workerManager.highlightFileAST(this, file);
+ 		} else {
+-			this.computedLang = file.lang ?? getFiletypeFromFileName(file.name);
+ 			const hasThemes = this.highlighter != null && areThemesAttached(options.theme);
+ 			const hasLangs = this.highlighter != null && areLanguagesAttached(this.computedLang);
+ 			const canHighlight = !forcePlainText && hasLangs;
 diff --git a/package.json b/package.json
-index 6085c78..17203ce 100644
 --- a/package.json
 +++ b/package.json
-@@ -55,6 +55,14 @@
+@@ -58,6 +58,18 @@
      "./worker/worker-portable.js": {
        "types": "./dist/worker/worker-portable.d.ts",
        "import": "./dist/worker/worker-portable.js"
++    },
++    "./types": {
++      "types": "./dist/types.d.ts",
++      "import": "./dist/types.js"
 +    },
 +    "./utils/getFiletypeFromFileName": {
 +      "types": "./dist/utils/getFiletypeFromFileName.d.ts",

@@ -2,6 +2,9 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId, TurnId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
+import { getDefaultCollapsedDiffFilePaths, getDiffFileReviewState } from "./lib/diffCollapse";
+import { buildDiffFileReviewSnapshot, getRenderablePatch } from "./lib/diffRendering";
+
 import { selectThreadDiffPanelSelection, useDiffPanelStore } from "./diffPanelStore";
 
 const THREAD_REF = scopeThreadRef(EnvironmentId.make("environment-1"), ThreadId.make("thread-1"));
@@ -73,6 +76,70 @@ describe("diffPanelStore", () => {
     });
   });
 
+  it.each([false, true])(
+    "restores Viewed collapse and detects later edits (default collapsed: %s)",
+    async (collapsedByDefault) => {
+      const snapshot = (line: string) => {
+        const patch = getRenderablePatch(
+          [
+            "diff --git a/src/app.ts b/src/app.ts",
+            "--- a/src/app.ts",
+            "+++ b/src/app.ts",
+            "@@ -1 +1 @@",
+            "-before",
+            `+${line}`,
+          ].join("\n"),
+        );
+        if (patch?.kind !== "files") throw new Error("Expected parsed patch");
+        return buildDiffFileReviewSnapshot(patch.files, null);
+      };
+      const original = snapshot("after");
+      const filePath = original.filePaths[0]!;
+      useDiffPanelStore
+        .getState()
+        .setReviewedDiffFileRevision(REVIEW_SCOPE, filePath, original.revisions.get(filePath)!);
+
+      const { name, storage } = useDiffPanelStore.persist.getOptions();
+      if (!name) throw new Error("Expected diff panel persistence to have a storage name");
+      const persisted = await storage?.getItem(name);
+      if (!persisted) throw new Error("Expected persisted review");
+      useDiffPanelStore.setState({ reviewedDiffFileRevisionsByScopeKey: {} });
+      await storage?.setItem(name, persisted);
+      await useDiffPanelStore.persist.rehydrate();
+
+      const reviewed = new Map(
+        Object.entries(
+          useDiffPanelStore.getState().reviewedDiffFileRevisionsByScopeKey[REVIEW_SCOPE] ?? {},
+        ),
+      );
+      expect(
+        getDefaultCollapsedDiffFilePaths(
+          original.filePaths,
+          original.revisions,
+          reviewed,
+          collapsedByDefault,
+        ).has(filePath),
+      ).toBe(true);
+      expect(getDiffFileReviewState(filePath, original.revisions.get(filePath)!, reviewed)).toBe(
+        "viewed",
+      );
+
+      const edited = snapshot("changed again");
+      expect(
+        getDefaultCollapsedDiffFilePaths(
+          edited.filePaths,
+          edited.revisions,
+          reviewed,
+          collapsedByDefault,
+        ).has(filePath),
+      ).toBe(false);
+      expect(getDiffFileReviewState(filePath, edited.revisions.get(filePath)!, reviewed)).toBe(
+        "changed",
+      );
+      expect(reviewed.get(filePath)).toBe(original.revisions.get(filePath));
+    },
+  );
+
   it("removes reviewed revisions with their thread only", () => {
     const store = useDiffPanelStore.getState();
     store.setReviewedDiffFileRevision(REVIEW_SCOPE, "src/app.ts", "revision-1");
@@ -120,6 +187,31 @@ describe("diffPanelStore", () => {
     expect(
       selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
     ).toEqual({ kind: "branch", baseRef: "origin/main" });
+  });
+
+  it("clears a thread's turn and file when selecting working tree without changing another thread's branch base", () => {
+    const otherThreadRef = scopeThreadRef(
+      EnvironmentId.make("environment-1"),
+      ThreadId.make("thread-2"),
+    );
+    const store = useDiffPanelStore.getState();
+    store.selectBranchBaseRef(THREAD_REF, "origin/release");
+    store.selectTurn(THREAD_REF, TurnId.make("turn-1"), "src/app.ts");
+    store.selectBranchBaseRef(otherThreadRef, "origin/main");
+
+    store.selectGitScope(THREAD_REF, "unstaged");
+
+    const { byThreadKey } = useDiffPanelStore.getState();
+    expect(selectThreadDiffPanelSelection(byThreadKey, THREAD_REF)).toEqual({ kind: "unstaged" });
+    expect(selectThreadDiffPanelSelection(byThreadKey, otherThreadRef)).toEqual({
+      kind: "branch",
+      baseRef: "origin/main",
+    });
+
+    store.selectGitScope(THREAD_REF, "branch");
+    expect(
+      selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
+    ).toEqual({ kind: "branch", baseRef: "origin/release" });
   });
 
   it("increments the reveal request when opening the same turn file again", () => {

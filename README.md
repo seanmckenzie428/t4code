@@ -1,8 +1,10 @@
 # T4 Code
 
-T4 Code is Sean McKenzie's personal fork of [T3 Code](https://github.com/pingdotgg/t3code), an open-source control surface for coding agents. It runs Claude Code, Codex, Cursor, Grok Build, and OpenCode through web, desktop, and mobile clients.
+T4 Code is Sean McKenzie's personal fork of [T3 Code](https://github.com/pingdotgg/t3code), an open-source control surface for coding agents. It runs Claude Code, Codex, Cursor, Grok Build, OpenCode, and Antigravity through web, desktop, and mobile clients.
 
 The fork keeps T3's internal package names, state paths, protocols, and other compatibility identifiers so existing data keeps working and upstream changes remain mergeable. See [T4 compatibility identifiers](./docs/internals/t4-compatibility.md).
+
+Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, OpenCode, and Google Antigravity. If they're set up on your computer, T4 Code can control them.
 
 ## Current distribution status
 

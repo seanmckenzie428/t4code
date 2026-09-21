@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   areAllDiffFilesCollapsed,
   getDiffFileReviewState,
+  getDefaultCollapsedDiffFilePaths,
   retainCurrentDiffFileKeys,
   retainCurrentDiffFileRevisions,
   setDiffFileViewed,
@@ -63,5 +64,42 @@ describe("diff collapse controls", () => {
         ]),
       ),
     ).toEqual(new Map([[FIRST_FILE_KEY, "revision-1"]]));
+  });
+});
+
+describe("restored review collapse", () => {
+  it("preserves saved Viewed collapse while a lazy patch is loading", () => {
+    const reviewed = new Map([[FIRST_FILE_KEY, "revision-1"]]);
+    expect(getDefaultCollapsedDiffFilePaths(FILE_KEYS, new Map(), reviewed, false)).toEqual(
+      new Set([FIRST_FILE_KEY]),
+    );
+    expect(getDefaultCollapsedDiffFilePaths([], new Map(), reviewed, false)).toEqual(new Set());
+    expect(
+      getDefaultCollapsedDiffFilePaths(
+        FILE_KEYS,
+        new Map([[FIRST_FILE_KEY, "revision-1"]]),
+        reviewed,
+        false,
+      ),
+    ).toEqual(new Set([FIRST_FILE_KEY]));
+    expect(
+      getDefaultCollapsedDiffFilePaths(
+        FILE_KEYS,
+        new Map([[FIRST_FILE_KEY, "revision-2"]]),
+        reviewed,
+        false,
+      ),
+    ).toEqual(new Set());
+  });
+
+  it("applies the global default only to files without a saved review", () => {
+    const reviewed = new Map([[FIRST_FILE_KEY, "revision-1"]]);
+    const revisions = new Map([[FIRST_FILE_KEY, "revision-2"]]);
+    expect(getDefaultCollapsedDiffFilePaths(FILE_KEYS, revisions, reviewed, true)).toEqual(
+      new Set([FILE_KEYS[1]!]),
+    );
+    expect(getDefaultCollapsedDiffFilePaths(FILE_KEYS, revisions, reviewed, false)).toEqual(
+      new Set(),
+    );
   });
 });

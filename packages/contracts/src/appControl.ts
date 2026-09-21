@@ -295,7 +295,7 @@ const AppControlFailureFields = {
   actionId: Schema.optional(AppActionId),
 } as const;
 
-export class AppControlUnavailableError extends Schema.TaggedErrorClass<AppControlUnavailableError>()(
+export class AppControlUnavailableError extends Schema.TaggedError<AppControlUnavailableError>()(
   "AppControlUnavailableError",
   {
     ...AppControlFailureFields,
@@ -308,7 +308,7 @@ export class AppControlUnavailableError extends Schema.TaggedErrorClass<AppContr
   }
 }
 
-export class AppControlDisconnectedError extends Schema.TaggedErrorClass<AppControlDisconnectedError>()(
+export class AppControlDisconnectedError extends Schema.TaggedError<AppControlDisconnectedError>()(
   "AppControlDisconnectedError",
   {
     ...AppControlFailureFields,
@@ -322,7 +322,7 @@ export class AppControlDisconnectedError extends Schema.TaggedErrorClass<AppCont
   }
 }
 
-export class AppControlTimeoutError extends Schema.TaggedErrorClass<AppControlTimeoutError>()(
+export class AppControlTimeoutError extends Schema.TaggedError<AppControlTimeoutError>()(
   "AppControlTimeoutError",
   {
     ...AppControlFailureFields,
@@ -335,7 +335,7 @@ export class AppControlTimeoutError extends Schema.TaggedErrorClass<AppControlTi
   }
 }
 
-export class AppControlMalformedResponseError extends Schema.TaggedErrorClass<AppControlMalformedResponseError>()(
+export class AppControlMalformedResponseError extends Schema.TaggedError<AppControlMalformedResponseError>()(
   "AppControlMalformedResponseError",
   {
     ...AppControlFailureFields,

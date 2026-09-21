@@ -8,12 +8,10 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  canSettle,
   changeRequestAutoSettles,
   effectiveSettled,
   hasQueuedTurnStart,
   threadLastActivityAt,
-  type ChangeRequestStateLike,
 } from "./threadSettled.ts";
 
 const NOW = "2026-04-10T00:00:00.000Z";
@@ -173,6 +171,7 @@ function makeShell(input: {
             lastError: null,
             updatedAt: NOW,
           },
+    pullRequests: [],
     latestUserMessageAt: null,
     hasPendingApprovals: input.pending === "approval",
     hasPendingUserInput: input.pending === "user-input",
@@ -460,7 +459,6 @@ describe("changeRequestAutoSettles", () => {
     expect(changeRequestAutoSettles("open", 3)).toBe(false);
   });
 });
-
 describe("hasQueuedTurnStart", () => {
   const QUEUED_AT = "2026-04-09T12:00:00.000Z";
   // Within the adoption grace window of the queued message.
@@ -529,89 +527,5 @@ describe("hasQueuedTurnStart", () => {
       session: null,
     };
     expect(hasQueuedTurnStart(slightlyAhead, { now: "2026-04-09T12:00:00.000Z" })).toBe(true);
-  });
-});
-
-describe("canSettle", () => {
-  it("blocks every state effectiveSettled refuses to classify as settled", () => {
-    expect(canSettle(makeShell({ activityAt: FRESH }), { now: NOW })).toBe(true);
-    expect(
-      canSettle(makeShell({ activityAt: FRESH, sessionStatus: "starting" }), { now: NOW }),
-    ).toBe(false);
-    expect(
-      canSettle(makeShell({ activityAt: FRESH, sessionStatus: "running" }), { now: NOW }),
-    ).toBe(false);
-    expect(canSettle(makeShell({ activityAt: FRESH, pending: "approval" }), { now: NOW })).toBe(
-      false,
-    );
-    expect(canSettle(makeShell({ activityAt: FRESH, pending: "user-input" }), { now: NOW })).toBe(
-      false,
-    );
-  });
-
-  it("blocks settling a queued turn start, only within the grace window", () => {
-    const queued = {
-      ...makeShell({ activityAt: FRESH }),
-      latestUserMessageAt: "2026-04-09T12:00:00.000Z",
-    };
-    const justAfter = "2026-04-09T12:00:30.000Z";
-    expect(canSettle(queued, { now: justAfter })).toBe(false);
-    // effectiveSettled must agree: queued work never auto-settles either,
-    // even with a merged PR.
-    expect(
-      effectiveSettled(queued, {
-        now: justAfter,
-        autoSettleAfterDays: 3,
-        changeRequest: { state: "merged" },
-      }),
-    ).toBe(false);
-    // Past the window the message is a failed/stale start: settleable again.
-    expect(canSettle(queued, { now: NOW })).toBe(true);
-  });
-
-  it("lets a server-accepted settle overrule the clock-derived queued blocker", () => {
-    // The settle action ran with wall-clock `now` (past the grace window);
-    // the list partition re-evaluates with a minute-floored `now` that is
-    // still INSIDE the window. settledAt >= message time proves the server
-    // already adjudicated this exact message, so the row must not snap back
-    // to active until the coarser clock catches up.
-    const messageAt = "2026-04-09T12:00:00.000Z";
-    const flooredNow = "2026-04-09T12:01:00.000Z";
-    const base = makeShell({ settledOverride: "settled", activityAt: null });
-    const settledAfterMessage = {
-      ...base,
-      latestUserMessageAt: messageAt,
-      settledAt: "2026-04-09T12:02:10.000Z",
-    };
-    expect(hasQueuedTurnStart(settledAfterMessage, { now: flooredNow })).toBe(true);
-    expect(effectiveSettled(settledAfterMessage, { now: flooredNow, autoSettleAfterDays: 3 })).toBe(
-      true,
-    );
-
-    // A message NEWER than settledAt is genuinely new work: still blocked
-    // until the server's auto-unsettle lands.
-    const messageAfterSettle = {
-      ...base,
-      latestUserMessageAt: "2026-04-09T12:03:00.000Z",
-      settledAt: "2026-04-09T12:02:10.000Z",
-    };
-    expect(
-      effectiveSettled(messageAfterSettle, {
-        now: "2026-04-09T12:03:30.000Z",
-        autoSettleAfterDays: 3,
-      }),
-    ).toBe(false);
-  });
-
-  it("agrees with effectiveSettled's blockers for explicitly settled shells", () => {
-    // Anything canSettle rejects must render as active even when the user
-    // settled it earlier.
-    const blocked = makeShell({
-      settledOverride: "settled",
-      activityAt: FRESH,
-      pending: "user-input",
-    });
-    expect(canSettle(blocked, { now: NOW })).toBe(false);
-    expect(effectiveSettled(blocked, { now: NOW, autoSettleAfterDays: 3 })).toBe(false);
   });
 });

@@ -4,10 +4,10 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { ElectronBrowserHost } from "./browser/ElectronBrowserHost";
 import { PreviewAutomationHosts } from "./components/preview/PreviewAutomationHosts";
-import { QuitHoldOverlay } from "./components/QuitHoldOverlay";
 import { AppAtomRegistryProvider } from "./rpc/atomRegistry";
 import type { AppRouter } from "./router";
 import { AppRoot } from "./AppRoot";
+import { QuitHoldOverlay } from "./components/QuitHoldOverlay";
 import { AppControlHosts } from "./components/AppControlHosts";
 
 describe("AppRoot", () => {
