@@ -1,3 +1,4 @@
+import { useThreadSendCommand } from "../hooks/useThreadSendCommand";
 import { inferCheckpointTurnCountByTurnId } from "../session-logic";
 import { buildRevertTurnCountByUserMessageId } from "./chat/MessagesTimeline.logic";
 import { useLoadBalancedEnvironment } from "../hooks/useLoadBalancedEnvironment";
@@ -9843,6 +9844,13 @@ function ChatViewContent(props: ChatViewProps) {
     [activeProject, activeThread, environmentId],
   );
 
+  useThreadSendCommand({
+    thread: activeThread ? scopeThreadRef(activeThread.environmentId, activeThread.id) : null,
+    readPrompt: () => promptRef.current,
+    send: (submissionIntent, queuedMessage) =>
+      executeSendRef.current(undefined, submissionIntent, undefined, queuedMessage),
+  });
+
   useEffect(() => {
     if (!activeThread) return;
     const matchesActiveThread = (context: { environmentId: string; threadId?: string }) => ({
@@ -9858,37 +9866,6 @@ function ChatViewContent(props: ChatViewProps) {
       }
     };
     const disposers = [
-      registerWebAppCommandHandler(
-        "thread.send",
-        (invocation) => {
-          assertTargetThread(invocation.args);
-          const { text, submissionIntent, queuedMessageId } = invocation.args as {
-            text: string;
-            submissionIntent?: ComposerSubmissionIntent;
-            queuedMessageId?: string;
-          };
-          const queuedMessage =
-            queuedMessageId === undefined
-              ? undefined
-              : useQueuedMessageStore
-                  .getState()
-                  .queuesByThreadKey[
-                    scopedThreadKey(scopeThreadRef(activeThread.environmentId, activeThread.id))
-                  ]?.find((entry) => entry.id === queuedMessageId);
-          if (queuedMessageId !== undefined && !queuedMessage)
-            throw new Error("The queued message is no longer available.");
-          if (text !== (queuedMessage?.prompt ?? promptRef.current)) {
-            throw new Error("The composer changed before the send command executed.");
-          }
-          return executeSendRef.current(
-            undefined,
-            submissionIntent ?? "foreground",
-            undefined,
-            queuedMessage,
-          );
-        },
-        matchesActiveThread,
-      ),
       registerWebAppCommandHandler(
         "thread.interrupt",
         (invocation) => {
