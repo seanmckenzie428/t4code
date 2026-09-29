@@ -8,6 +8,7 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  type ChangeRequestStateLike,
   changeRequestAutoSettles,
   effectiveSettled,
   hasQueuedTurnStart,

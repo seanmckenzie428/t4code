@@ -1,5 +1,10 @@
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ProviderInstanceId,
+  ThreadId,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
 import { act, StrictMode, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -47,7 +52,7 @@ function ChatProbe(props: {
       {
         threadId: props.thread.threadId,
         text: next.prompt,
-        submissionIntent: next.submissionIntent,
+        submissionIntent: "foreground",
         queuedMessageId: next.id,
       },
     ).catch((error: unknown) => failures.push(error));
@@ -60,8 +65,11 @@ function ChatProbe(props: {
       if (!message) throw new Error("Expected the queued snapshot, not the composer draft.");
       const taken = useQueuedMessageStore
         .getState()
-        .take(scopedThreadKey(props.thread), message.id, props.toolActivityId);
-      if (taken) sent.push(taken);
+        .beginSend(scopedThreadKey(props.thread), message.id, props.toolActivityId);
+      if (taken) {
+        sent.push(taken);
+        useQueuedMessageStore.getState().finishSend(scopedThreadKey(props.thread), message.id);
+      }
     },
   });
   return null;
@@ -87,7 +95,7 @@ beforeEach(() => {
   root = createRoot(container as unknown as HTMLElement);
   sent = [];
   failures = [];
-  useQueuedMessageStore.setState({ queuesByThreadKey: {}, drainGeneration: 0 });
+  useQueuedMessageStore.setState({ queuesByThreadKey: {}, lastDispatchByThreadKey: {} });
 });
 
 afterEach(async () => {
@@ -107,7 +115,12 @@ describe("thread send command lifecycle", () => {
       terminalContexts: [],
       previewAnnotations: [],
       reviewComments: [],
-      submissionIntent: "foreground",
+      sendSettings: {
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        promptEffort: null,
+      },
       queuedAfterToolActivityId: null,
       createdAt: "2026-09-22T00:00:00.000Z",
     });

@@ -26,6 +26,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
@@ -225,7 +226,7 @@ const providerSessionDirectoryTestLayer = Layer.succeed(ProviderSessionDirectory
   recordImportedTranscript: () => Effect.die("unused"),
   getProvider: () =>
     Effect.die(new Error("ProviderSessionDirectory.getProvider is not used in test")),
-  getBinding: () => Effect.succeed(Option.none()),
+  getBinding: () => Effect.succeedNone,
   listThreadIds: () => Effect.succeed([]),
   listBindings: () => Effect.succeed([]),
 });
@@ -2383,6 +2384,7 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
           method: "item/tool/requestUserInput",
           requestId: ApprovalRequestId.make("req-user-input-1"),
           payload: {
+            isBlocking: true,
             itemId: "item-user-input-1",
             threadId: "thread-1",
             turnId: "turn-1",
@@ -3082,4 +3084,171 @@ usageLimitLayer("CodexAdapterLive usage limits", (it) => {
       NodeAssert.equal(first.value.payload.class, "provider_error");
     }),
   );
+});
+
+it.effect("managed runtime rotation restarts app-server and resumes the same native thread", () => {
+  const runtimes: FakeCodexRuntime[] = [];
+  let revision = "first";
+  const layer = Layer.effect(
+    CodexAdapter,
+    Effect.gen(function* () {
+      return yield* makeCodexAdapter(decodeCodexSettings({}), {
+        resolveRuntime: Effect.sync(() => ({
+          config: decodeCodexSettings({
+            binaryPath: "/t3/tools/codex/0.155.1/bin/codex",
+            homePath: "/t3/caches/codex/home",
+            launchArgs: "-c 'model_provider=managed'",
+          }),
+          environment: { ACCESS_TOKEN: `dummy-${revision}` },
+          revision,
+        })),
+        makeRuntime: (options) => {
+          const runtime = new FakeCodexRuntime(options);
+          runtime.startImpl.mockImplementation(() =>
+            Promise.resolve({
+              provider: ProviderDriverKind.make("codex"),
+              threadId: options.threadId,
+              runtimeMode: options.runtimeMode,
+              cwd: options.cwd,
+              status: "ready",
+              createdAt: "2026-01-01T00:00:00Z",
+              updatedAt: "2026-01-01T00:00:00Z",
+              resumeCursor: { threadId: "native-managed-thread" },
+            }),
+          );
+          runtimes.push(runtime);
+          return Effect.succeed(runtime);
+        },
+      });
+    }),
+  ).pipe(
+    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
+    Layer.provideMerge(ServerSettingsService.layerTest()),
+    Layer.provideMerge(providerSessionDirectoryTestLayer),
+    Layer.provideMerge(NodeServices.layer),
+  );
+  return Effect.gen(function* () {
+    const adapter = yield* CodexAdapter;
+    const threadId = asThreadId("managed-token-rotation");
+    yield* adapter.startSession({ threadId, runtimeMode: "full-access" });
+    yield* adapter.sendTurn({ threadId, input: "first" });
+    NodeAssert.equal(runtimes.length, 1);
+    revision = "rotated";
+    yield* adapter.sendTurn({ threadId, input: "second" });
+    NodeAssert.equal(runtimes.length, 2);
+    NodeAssert.equal(runtimes[0]?.closeImpl.mock.calls.length, 1);
+    NodeAssert.deepEqual(runtimes[1]?.options.resumeCursor, { threadId: "native-managed-thread" });
+    NodeAssert.equal(runtimes[1]?.options.environment?.ACCESS_TOKEN, "dummy-rotated");
+    NodeAssert.equal(runtimes[1]?.options.binaryPath, "/t3/tools/codex/0.155.1/bin/codex");
+  }).pipe(Effect.provide(layer));
+});
+
+it.effect(
+  "managed Quick Chat keeps its isolated control-only profile across credential rotation",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: "codex-managed-quick-chat-" });
+      const runtimes: FakeCodexRuntime[] = [];
+      let revision = "first";
+      const layer = Layer.effect(
+        CodexAdapter,
+        makeCodexAdapter(decodeCodexSettings({ homePath: NodePath.join(root, "unused") }), {
+          resolveRuntime: Effect.sync(() => ({
+            config: decodeCodexSettings({
+              binaryPath: "/managed/bin/codex",
+              homePath: NodePath.join(root, "managed-home"),
+              launchArgs: "-c 'model_provider=managed'",
+            }),
+            environment: { ACCESS_TOKEN: `dummy-${revision}` },
+            revision,
+          })),
+          makeRuntime: (options) => {
+            const runtime = new FakeCodexRuntime(options);
+            runtimes.push(runtime);
+            return Effect.succeed(runtime);
+          },
+        }),
+      ).pipe(
+        Layer.provideMerge(ServerConfig.layerTest(root, root)),
+        Layer.provideMerge(ServerSettingsService.layerTest()),
+        Layer.provideMerge(providerSessionDirectoryTestLayer),
+        Layer.provideMerge(NodeServices.layer),
+      );
+      yield* Effect.gen(function* () {
+        const adapter = yield* CodexAdapter;
+        const threadId = asThreadId("managed-quick-chat");
+        yield* adapter.startSession({
+          threadId,
+          runtimeMode: "approval-required",
+          sessionProfile: "global-assistant",
+        });
+        revision = "rotated";
+        yield* adapter.sendTurn({ threadId, input: "status" });
+        NodeAssert.equal(runtimes.length, 2);
+        for (const runtime of runtimes) {
+          NodeAssert.equal(runtime.options.binaryPath, "/managed/bin/codex");
+          NodeAssert.equal(runtime.options.launchArgs, "-c 'model_provider=managed'");
+          NodeAssert.equal(runtime.options.homePath, runtime.options.controlOnlyProfile?.codexHome);
+          NodeAssert.notEqual(runtime.options.homePath, NodePath.join(root, "managed-home"));
+          NodeAssert.deepEqual(runtime.options.appServerArgs, ["--strict-config"]);
+          const config = yield* fs.readFileString(runtime.options.controlOnlyProfile!.configFile);
+          NodeAssert.match(config, /default_permissions = "t3-control-only"/);
+          NodeAssert.match(config, /shell_tool = false/);
+        }
+        NodeAssert.equal(runtimes[1]?.options.environment?.ACCESS_TOKEN, "dummy-rotated");
+      }).pipe(Effect.provide(layer));
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);
+
+it.effect("managed turn failures preserve the sharing-limit code for client notices", () => {
+  const factory = makeRuntimeFactory();
+  const layer = Layer.effect(
+    CodexAdapter,
+    Effect.gen(function* () {
+      return yield* makeCodexAdapter(decodeCodexSettings({}), {
+        makeRuntime: factory.factory,
+        resolveRuntime: Effect.succeed({
+          config: decodeCodexSettings({}),
+          environment: {},
+          revision: "managed",
+        }),
+      });
+    }),
+  ).pipe(
+    Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
+    Layer.provideMerge(ServerSettingsService.layerTest()),
+    Layer.provideMerge(providerSessionDirectoryTestLayer),
+    Layer.provideMerge(NodeServices.layer),
+  );
+  return Effect.gen(function* () {
+    const adapter = yield* CodexAdapter;
+    yield* adapter.startSession({ threadId: asThreadId("thread-1"), runtimeMode: "full-access" });
+    const eventsFiber = yield* adapter.streamEvents.pipe(
+      Stream.take(2),
+      Stream.runCollect,
+      Effect.forkChild,
+    );
+    const notification = codexUsageLimitTurnFailed("managed-sharing-limit");
+    yield* factory.lastRuntime!.emit({
+      ...notification,
+      payload: {
+        threadId: "thread-1",
+        turn: {
+          id: "turn-limit",
+          items: [],
+          status: "failed",
+          error: { message: "subscription_sharing_usage_limit_exceeded", codexErrorInfo: "other" },
+        },
+      },
+    });
+    const events = Array.from(yield* Fiber.join(eventsFiber));
+    NodeAssert.equal(events[0]?.type, "runtime.error");
+    if (events[0]?.type === "runtime.error") {
+      NodeAssert.equal(events[0].payload.code, "subscription_sharing_usage_limit_exceeded");
+      NodeAssert.match(events[0].payload.message, /ChatGPT usage limit/);
+    }
+    NodeAssert.equal(events[1]?.type, "turn.completed");
+    if (events[1]?.type === "turn.completed") NodeAssert.equal(events[1].payload.state, "failed");
+  }).pipe(Effect.provide(layer));
 });

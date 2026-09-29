@@ -125,7 +125,7 @@ it.effect("upgrades the shipped T4 ledger through 46 without losing fork data", 
 
     assert.deepStrictEqual(
       executed.map(([id]) => id),
-      Array.from({ length: 13 }, (_, index) => 47 + index),
+      Array.from({ length: 14 }, (_, index) => 47 + index),
     );
     assert.deepStrictEqual(
       yield* sql`
@@ -188,7 +188,9 @@ it.effect(
         });
       const previousRows = yield* readExistingRows();
 
-      assert.deepStrictEqual(yield* runMigrations(), [[59, "PullRequestFilesViewed"]]);
+      assert.deepStrictEqual(yield* runMigrations({ toMigrationInclusive: 59 }), [
+        [59, "PullRequestFilesViewed"],
+      ]);
       assert.deepStrictEqual(
         yield* sql`
         SELECT migration_id, name, created_at FROM effect_sql_migrations
@@ -208,8 +210,87 @@ it.effect(
     `;
       const viewedRows = yield* sql`SELECT * FROM pull_request_files_viewed`;
       assert.equal(viewedRows.length, 1);
-      assert.deepStrictEqual(yield* runMigrations(), []);
+      assert.deepStrictEqual(yield* runMigrations({ toMigrationInclusive: 59 }), []);
       assert.deepStrictEqual(yield* sql`SELECT * FROM pull_request_files_viewed`, viewedRows);
+      assert.deepStrictEqual(yield* readExistingRows(), previousRows);
+    }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
+);
+
+it.effect(
+  "appends migration 60 to a populated T4 ledger through 59 without losing fork or review data",
+  () =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      yield* runMigrations({ toMigrationInclusive: 59 });
+      const previousLedger = yield* sql`
+      SELECT migration_id, name, created_at FROM effect_sql_migrations ORDER BY migration_id
+    `;
+      yield* sql`
+      INSERT INTO projection_projects (
+        project_id, title, workspace_root, scripts_json, kind, system_role,
+        custom_actions_json, created_at, updated_at
+      ) VALUES (
+        'assistant-project-59', 'Environment', '/workspace', '[]', 'system', 'quick-chat',
+        '[{"id":"review","name":"Review","placement":"toolbar","commandId":"ui.external-url.open","args":{"url":"https://example.com/review"}}]',
+        '2026-09-21T00:00:00Z', '2026-09-21T00:00:00Z'
+      )
+    `;
+      yield* sql`
+      INSERT INTO projection_threads (
+        thread_id, project_id, title, model_selection_json, kind, workspace_binding_json,
+        active_order_key, created_at, updated_at
+      ) VALUES (
+        'quick-chat-59', 'assistant-project-59', 'Quick Chat', '{"instanceId":"codex","model":"gpt-5"}',
+        'quick', '{"extensionId":"workspaces","providerId":"local","workspaceId":"feature"}',
+        'a1', '2026-09-21T00:00:00Z', '2026-09-21T00:00:00Z'
+      )
+    `;
+      yield* sql`
+      INSERT INTO projection_thread_messages (
+        message_id, thread_id, role, text, delegation_json, is_streaming, created_at, updated_at
+      ) VALUES (
+        'delegated-message-59', 'quick-chat-59', 'user', 'Review changes',
+        '{"assistantThreadId":"quick-chat-59","actionId":"review","depth":1}', 0,
+        '2026-09-21T00:00:00Z', '2026-09-21T00:00:00Z'
+      )
+    `;
+      yield* sql`
+      INSERT INTO pull_request_files_viewed (
+        provider, host, repository, number, viewer, path, revision, viewed_at
+      ) VALUES (
+        'gitlab', 'gitlab.example.com', 'team/project', 12, 'reader', 'src/app.ts',
+        'sha-before-push', '2026-09-21T00:00:00Z'
+      )
+    `;
+      const readExistingRows = () =>
+        Effect.all({
+          projects: sql`SELECT * FROM projection_projects ORDER BY project_id`,
+          threads: sql`SELECT thread_id, project_id, kind, workspace_binding_json, active_order_key, created_at, updated_at FROM projection_threads ORDER BY thread_id`,
+          messages: sql`SELECT * FROM projection_thread_messages ORDER BY message_id`,
+          viewed: sql`SELECT * FROM pull_request_files_viewed`,
+        });
+      const previousRows = yield* readExistingRows();
+
+      assert.deepStrictEqual(yield* runMigrations(), [
+        [60, "ProjectionThreadsAutoSettleDisabledAt"],
+      ]);
+      assert.deepStrictEqual(
+        yield* sql`
+      SELECT migration_id, name, created_at FROM effect_sql_migrations
+      WHERE migration_id <= 59 ORDER BY migration_id
+    `,
+        previousLedger,
+      );
+      assert.deepStrictEqual(yield* readExistingRows(), previousRows);
+      assert.deepStrictEqual(yield* sql`SELECT auto_settle_disabled_at FROM projection_threads`, [
+        { auto_settle_disabled_at: null },
+      ]);
+
+      yield* sql`UPDATE projection_threads SET auto_settle_disabled_at = '2026-09-29T00:00:00Z'`;
+      assert.deepStrictEqual(yield* runMigrations(), []);
+      assert.deepStrictEqual(yield* sql`SELECT auto_settle_disabled_at FROM projection_threads`, [
+        { auto_settle_disabled_at: "2026-09-29T00:00:00Z" },
+      ]);
       assert.deepStrictEqual(yield* readExistingRows(), previousRows);
     }).pipe(Effect.provide(NodeSqliteClient.layer({ filename: ":memory:" }))),
 );

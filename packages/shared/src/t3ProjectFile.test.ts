@@ -33,9 +33,12 @@ describe("buildT3ProjectFileJsonSchema", () => {
 
     expect(Object.keys(schema.properties).sort()).toEqual([
       "$schema",
+      "appViews",
       "defaultThreadEnvMode",
+      "extensions",
       "iconPath",
       "scripts",
+      "worktreeSubmodules",
     ]);
     expect(schema.required).toBeUndefined();
     expect(schema.properties.iconPath?.description).toContain("Workspace-relative path");

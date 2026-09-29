@@ -49,6 +49,7 @@ export function useThreadSendCommand(input: {
       },
       (context) => ({
         available:
+          context.queuedMessageDispatch !== true &&
           context.environmentId === thread.environmentId &&
           (context.threadId === undefined || context.threadId === thread.threadId),
         reason: "The command is hosted by another active thread.",

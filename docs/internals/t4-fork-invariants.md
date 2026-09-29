@@ -27,7 +27,7 @@ merge cleanly while omitting a required T4 field or bypassing a T4 policy.
 | Workspace preferences         | T4 workspace appearance preferences and expanded chat snooze options remain available and stable.                                                                                                                                                                             | settings, UI-state, sidebar snooze, and `threadSnoozed.test.ts`                                                                                 |
 | Desktop/nightly               | T4 icons, safe state-directory locking, release dependency handling, local nightly build/install flow, and packaged macOS Dock icon behavior remain intact.                                                                                                                   | desktop identity/lock tests and desktop-nightly script tests                                                                                    |
 | Lotus integration             | Optional Lotus Runtime extension and project custom actions remain additive; Lotus owns its runtime lifecycle.                                                                                                                                                                | integration provider/MCP tests and project custom-action tests                                                                                  |
-| Persistence ledger            | T4 migration IDs 36-46 keep shipped meanings. Upstream migrations formerly numbered 36-38 run as 41-43; compatibility reruns remain 44-46; upstream 41-53 run as 47-59.                                                                                                       | `041_049_ForkCompatibility.test.ts`                                                                                                             |
+| Persistence ledger            | T4 migration IDs 36-46 keep shipped meanings. Upstream migrations formerly numbered 36-38 run as 41-43; compatibility reruns remain 44-46; upstream 41-54 run as 47-60.                                                                                                       | `041_049_ForkCompatibility.test.ts`                                                                                                             |
 
 When a T3 change creates another read, write, transport, cache, pagination, or fallback path in one
 of these areas, extend that path with every T4 field and policy. Add a regression using non-default
@@ -75,6 +75,32 @@ No-overlap preflight is not proof of compatibility. Contracts can cross files, s
 remain mandatory.
 
 ## Sync records
+
+### 2026-09-29 — T3 v0.0.43
+
+- T4 parent: `cb67721cc99c40ce265a11d7d46954a05fa857ba`; T3 parent:
+  `2cbc24fcae2b5649d7b60b68da72053a37fa82d5` (latest upstream `main` when fetched).
+- Integrated 252 upstream commits. Exact-SHA preflight identified 187 overlapping paths;
+  reviewed clean merges alongside 48 unmerged paths. Retained T4 branding and compatibility
+  identifiers, Quick Chat, app control, generated views, Chat/Review and Viewed persistence,
+  hover sidebar, workspace preferences, manual settlement, and desktop state locking.
+- Kept upstream background queued sends on T4's typed command surface. Preserved T4 provider
+  instructions alongside the new Codex context transport and managed authentication. Added
+  upstream per-thread auto-settle settings without changing the existing environment behavior.
+  New lightweight PR and settlement queries retain Quick Chat/assistant exclusions, with
+  non-default regression fixtures.
+- Migration ledger 1–59 retains its shipped IDs, names, and modules; upstream migration 54
+  appends as runtime 60. Populated-upgrade coverage checks preserved T4 rows and ledger entries.
+- Kept source-only distribution and omitted upstream triage tooling. Combined overlapping relay
+  deployment guards so both the upstream-repository and main-branch restrictions apply.
+- Validation: T4 invariants passed (15 files / 162 tests); focused web checks passed
+  (41 files / 1,182 tests), desktop/shared/mobile checks passed (33 files / 926 tests),
+  packaging checks passed (4 files / 110 tests), and focused server/provider/relay checks passed.
+  Scoped typechecks passed for server, web, desktop, mobile, contracts, shared, client runtime,
+  Codex protocol, marketing, and scripts. Release smoke, scoped formatting/lint, and source
+  whitespace checks passed; lint retains existing warnings and upstream patch files retain
+  unified-diff context whitespace. Local socket tests passed with loopback permissions.
+  No live database writes, interactive UI verification, app install/restart, or push performed.
 
 ### 2026-09-21 — T3 nightly 20260921.2058 after T4 recovery
 

@@ -16,6 +16,8 @@ import { randomHex } from "./lib/utils";
 
 export interface WebAppCommandContext extends AppCommandContext {
   readonly environmentId: string;
+  /** Selects the root queue host; renderer-local and never sent over the wire. */
+  readonly queuedMessageDispatch?: boolean;
   /** Renderer-only feedback/navigation options; never part of command arguments. */
   readonly threadLifecycleOptions?: {
     readonly undoToast?: boolean;

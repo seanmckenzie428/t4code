@@ -13,7 +13,7 @@ describe("Chat and Review tabs", () => {
     expect(tabsEnd).toBeGreaterThan(tabsStart);
 
     const tabsSource = source.slice(tabsStart, tabsEnd);
-    expect(tabsSource).toContain('className="flex h-10 min-h-10 shrink-0 items-center');
+    expect(tabsSource).toContain('className="flex h-10 min-h-10 shrink-0 flex-row items-center');
     expect(tabsSource).toContain('{ id: "chat" as const');
     expect(tabsSource).toContain('id: "review" as const');
     expect(tabsSource).not.toContain("surface-subheader");

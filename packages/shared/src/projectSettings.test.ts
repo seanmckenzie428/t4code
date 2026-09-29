@@ -1,5 +1,6 @@
 import {
   DEFAULT_SERVER_SETTINGS,
+  ExtensionId,
   PROJECT_SCOPED_SERVER_SETTING_KEYS,
   ProjectId,
   ProviderInstanceId,
@@ -9,6 +10,7 @@ import { createModelSelection } from "./model.ts";
 import {
   clearProjectSettingsOverrides,
   hasProjectSettingsOverrides,
+  resolveProjectFileBackedSetting,
   resolveProjectSettings,
   resolveWorktreeCleanup,
   withProjectSettingsOverrides,
@@ -19,6 +21,35 @@ const projectId = ProjectId.make("project-a");
 const otherProjectId = ProjectId.make("project-b");
 
 describe("resolveProjectSettings", () => {
+  it("preserves Quick Chat and extensions while resolving repository defaults", () => {
+    const settings = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      globalAssistant: {
+        enabled: true,
+        delegationEnabled: true,
+        modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.6"),
+      },
+      extensions: [
+        {
+          id: ExtensionId.make("lotus-runtime"),
+          title: "Lotus Runtime",
+          transport: { kind: "stdio", executable: "lotus", args: ["mcp"] },
+          requestedCapabilities: ["tools"],
+          enabled: false,
+          approval: null,
+        },
+      ],
+    });
+    const resolved = resolveProjectSettings(settings, projectId, null, {
+      defaultThreadEnvMode: "worktree",
+      worktreeSubmodules: "none",
+    });
+
+    expect(resolved.settings.defaultThreadEnvMode).toBe("worktree");
+    expect(resolved.settings.worktreeSubmodules).toBe("none");
+    expect(resolved.settings.globalAssistant).toEqual(settings.globalAssistant);
+    expect(resolved.settings.extensions).toEqual(settings.extensions);
+  });
+
   it("inherits every scopable key when the project has no overrides", () => {
     const resolved = resolveProjectSettings(DEFAULT_SERVER_SETTINGS, projectId);
     expect(resolved.settings).toBe(DEFAULT_SERVER_SETTINGS);
@@ -28,6 +59,24 @@ describe("resolveProjectSettings", () => {
     expect(resolveProjectSettings(DEFAULT_SERVER_SETTINGS, null).settings).toBe(
       DEFAULT_SERVER_SETTINGS,
     );
+  });
+
+  it("ignores an override left undefined by a forward-compatible decode", () => {
+    const resolved = resolveProjectSettings(
+      {
+        ...DEFAULT_SERVER_SETTINGS,
+        defaultRuntimeMode: "full-access",
+        projectSettingsOverrides: { [projectId]: { defaultRuntimeMode: undefined } as never },
+      },
+      projectId,
+    );
+    expect(resolved.settings.defaultRuntimeMode).toBe("full-access");
+    expect(resolved.sources.defaultRuntimeMode).toBe("environment");
+    expect(
+      hasProjectSettingsOverrides({
+        projectSettingsOverrides: { [projectId]: { defaultRuntimeMode: undefined } as never },
+      }),
+    ).toBe(false);
   });
 
   it("treats a null project like an absent one before the shell snapshot arrives", () => {
@@ -115,6 +164,81 @@ describe("resolveProjectSettings", () => {
     const resolved = resolveProjectSettings(settings, projectId);
     expect(resolved.settings.defaultModelSelection).toBeNull();
     expect(resolved.sources.defaultModelSelection).toBe("environment");
+  });
+});
+
+describe("resolveProjectSettings with a t3.json", () => {
+  it("walks project override, environment value, file, then built-in for file-backed keys", () => {
+    const file = { defaultThreadEnvMode: "worktree" as const };
+    const fromOverride = resolveProjectSettings(
+      {
+        ...DEFAULT_SERVER_SETTINGS,
+        projectSettingsOverrides: { [projectId]: { defaultThreadEnvMode: "local" } },
+      },
+      projectId,
+      null,
+      file,
+    );
+    expect(fromOverride.settings.defaultThreadEnvMode).toBe("local");
+    expect(fromOverride.sources.defaultThreadEnvMode).toBe("project");
+
+    const fromEnvironment = resolveProjectSettings(
+      { ...DEFAULT_SERVER_SETTINGS, defaultThreadEnvMode: "local" },
+      projectId,
+      null,
+      file,
+    );
+    expect(fromEnvironment.settings.defaultThreadEnvMode).toBe("local");
+    expect(fromEnvironment.sources.defaultThreadEnvMode).toBe("environment");
+
+    const fromFile = resolveProjectSettings(DEFAULT_SERVER_SETTINGS, projectId, null, file);
+    expect(fromFile.settings.defaultThreadEnvMode).toBe("worktree");
+    expect(fromFile.sources.defaultThreadEnvMode).toBe("t3.json");
+
+    const builtIn = resolveProjectSettings(DEFAULT_SERVER_SETTINGS, projectId, null, null);
+    expect(builtIn.settings.defaultThreadEnvMode).toBe("local");
+    expect(builtIn.sources.defaultThreadEnvMode).toBe("environment");
+    // A stored null override defers like an unset one and is not reported
+    // as the project's value.
+    const nullOverride = resolveProjectSettings(
+      {
+        ...DEFAULT_SERVER_SETTINGS,
+        projectSettingsOverrides: { [projectId]: { defaultThreadEnvMode: null } as never },
+      },
+      projectId,
+      null,
+      file,
+    );
+    expect(nullOverride.settings.defaultThreadEnvMode).toBe("worktree");
+    expect(nullOverride.sources.defaultThreadEnvMode).toBe("t3.json");
+    // A file that does not mention the key leaves the source alone too.
+    expect(
+      resolveProjectSettings(DEFAULT_SERVER_SETTINGS, projectId, null, {}).sources
+        .defaultThreadEnvMode,
+    ).toBe("environment");
+  });
+
+  it("resolves one key from the settings tier, then the file, then the built-in", () => {
+    expect(
+      resolveProjectFileBackedSetting("worktreeSubmodules", "none", {
+        worktreeSubmodules: "top-level",
+      }),
+    ).toEqual({ value: "none", source: "environment" });
+    expect(
+      resolveProjectFileBackedSetting("worktreeSubmodules", null, {
+        worktreeSubmodules: "top-level",
+      }),
+    ).toEqual({ value: "top-level", source: "t3.json" });
+    expect(resolveProjectFileBackedSetting("worktreeSubmodules", null, null)).toEqual({
+      value: "recursive",
+      source: "environment",
+    });
+  });
+
+  it("leaves settings untouched when no file is passed", () => {
+    expect(resolveProjectSettings(DEFAULT_SERVER_SETTINGS, projectId).settings).toBe(
+      DEFAULT_SERVER_SETTINGS,
+    );
   });
 });
 

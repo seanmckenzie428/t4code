@@ -43,10 +43,25 @@ const T4_CODE_APP_CONTROL_INSTRUCTIONS = `
 When the user asks you to inspect or control T4 Code itself, inspect with \`app_status\`, discover semantic actions with \`app_commands\`, and execute them with \`app_invoke\`. Project chats may inspect and control projects and threads within their current environment, including delegated work in another thread. Cross-environment control remains unavailable. Persistent, destructive, or external actions still require the configured grant or user confirmation.
 `;
 
+export const buildT3CodeMcpInstructionBlocks = (
+  browserToolsAvailable: boolean,
+  deviceToolsAvailable = false,
+) => ({
+  app_views: T4_CODE_APP_CAPABILITIES_INSTRUCTIONS,
+  app_control: T4_CODE_APP_CONTROL_INSTRUCTIONS,
+  ...(browserToolsAvailable || deviceToolsAvailable
+    ? {
+        tools: `${browserToolsAvailable ? T4_CODE_BROWSER_INSTRUCTIONS : ""}${deviceToolsAvailable ? T3_CODE_DEVICE_TOOL_INSTRUCTIONS : ""}`,
+      }
+    : {}),
+});
+
 export const buildT3CodeMcpInstructions = (
   browserToolsAvailable: boolean,
   deviceToolsAvailable = false,
 ): string =>
-  `${T4_CODE_APP_CAPABILITIES_INSTRUCTIONS}${T4_CODE_APP_CONTROL_INSTRUCTIONS}${browserToolsAvailable ? T4_CODE_BROWSER_INSTRUCTIONS : ""}${deviceToolsAvailable ? T3_CODE_DEVICE_TOOL_INSTRUCTIONS : ""}`;
+  Object.values(buildT3CodeMcpInstructionBlocks(browserToolsAvailable, deviceToolsAvailable)).join(
+    "",
+  );
 
 export const T3_CODE_MCP_INSTRUCTIONS = buildT3CodeMcpInstructions(true);
