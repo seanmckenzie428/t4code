@@ -338,6 +338,16 @@ export class TerminalNotRunningError extends Schema.TaggedError<TerminalNotRunni
   }
 }
 
+export class TerminalArchiveAdmissionError extends Schema.TaggedError<TerminalArchiveAdmissionError>()(
+  "TerminalArchiveAdmissionError",
+  {
+    threadId: Schema.String,
+    terminalId: Schema.String,
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
+
 export class TerminalWriteError extends Schema.TaggedError<TerminalWriteError>()(
   "TerminalWriteError",
   {
@@ -375,6 +385,7 @@ export const TerminalError = Schema.Union([
   TerminalProviderInstanceNotFoundError,
   TerminalProviderEnvironmentError,
   TerminalNotRunningError,
+  TerminalArchiveAdmissionError,
   TerminalWriteError,
   TerminalResizeError,
 ]);

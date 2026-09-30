@@ -11,6 +11,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { SettingsGroup } from "./SettingsGroup";
 import { Spinner } from "~/components/ui/spinner";
 import { NotificationSettings } from "./NotificationSettings";
+import { ArchiveLifecycleNotice } from "../sidebar/ArchiveLifecycleNotice";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -597,6 +598,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.sidebarAutoSettleOnMerge !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge
         ? ["Auto-settle merged threads"]
         : []),
+      ...(settings.sidebarAutoArchiveSettled !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoArchiveSettled
+        ? ["Auto-archive after 7 days settled"]
+        : []),
       ...(settings.wordWrap !== DEFAULT_UNIFIED_SETTINGS.wordWrap ? ["Word wrap"] : []),
       ...(settings.diffTheme !== DEFAULT_UNIFIED_SETTINGS.diffTheme ? ["Code theme"] : []),
       ...(settings.diffFont !== DEFAULT_UNIFIED_SETTINGS.diffFont ? ["Code font"] : []),
@@ -730,6 +734,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.continueThreadsAfterServerUpdate,
       settings.sidebarAutoSettleAfterDays,
       settings.sidebarAutoSettleOnMerge,
+      settings.sidebarAutoArchiveSettled,
       settings.sidebarProjectGroupingMode,
       settings.sidebarThreadPreviewCount,
       settings.showSkillsInSlashMenu,
@@ -836,6 +841,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
+      sidebarAutoArchiveSettled: DEFAULT_UNIFIED_SETTINGS.sidebarAutoArchiveSettled,
       responseStreamingMode: DEFAULT_UNIFIED_SETTINGS.responseStreamingMode,
       enableProviderUpdateChecks: DEFAULT_UNIFIED_SETTINGS.enableProviderUpdateChecks,
       continueThreadsAfterServerUpdate: DEFAULT_UNIFIED_SETTINGS.continueThreadsAfterServerUpdate,
@@ -2425,6 +2431,11 @@ export function GeneralSettingsPanel() {
     connectedEnvironments.every(
       (target) => target.serverConfig?.environment.capabilities.threadAutoSettlement === true,
     );
+  const supportsAutoArchive =
+    connectedEnvironments.length > 0 &&
+    connectedEnvironments.every(
+      (target) => target.serverConfig?.environment.capabilities.threadAutoArchive === true,
+    );
   const supportsRestartContinuation =
     connectedEnvironments.length > 0 &&
     connectedEnvironments.every(
@@ -2692,6 +2703,37 @@ export function GeneralSettingsPanel() {
               />
             ) : null}
           </>
+        ) : null}
+        {supportsAutoArchive ? (
+          <SettingsRow
+            serverScoped
+            settingKeys={["sidebarAutoArchiveSettled"]}
+            {...searchableSetting("auto-archive-settled-threads")}
+            description="Archive threads after seven uninterrupted days settled."
+            resetAction={
+              settings.sidebarAutoArchiveSettled !==
+              DEFAULT_UNIFIED_SETTINGS.sidebarAutoArchiveSettled ? (
+                <SettingResetButton
+                  label="auto-archive settled threads"
+                  onClick={() =>
+                    updateSettings({
+                      sidebarAutoArchiveSettled: DEFAULT_UNIFIED_SETTINGS.sidebarAutoArchiveSettled,
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <ScopedSwitch
+                settingKeys={["sidebarAutoArchiveSettled"]}
+                checked={settings.sidebarAutoArchiveSettled}
+                onCheckedChange={(checked) =>
+                  updateSettings({ sidebarAutoArchiveSettled: Boolean(checked) })
+                }
+                aria-label="Auto-archive after 7 days settled"
+              />
+            }
+          />
         ) : null}
       </SettingsSection>
 
@@ -3770,6 +3812,14 @@ export function ArchivedThreadsPanel() {
             <SettingsRow
               key={`${thread.environmentId}:${thread.id}`}
               title={thread.title}
+              status={
+                thread.archiveLifecycle ? (
+                  <ArchiveLifecycleNotice
+                    key={thread.archiveLifecycle.operationId}
+                    thread={thread}
+                  />
+                ) : null
+              }
               description={
                 <>
                   Saved {formatRelativeTimeLabel(thread.archivedAt ?? thread.updatedAt)}
@@ -3784,6 +3834,7 @@ export function ArchivedThreadsPanel() {
                     variant="outline"
                     size="sm"
                     className="shrink-0"
+                    disabled={thread.archiveLifecycle != null}
                     onClick={() => {
                       void (async () => {
                         const current =
@@ -3930,6 +3981,14 @@ export function ArchivedThreadsPanel() {
                   })();
                 }}
                 title={thread.title}
+                status={
+                  thread.archiveLifecycle ? (
+                    <ArchiveLifecycleNotice
+                      key={thread.archiveLifecycle.operationId}
+                      thread={thread}
+                    />
+                  ) : null
+                }
                 description={
                   <>
                     Archived {formatRelativeTimeLabel(thread.archivedAt ?? thread.createdAt)}
@@ -3943,6 +4002,7 @@ export function ArchivedThreadsPanel() {
                     variant="outline"
                     size="xs"
                     className="shrink-0"
+                    disabled={thread.archiveLifecycle != null}
                     onClick={() => {
                       void (async () => {
                         const result = await unarchiveThread(

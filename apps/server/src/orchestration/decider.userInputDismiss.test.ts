@@ -58,6 +58,8 @@ function makeReadModel(
         archivedAt: null,
         settledOverride: null,
         settledAt: null,
+        settledSince: null,
+        archiveLifecycle: null,
         snoozedUntil: null,
         snoozedAt: null,
         pinnedAt: null,

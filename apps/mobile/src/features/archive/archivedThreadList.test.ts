@@ -44,6 +44,8 @@ function makeThread(
     ...input,
     settledOverride: input.settledOverride ?? null,
     settledAt: input.settledAt ?? null,
+    settledSince: input.settledSince ?? null,
+    archiveLifecycle: input.archiveLifecycle ?? null,
   };
 }
 

@@ -64,6 +64,30 @@ export interface ProviderThreadSnapshot {
   readonly turns: ReadonlyArray<ProviderThreadTurnSnapshot>;
 }
 
+export interface ProviderNativeArchiveTarget {
+  readonly threadId: ThreadId;
+  readonly resumeCursor: unknown;
+  readonly cwd?: string | undefined;
+}
+
+export type ProviderNativeArchiveState = "active" | "archived" | "unknown";
+
+export interface ProviderNativeArchiveStateResult {
+  readonly target: ProviderNativeArchiveTarget;
+  readonly state: ProviderNativeArchiveState;
+}
+
+/** Omitted unless the provider exposes both durable archive and restoration. */
+export interface ProviderNativeArchive<TError> {
+  readonly readStates: (
+    targets: ReadonlyArray<ProviderNativeArchiveTarget>,
+  ) => Effect.Effect<ReadonlyArray<ProviderNativeArchiveStateResult>, TError>;
+  readonly setArchived: (
+    target: ProviderNativeArchiveTarget,
+    archived: boolean,
+  ) => Effect.Effect<void, TError>;
+}
+
 export interface ProviderAdapterShape<TError> {
   /**
    * Provider kind implemented by this adapter.
@@ -87,6 +111,8 @@ export interface ProviderAdapterShape<TError> {
 
   /** Omitted when this adapter does not support manual context compaction. */
   readonly compaction?: ProviderCompaction<TError>;
+
+  readonly nativeArchive?: ProviderNativeArchive<TError>;
 
   /**
    * Interrupt an active turn.

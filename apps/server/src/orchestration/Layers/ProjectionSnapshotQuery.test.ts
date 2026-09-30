@@ -46,6 +46,7 @@ const encodeChatAttachments = Schema.encodeEffect(
 const encodeThreadLinkedPullRequest = Schema.encodeSync(
   Schema.fromJsonString(ThreadLinkedPullRequest),
 );
+const encodeArchiveLifecycleJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const encodeMessageContext = Schema.encodeEffect(
   Schema.fromJsonString(OrchestrationMessageContext),
 );
@@ -488,6 +489,8 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           archivedAt: null,
           settledOverride: null,
           settledAt: null,
+          settledSince: null,
+          archiveLifecycle: null,
           unsettledAt: null,
           snoozedUntil: null,
           snoozedAt: null,
@@ -618,6 +621,8 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           archivedAt: null,
           settledOverride: null,
           settledAt: null,
+          settledSince: null,
+          archiveLifecycle: null,
           unsettledAt: null,
           snoozedUntil: null,
           snoozedAt: null,
@@ -1116,6 +1121,33 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       assert.equal(archivedShellSnapshot.threads[0]?.archivedAt, "2026-04-06T00:00:06.000Z");
       assert.equal(archivedShellSnapshot.threads[1]?.kind, "quick");
       assert.deepEqual(archivedShellSnapshot.threads[0]?.branchPullRequest, branchPullRequest);
+      const restoreLifecycle = {
+        operationId: "restore-archived",
+        direction: "restore" as const,
+        status: "retrying" as const,
+        lastError: "Provider unavailable",
+      };
+      const encodedRestoreLifecycle = yield* encodeArchiveLifecycleJson(restoreLifecycle);
+      yield* sql`
+        UPDATE projection_threads SET
+          settled_since = '2026-04-01T00:00:00.000Z',
+          archive_lifecycle_json = ${encodedRestoreLifecycle}
+        WHERE thread_id = 'thread-archived'
+      `;
+      assert.equal(
+        (yield* snapshotQuery.getThreadShellById(ThreadId.make("thread-archived")))._tag,
+        "None",
+      );
+      const archivedShell = yield* snapshotQuery.getThreadArchiveShellById!(
+        ThreadId.make("thread-archived"),
+      );
+      assert.equal(archivedShell._tag, "Some");
+      if (archivedShell._tag === "Some") {
+        assert.equal(archivedShell.value.settledSince, "2026-04-01T00:00:00.000Z");
+        assert.deepEqual(archivedShell.value.archiveLifecycle, restoreLifecycle);
+      }
+      const lifecycleSnapshot = yield* snapshotQuery.getArchivedShellSnapshot();
+      assert.deepEqual(lifecycleSnapshot.threads[0]?.archiveLifecycle, restoreLifecycle);
       const activeContext = yield* snapshotQuery.getThreadRuntimeContext(
         ThreadId.make("thread-active"),
       );
@@ -1139,6 +1171,10 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             deleted_at = '2026-04-06T00:00:09.000Z'
         WHERE thread_id = 'thread-archived'
       `;
+      assert.equal(
+        (yield* snapshotQuery.getThreadArchiveShellById!(ThreadId.make("thread-archived")))._tag,
+        "None",
+      );
       assert.deepEqual(yield* snapshotQuery.getDeletedWorktreeThreads(), [
         {
           id: ThreadId.make("thread-archived"),

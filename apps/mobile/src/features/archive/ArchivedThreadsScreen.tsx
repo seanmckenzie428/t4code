@@ -33,6 +33,7 @@ import { useServerConfigs } from "../../state/entities";
 import { ThreadSwipeable } from "../home/thread-swipe-actions";
 import type { ArchivedThreadGroup, ArchivedThreadSortOrder } from "./archivedThreadList";
 import { SettingsScreenContent } from "../settings/components/SettingsScreen";
+import { ArchiveLifecycleNotice } from "../threads/ArchiveLifecycleNotice";
 
 export interface ArchivedThreadsHeaderEnvironment {
   readonly environmentId: EnvironmentId;
@@ -201,6 +202,7 @@ function ArchivedThreadRow(props: {
     <ThreadSwipeable
       resetKey={`${props.thread.environmentId}:${props.thread.id}`}
       threadKey={`${props.thread.environmentId}:${props.thread.id}`}
+      enabled={props.thread.archiveLifecycle == null}
       backgroundColor={cardColor}
       // Round + clip the swipeable container so the group's corners stay
       // rounded while rows swipe; the row itself stays square inside.
@@ -225,47 +227,55 @@ function ArchivedThreadRow(props: {
       threadTitle={props.thread.title}
     >
       {() => (
-        <View
-          className={`flex-row items-center gap-3 bg-card px-4 py-3 ${props.isLast ? "" : "border-b border-separator"}`}
-        >
-          <View className="h-[34px] w-[34px] items-center justify-center rounded-[11px] bg-subtle">
-            <SymbolView
-              name="archivebox.fill"
-              size={15}
-              tintColorClassName="accent-icon-subtle"
-              type="monochrome"
-            />
-          </View>
-
-          <View className="min-w-0 flex-1 gap-1">
-            <View className="flex-row items-center gap-2">
-              <Text
-                className="min-w-0 flex-1 text-base font-t3-bold leading-snug text-foreground"
-                numberOfLines={1}
-              >
-                {props.thread.title}
-              </Text>
-              <Text className="min-w-[30px] text-right text-xs tabular-nums text-foreground-tertiary">
-                {timestamp}
-              </Text>
+        <View className={`bg-card ${props.isLast ? "" : "border-b border-separator"}`}>
+          <View className="flex-row items-center gap-3 px-4 py-3">
+            <View className="h-[34px] w-[34px] items-center justify-center rounded-[11px] bg-subtle">
+              <SymbolView
+                name="archivebox.fill"
+                size={15}
+                tintColorClassName="accent-icon-subtle"
+                type="monochrome"
+              />
             </View>
-            {subtitle.length > 0 ? (
-              <View className="flex-row items-center gap-1.5">
-                <SymbolView
-                  name="arrow.triangle.branch"
-                  size={10}
-                  tintColorClassName="accent-icon-subtle"
-                  type="monochrome"
-                />
+
+            <View className="min-w-0 flex-1 gap-1">
+              <View className="flex-row items-center gap-2">
                 <Text
-                  className="min-w-0 flex-1 font-mono text-2xs text-foreground-tertiary"
+                  className="min-w-0 flex-1 text-base font-t3-bold leading-snug text-foreground"
                   numberOfLines={1}
                 >
-                  {subtitle.join(" · ")}
+                  {props.thread.title}
+                </Text>
+                <Text className="min-w-[30px] text-right text-xs tabular-nums text-foreground-tertiary">
+                  {timestamp}
                 </Text>
               </View>
-            ) : null}
+              {subtitle.length > 0 ? (
+                <View className="flex-row items-center gap-1.5">
+                  <SymbolView
+                    name="arrow.triangle.branch"
+                    size={10}
+                    tintColorClassName="accent-icon-subtle"
+                    type="monochrome"
+                  />
+                  <Text
+                    className="min-w-0 flex-1 font-mono text-2xs text-foreground-tertiary"
+                    numberOfLines={1}
+                  >
+                    {subtitle.join(" · ")}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
+          {props.thread.archiveLifecycle ? (
+            <View className="px-4 pb-2">
+              <ArchiveLifecycleNotice
+                key={props.thread.archiveLifecycle.operationId}
+                thread={props.thread}
+              />
+            </View>
+          ) : null}
         </View>
       )}
     </ThreadSwipeable>

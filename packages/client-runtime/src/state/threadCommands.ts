@@ -16,6 +16,8 @@ import {
 } from "./runtime.ts";
 import {
   type ArchiveThreadInput,
+  type CancelThreadArchiveInput,
+  cancelThreadArchive,
   type CreateThreadInput,
   type DeleteThreadInput,
   type InterruptThreadTurnInput,
@@ -70,6 +72,7 @@ import type { EnvironmentRegistry } from "../connection/registry.ts";
 
 export type {
   ArchiveThreadInput,
+  CancelThreadArchiveInput,
   CreateThreadInput,
   DeleteThreadInput,
   InterruptThreadTurnInput,
@@ -101,6 +104,8 @@ export function createThreadEnvironmentAtoms<R, E>(
   snapshotAtom: (environmentId: EnvironmentId) => Atom.Atom<OrchestrationShellSnapshot | null>,
 ) {
   const scheduler = createAtomCommandScheduler();
+  const archiveScheduler = createAtomCommandScheduler();
+  const archiveCancellationScheduler = createAtomCommandScheduler();
   const concurrency = {
     mode: "serial" as const,
     key: ({ environmentId, input }: { environmentId: string; input: { threadId: string } }) =>
@@ -122,13 +127,19 @@ export function createThreadEnvironmentAtoms<R, E>(
     archive: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:archive",
       execute: (input: ArchiveThreadInput) => archiveThread(input),
-      scheduler,
+      scheduler: archiveScheduler,
       concurrency,
     }),
     unarchive: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:unarchive",
       execute: (input: UnarchiveThreadInput) => unarchiveThread(input),
-      scheduler,
+      scheduler: archiveScheduler,
+      concurrency,
+    }),
+    cancelArchive: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:cancel-archive",
+      execute: (input: CancelThreadArchiveInput) => cancelThreadArchive(input),
+      scheduler: archiveCancellationScheduler,
       concurrency,
     }),
     settle: createEnvironmentCommand(runtime, {
@@ -280,6 +291,7 @@ export function createThreadEnvironmentAtoms<R, E>(
             hasPendingUserInput: false,
             settledOverride: "settled",
             settledAt: thread.settledOverride === "settled" ? (thread.settledAt ?? now) : now,
+            settledSince: thread.settledOverride === "settled" ? (thread.settledSince ?? now) : now,
             unsettledAt: null,
             activeOrderKey: null,
             pinnedAt: null,
@@ -292,6 +304,7 @@ export function createThreadEnvironmentAtoms<R, E>(
       ...thread,
       settledOverride: input.reason === "user" ? "active" : null,
       settledAt: null,
+      settledSince: null,
       unsettledAt: thread.settledOverride === "active" ? (thread.unsettledAt ?? null) : now,
     })),
     snooze: optimistic.wrap(commands.snooze, (thread, input, now, accepted) =>
@@ -319,6 +332,7 @@ export function createThreadEnvironmentAtoms<R, E>(
         ? {
             settledOverride: "active" as const,
             settledAt: null,
+            settledSince: null,
             unsettledAt: now,
           }
         : {}),

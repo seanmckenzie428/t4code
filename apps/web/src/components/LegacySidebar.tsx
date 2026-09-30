@@ -117,6 +117,7 @@ import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
 
 import { useThreadActions } from "../hooks/useThreadActions";
+import { ArchiveLifecycleNotice } from "./sidebar/ArchiveLifecycleNotice";
 import { projectEnvironment } from "../state/projects";
 import { threadEnvironment, useEnvironmentThread } from "../state/threads";
 import { useEnvironment, useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
@@ -946,6 +947,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           </div>
         </div>
       </div>
+      {thread.archiveLifecycle ? (
+        <div className="px-2">
+          <ArchiveLifecycleNotice key={thread.archiveLifecycle.operationId} thread={thread} />
+        </div>
+      ) : null}
     </SidebarMenuSubItem>
   );
 });

@@ -58,6 +58,8 @@ function makeThread(
     archivedAt: null,
     settledOverride: null,
     settledAt: null,
+    settledSince: null,
+    archiveLifecycle: null,
     session: null,
     latestUserMessageAt: null,
     hasPendingApprovals: false,

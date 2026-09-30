@@ -405,6 +405,8 @@ describe("streaming row projection", () => {
       archivedAt: null,
       settledOverride: null,
       settledAt: null,
+      settledSince: null,
+      archiveLifecycle: null,
       deletedAt: null,
       messages: [
         ...history.flatMap(({ user, assistant }) => [user, assistant]),

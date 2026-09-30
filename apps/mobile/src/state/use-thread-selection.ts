@@ -72,6 +72,8 @@ function threadDetailToShell(
     archivedAt: thread.archivedAt,
     settledOverride: thread.settledOverride,
     settledAt: thread.settledAt,
+    settledSince: thread.settledSince,
+    archiveLifecycle: thread.archiveLifecycle,
     unsettledAt: thread.unsettledAt,
     activeOrderKey: thread.activeOrderKey,
     autoSettleDisabledAt: thread.autoSettleDisabledAt,

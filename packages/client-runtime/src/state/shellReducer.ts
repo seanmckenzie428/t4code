@@ -1,6 +1,33 @@
 import * as Arr from "effect/Array";
 import type { OrchestrationShellSnapshot, OrchestrationShellStreamEvent } from "@t3tools/contracts";
 
+/** Archive queries follow lifecycle changes without refetching for message updates. */
+export function shellEventChangesArchive(
+  snapshot: OrchestrationShellSnapshot,
+  event: OrchestrationShellStreamEvent,
+): boolean {
+  if (event.sequence <= snapshot.snapshotSequence) return false;
+  if (event.kind === "project-removed") return true;
+  if (event.kind === "thread-removed") {
+    return (
+      event.archiveChanged === true ||
+      snapshot.threads.some((thread) => thread.id === event.threadId)
+    );
+  }
+  if (event.kind !== "thread-upserted") return false;
+  if (event.archiveChanged === true) return true;
+  const previous = snapshot.threads.find(
+    (thread) => thread.id === event.thread.id,
+  )?.archiveLifecycle;
+  const current = event.thread.archiveLifecycle;
+  return (
+    previous?.operationId !== current?.operationId ||
+    previous?.direction !== current?.direction ||
+    previous?.status !== current?.status ||
+    previous?.lastError !== current?.lastError
+  );
+}
+
 /**
  * Reduce a single shell stream event into an existing snapshot, returning a new
  * snapshot with the event's changes applied. This is a pure reducer that both

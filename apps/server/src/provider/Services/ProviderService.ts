@@ -29,16 +29,56 @@ import type {
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import type * as Stream from "effect/Stream";
+import {
+  ProviderDriverKind,
+  ProviderInstanceId as ProviderInstanceIdSchema,
+  ThreadId as ThreadIdSchema,
+} from "@t3tools/contracts";
 
 import type { ProviderServiceError } from "../Errors.ts";
-import type { ProviderAdapterCapabilities } from "./ProviderAdapter.ts";
+import type { ProviderAdapterCapabilities, ProviderNativeArchiveState } from "./ProviderAdapter.ts";
 import type { ProviderInstanceRoutingInfo } from "./ProviderAdapterRegistry.ts";
+
+export const ProviderThreadArchiveTarget = Schema.Struct({
+  threadId: ThreadIdSchema,
+  providerInstanceId: ProviderInstanceIdSchema,
+  provider: ProviderDriverKind,
+  resumeCursor: Schema.Unknown,
+  cwd: Schema.optional(Schema.String),
+  continuationKey: Schema.String,
+});
+export type ProviderThreadArchiveTarget = typeof ProviderThreadArchiveTarget.Type;
+
+export interface ProviderThreadArchiveStateResult {
+  readonly target: ProviderThreadArchiveTarget;
+  readonly state: ProviderNativeArchiveState;
+}
 
 /**
  * ProviderServiceShape - Service API for provider session and turn orchestration.
  */
 export interface ProviderServiceShape {
+  readonly getThreadArchiveTarget?: (
+    threadId: ThreadId,
+  ) => Effect.Effect<ProviderThreadArchiveTarget | undefined, ProviderServiceError>;
+  readonly readNativeArchiveStates?: (
+    targets: ReadonlyArray<ProviderThreadArchiveTarget>,
+  ) => Effect.Effect<ReadonlyArray<ProviderThreadArchiveStateResult>, ProviderServiceError>;
+  /** False means the captured binding no longer owns this native conversation. */
+  readonly setNativeThreadArchived?: (
+    target: ProviderThreadArchiveTarget,
+    archived: boolean,
+  ) => Effect.Effect<boolean, ProviderServiceError>;
+  readonly withThreadArchiveLock?: <A, E, R>(
+    threadId: ThreadId,
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>;
+  readonly registerThreadResumePreparation?: (
+    prepare: (threadId: ThreadId) => Effect.Effect<void, ProviderServiceError>,
+  ) => Effect.Effect<void>;
+
   /**
    * Start a provider session.
    */

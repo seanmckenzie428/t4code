@@ -13,6 +13,7 @@ import { isProviderSettingsEnvironmentAvailable } from "./ProviderSettingsPanel.
 import type { SettingsScopeSearch } from "./settingsScope";
 import {
   filterAvailableSettingsSearchItems,
+  getThreadAutoArchiveSearchAvailability,
   getThreadAutoSettlementSearchAvailability,
 } from "./settingsSearch";
 
@@ -59,6 +60,8 @@ export function useAvailableSettingsSearchItems(scopeSearch: SettingsScopeSearch
         }),
         hasThreadAutoSettlement:
           getThreadAutoSettlementSearchAvailability(environments).eligibleEnvironmentIds.length > 0,
+        hasThreadAutoArchive:
+          getThreadAutoArchiveSearchAvailability(environments).eligibleEnvironmentIds.length > 0,
       }),
     [
       canManageLocalBackend,

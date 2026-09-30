@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   DEFAULT_TERMINAL_ID,
+  TerminalArchiveAdmissionError,
   TerminalAttachInput,
   TerminalClearInput,
   TerminalCloseInput,
@@ -19,6 +20,26 @@ import { ProviderInstanceId } from "./providerInstance.ts";
 
 const encodeTerminalError = Schema.encodeUnknownSync(TerminalError);
 const decodeTerminalError = Schema.decodeUnknownSync(TerminalError);
+
+describe("TerminalArchiveAdmissionError", () => {
+  it("preserves the native archive failure message across the terminal error wire schema", () => {
+    const error = new TerminalArchiveAdmissionError({
+      threadId: "thread-1",
+      terminalId: DEFAULT_TERMINAL_ID,
+      message: "Could not restore the Codex conversation: provider unavailable",
+      cause: new Error("provider unavailable"),
+    });
+    const decoded = decodeTerminalError(encodeTerminalError(error));
+    expect(decoded).toBeInstanceOf(TerminalArchiveAdmissionError);
+    expect(decoded).toMatchObject({
+      _tag: "TerminalArchiveAdmissionError",
+      threadId: "thread-1",
+      terminalId: DEFAULT_TERMINAL_ID,
+      message: error.message,
+    });
+    expect(decoded.cause).toBeInstanceOf(Error);
+  });
+});
 
 function decodeSync<S extends Schema.Top>(schema: S, input: unknown): Schema.Schema.Type<S> {
   return Schema.decodeUnknownSync(schema as never)(input) as Schema.Schema.Type<S>;

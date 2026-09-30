@@ -65,6 +65,7 @@ export interface SettingsSearchItem {
    */
   readonly secondary?: boolean;
   readonly requiresThreadAutoSettlement?: boolean;
+  readonly requiresThreadAutoArchive?: boolean;
 }
 
 export interface SettingsSearchAvailability {
@@ -76,6 +77,7 @@ export interface SettingsSearchAvailability {
   readonly canManageLocalBackend: boolean;
   readonly isWslSettingsRowVisible: boolean;
   readonly hasThreadAutoSettlement: boolean;
+  readonly hasThreadAutoArchive?: boolean;
 }
 
 /**
@@ -296,6 +298,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "auto-settle-inactive-threads",
     searchTerms: ["thread timeout activity sidebar"],
     requiresThreadAutoSettlement: true,
+    scope: "project-defaults",
+  },
+  {
+    id: "auto-archive-settled-threads",
+    title: "Auto-archive after 7 days settled",
+    to: "/settings/general",
+    searchTerms: ["archive settled seven 7 days conversation history provider"],
+    requiresThreadAutoArchive: true,
     scope: "project-defaults",
   },
   {
@@ -866,6 +876,7 @@ export function getSettingsSearchTargetScope(targetId: string) {
         title: item.title,
         scope: item.scope ?? SETTINGS_CATEGORY_SCOPES[item.to],
         ...(item.requiresThreadAutoSettlement ? { requiresThreadAutoSettlement: true } : {}),
+        ...(item.requiresThreadAutoArchive ? { requiresThreadAutoArchive: true } : {}),
       }
     : null;
 }
@@ -875,7 +886,10 @@ interface AutoSettlementSearchEnvironment {
   readonly connection: { readonly phase: EnvironmentConnectionPhase };
   readonly serverConfig: {
     readonly environment: {
-      readonly capabilities: { readonly threadAutoSettlement?: boolean };
+      readonly capabilities: {
+        readonly threadAutoSettlement?: boolean;
+        readonly threadAutoArchive?: boolean;
+      };
     };
   } | null;
 }
@@ -885,14 +899,28 @@ export function getThreadAutoSettlementSearchAvailability(
   environments: readonly AutoSettlementSearchEnvironment[],
   scope?: Pick<ResolvedSettingsScope, "kind" | "environmentIds">,
 ) {
+  return getThreadAutomationSearchAvailability(environments, "threadAutoSettlement", scope);
+}
+
+export function getThreadAutoArchiveSearchAvailability(
+  environments: readonly AutoSettlementSearchEnvironment[],
+  scope?: Pick<ResolvedSettingsScope, "kind" | "environmentIds">,
+) {
+  return getThreadAutomationSearchAvailability(environments, "threadAutoArchive", scope);
+}
+
+function getThreadAutomationSearchAvailability(
+  environments: readonly AutoSettlementSearchEnvironment[],
+  capability: "threadAutoSettlement" | "threadAutoArchive",
+  scope?: Pick<ResolvedSettingsScope, "kind" | "environmentIds">,
+) {
   const connected = environments.filter(
     (environment) =>
       environment.connection.phase === "connected" && environment.serverConfig !== null,
   );
   const eligibleEnvironmentIds = connected
     .filter(
-      (environment) =>
-        environment.serverConfig?.environment.capabilities.threadAutoSettlement === true,
+      (environment) => environment.serverConfig?.environment.capabilities[capability] === true,
     )
     .map((environment) => environment.environmentId);
   const selected = connected.filter((environment) =>
@@ -971,7 +999,8 @@ export function filterAvailableSettingsSearchItems(
       (!item.localBackendManagementOnly || availability.canManageLocalBackend) &&
       (!item.localEnvironmentOnly || !availability.localEnvironmentDisabled) &&
       (!item.wslAvailableOnly || availability.isWslSettingsRowVisible) &&
-      (!item.requiresThreadAutoSettlement || availability.hasThreadAutoSettlement),
+      (!item.requiresThreadAutoSettlement || availability.hasThreadAutoSettlement) &&
+      (!item.requiresThreadAutoArchive || availability.hasThreadAutoArchive === true),
   );
 }
 

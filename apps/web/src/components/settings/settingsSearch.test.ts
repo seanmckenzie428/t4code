@@ -4,6 +4,7 @@ import { EnvironmentId } from "@t3tools/contracts";
 import {
   filterAvailableSettingsSearchItems,
   getSettingsSearchTargetScope,
+  getThreadAutoArchiveSearchAvailability,
   getThreadAutoSettlementSearchAvailability,
   isSettingsOverviewVisible,
   isSettingsSearchScopeAvailable,
@@ -175,6 +176,7 @@ describe("searchSettings", () => {
       "auto-settle-inactive-threads",
       "auto-settle-merged-threads",
       "days-before-auto-settle",
+      "auto-archive-settled-threads",
     ]);
     expect(available.map((item) => item.id).filter((id) => gatedIds.has(id))).toEqual([]);
   });
@@ -237,6 +239,25 @@ describe("searchSettings", () => {
       "auto-settle-merged-threads",
       "days-before-auto-settle",
     ]);
+    expect(searchSettings("archive seven days", available)).toEqual([]);
+  });
+
+  it("offers automatic archiving only when the separate capability is available", () => {
+    const available = filterAvailableSettingsSearchItems({
+      hasCloudPublicConfig: false,
+      hasEnvironment: true,
+      hasProviderSettingsEnvironment: true,
+      hasMacProviderSettingsEnvironment: false,
+      canManageLocalBackend: false,
+      isWslSettingsRowVisible: false,
+      hasThreadAutoSettlement: true,
+      hasThreadAutoArchive: true,
+    });
+    expect(searchSettings("archive seven days", available)[0]).toMatchObject({
+      id: "auto-archive-settled-threads",
+      to: "/settings/general",
+      scope: "project-defaults",
+    });
   });
 
   it("finds keybinding commands by label, command id, and default key", () => {
@@ -375,6 +396,14 @@ describe("settings search targets", () => {
     });
   });
 
+  it("retains the separate automatic archive capability requirement", () => {
+    expect(getSettingsSearchTargetScope("auto-archive-settled-threads")).toEqual({
+      title: "Auto-archive after 7 days settled",
+      scope: "project-defaults",
+      requiresThreadAutoArchive: true,
+    });
+  });
+
   it("treats device-local rows as reachable from every selection", () => {
     const setting = getSettingsSearchTargetScope("time-format")!;
     expect(setting).toEqual({ title: "Time format", scope: null });
@@ -425,12 +454,22 @@ describe("settings search targets", () => {
 });
 
 describe("auto-settlement search availability", () => {
-  function environment(id: string, { connected = true, loaded = true, supported = true } = {}) {
+  function environment(
+    id: string,
+    { connected = true, loaded = true, supported = true, archiveSupported = false } = {},
+  ) {
     return {
       environmentId: EnvironmentId.make(id),
       connection: { phase: connected ? ("connected" as const) : ("offline" as const) },
       serverConfig: loaded
-        ? { environment: { capabilities: { threadAutoSettlement: supported } } }
+        ? {
+            environment: {
+              capabilities: {
+                threadAutoSettlement: supported,
+                threadAutoArchive: archiveSupported,
+              },
+            },
+          }
         : null,
     };
   }
@@ -440,6 +479,29 @@ describe("auto-settlement search availability", () => {
   const offline = environment("offline", { connected: false });
   const loading = environment("loading", { loaded: false });
   const environments = [capable, unsupported, offline, loading];
+
+  it("offers a current archive environment while keeping settlement-only servers supported", () => {
+    const current = environment("current", { archiveSupported: true });
+    const selected = [capable, current];
+    const mixedScope = {
+      kind: "all" as const,
+      environmentIds: selected.map((entry) => entry.environmentId),
+    };
+    expect(getThreadAutoSettlementSearchAvailability(selected, mixedScope).isTargetAvailable).toBe(
+      true,
+    );
+    expect(getThreadAutoArchiveSearchAvailability(selected, mixedScope)).toEqual({
+      eligibleEnvironmentIds: [current.environmentId],
+      isTargetAvailable: false,
+    });
+    expect(
+      getThreadAutoArchiveSearchAvailability(selected, {
+        kind: "environment",
+        environmentIds: [current.environmentId],
+      }).isTargetAvailable,
+    ).toBe(true);
+    expect(getThreadAutoArchiveSearchAvailability([capable]).eligibleEnvironmentIds).toEqual([]);
+  });
 
   it("keeps results discoverable when one connected environment supports them", () => {
     const availability = getThreadAutoSettlementSearchAvailability(environments);

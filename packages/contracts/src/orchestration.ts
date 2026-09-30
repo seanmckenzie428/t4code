@@ -779,6 +779,14 @@ export const ThreadTitleRegeneration = Schema.Struct({
 });
 export type ThreadTitleRegeneration = typeof ThreadTitleRegeneration.Type;
 
+export const ThreadArchiveLifecycle = Schema.Struct({
+  operationId: TrimmedNonEmptyString,
+  direction: Schema.Literals(["archive", "restore"]),
+  status: Schema.Literals(["pending", "retrying"]),
+  lastError: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type ThreadArchiveLifecycle = typeof ThreadArchiveLifecycle.Type;
+
 /**
  * Legacy single-PR link. Still emitted as the thread's derived current pull
  * request (see `@t3tools/shared/threadPullRequests`) so clients from before
@@ -893,6 +901,11 @@ export const OrchestrationThread = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   settledAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  // Actual start of this continuous settled interval; settledAt retains the activity anchor.
+  settledSince: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  archiveLifecycle: Schema.NullOr(ThreadArchiveLifecycle).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   // When the thread last re-entered the active list (any thread.unsettled).
   // Anchors the active-list sort so an unsettled thread surfaces at the top
   // instead of sinking back to its creation-order slot. Cleared on settle.
@@ -988,6 +1001,10 @@ export const OrchestrationThreadShell = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
   settledAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  settledSince: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  archiveLifecycle: Schema.NullOr(ThreadArchiveLifecycle).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   // See OrchestrationThread.unsettledAt: last re-entry into the active list.
   unsettledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   snoozedUntil: Schema.optional(Schema.NullOr(IsoDateTime)),
@@ -1049,11 +1066,13 @@ export const OrchestrationShellStreamEvent = Schema.Union([
     kind: Schema.Literal("thread-upserted"),
     sequence: NonNegativeInt,
     thread: OrchestrationThreadShell,
+    archiveChanged: Schema.optionalKey(Schema.Boolean),
   }),
   Schema.Struct({
     kind: Schema.Literal("thread-removed"),
     sequence: NonNegativeInt,
     threadId: ThreadId,
+    archiveChanged: Schema.optionalKey(Schema.Boolean),
   }),
 ]);
 export type OrchestrationShellStreamEvent = typeof OrchestrationShellStreamEvent.Type;
@@ -1231,12 +1250,34 @@ const ThreadArchiveCommand = Schema.Struct({
   type: Schema.Literal("thread.archive"),
   commandId: CommandId,
   threadId: ThreadId,
+  expectedSettledSince: Schema.optional(IsoDateTime),
+  onlyIfIdle: Schema.optional(Schema.Boolean),
+});
+
+const ClientThreadArchiveCommand = Schema.Struct({
+  type: Schema.Literal("thread.archive"),
+  commandId: CommandId,
+  threadId: ThreadId,
 });
 
 const ThreadUnarchiveCommand = Schema.Struct({
   type: Schema.Literal("thread.unarchive"),
   commandId: CommandId,
   threadId: ThreadId,
+});
+
+const ThreadArchiveCancelCommand = Schema.Struct({
+  type: Schema.Literal("thread.archive.cancel"),
+  commandId: CommandId,
+  threadId: ThreadId,
+});
+
+const ThreadArchiveLifecycleSetCommand = Schema.Struct({
+  type: Schema.Literal("thread.archive-lifecycle.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  archiveLifecycle: Schema.NullOr(ThreadArchiveLifecycle),
+  expectedOperationId: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
 });
 
 const ThreadSettleCommand = Schema.Struct({
@@ -1523,6 +1564,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadDeleteCommand,
   ThreadArchiveCommand,
   ThreadUnarchiveCommand,
+  ThreadArchiveCancelCommand,
   ThreadSettleCommand,
   ThreadUnsettleCommand,
   ThreadSnoozeCommand,
@@ -1555,8 +1597,9 @@ export const ClientOrchestrationCommand = Schema.Union([
   ProjectDeleteCommand,
   ThreadCreateCommand,
   ThreadDeleteCommand,
-  ThreadArchiveCommand,
+  ClientThreadArchiveCommand,
   ThreadUnarchiveCommand,
+  ThreadArchiveCancelCommand,
   ThreadSettleCommand,
   ThreadUnsettleCommand,
   ThreadSnoozeCommand,
@@ -1750,6 +1793,7 @@ const ThreadPullRequestLinkSyncCommand = Schema.Struct({
 });
 
 const InternalOrchestrationCommand = Schema.Union([
+  ThreadArchiveLifecycleSetCommand,
   ThreadAutoSettleCommand,
   ThreadPullRequestSyncCommand,
   ThreadPullRequestLinkSyncCommand,
@@ -1786,6 +1830,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.deleted",
   "thread.archived",
   "thread.unarchived",
+  "thread.archive-lifecycle-set",
   "thread.settled",
   "thread.unsettled",
   "thread.snoozed",
@@ -1886,6 +1931,12 @@ export const ThreadArchivedPayload = Schema.Struct({
 
 export const ThreadUnarchivedPayload = Schema.Struct({
   threadId: ThreadId,
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadArchiveLifecycleSetPayload = Schema.Struct({
+  threadId: ThreadId,
+  archiveLifecycle: Schema.NullOr(ThreadArchiveLifecycle),
   updatedAt: IsoDateTime,
 });
 
@@ -2175,6 +2226,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.unarchived"),
     payload: ThreadUnarchivedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.archive-lifecycle-set"),
+    payload: ThreadArchiveLifecycleSetPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

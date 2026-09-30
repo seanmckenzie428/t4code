@@ -99,6 +99,8 @@ const THREAD_SHELL = {
   archivedAt: null,
   settledOverride: null,
   settledAt: null,
+  settledSince: null,
+  archiveLifecycle: null,
   pullRequests: [],
   session: null,
   latestUserMessageAt: null,

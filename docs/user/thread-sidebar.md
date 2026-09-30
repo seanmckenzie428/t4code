@@ -124,6 +124,23 @@ rules to connected environments that support shared settings. Offline environmen
 and older servers keep their previous values. Changing a rule does not reopen
 already settled threads.
 
+## Archive conversations
+
+Archive a thread to move it into **Settings → Archived threads**. Restoring it returns it
+to active work. For supported providers, archiving and restoring also update the original
+provider conversation; this currently supports Codex. Other providers archive in T4 only.
+Provider changes made outside T4 sync when the owning environment starts and about every
+five minutes while it runs. Remote clients use that environment's provider account.
+
+Enable **Auto-archive after 7 days settled** in **Settings → General** on web and desktop,
+or **Settings → Thread behavior** on mobile. It is off by default and can be overridden
+per project. The seven days must be uninterrupted. New activity or restoring a thread
+clears that period; settling it again starts a fresh seven days. Automatic archiving waits
+while agent or terminal work is active.
+
+If a provider update fails, the thread stays in its current list while T4 retries. Use
+**Retry** to try immediately or **Cancel** to stop the pending change.
+
 ## Link a pull request
 
 The server finds the PR for each unsettled thread's saved branch, even when your

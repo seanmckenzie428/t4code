@@ -1,10 +1,14 @@
 import { DEFAULT_SERVER_SETTINGS, EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { planAutoSettleSettingsSync } from "./autoSettleSettingsSync";
+import {
+  filterAutoSettleSettingsPatch,
+  planAutoSettleSettingsSync,
+} from "./autoSettleSettingsSync";
 
 const reference = {
   environmentId: EnvironmentId.make("reference"),
+  capabilities: { threadAutoArchive: true },
   settings: {
     ...DEFAULT_SERVER_SETTINGS,
     sidebarAutoSettleAfterDays: 7,
@@ -36,6 +40,7 @@ describe("auto-settle settings sync", () => {
     expect(plan.patch).toEqual({
       sidebarAutoSettleAfterDays: 7,
       sidebarAutoSettleOnMerge: true,
+      sidebarAutoArchiveSettled: false,
     });
   });
 
@@ -88,5 +93,53 @@ describe("auto-settle settings sync", () => {
     expect(planAutoSettleSettingsSync(projectReference, [otherCheckout]).mismatches).toEqual([
       otherCheckout,
     ]);
+  });
+
+  it("synchronizes an archive override independently of settlement thresholds", () => {
+    const target = {
+      environmentId: EnvironmentId.make("remote"),
+      label: "Remote",
+      capabilities: { threadAutoArchive: true },
+      settings: { ...reference.settings, sidebarAutoArchiveSettled: true },
+    };
+
+    const plan = planAutoSettleSettingsSync(reference, [target]);
+
+    expect(plan.mismatches).toEqual([target]);
+    expect(plan.patch.sidebarAutoArchiveSettled).toBe(false);
+  });
+
+  it("retains settlement sync with older servers while omitting unsupported archive writes", () => {
+    const target = {
+      environmentId: EnvironmentId.make("legacy"),
+      label: "Legacy",
+      capabilities: { threadAutoArchive: false },
+      settings: { ...reference.settings, sidebarAutoArchiveSettled: true },
+    };
+    expect(planAutoSettleSettingsSync(reference, [target]).mismatches).toEqual([]);
+    const settlementDrift = {
+      ...target,
+      settings: { ...target.settings, sidebarAutoSettleAfterDays: null },
+    };
+    const plan = planAutoSettleSettingsSync(reference, [settlementDrift]);
+    expect(plan.mismatches).toEqual([settlementDrift]);
+    expect(filterAutoSettleSettingsPatch(plan.patch, target.capabilities)).toEqual({
+      sidebarAutoSettleAfterDays: 7,
+      sidebarAutoSettleOnMerge: true,
+    });
+    expect(filterAutoSettleSettingsPatch({ sidebarAutoArchiveSettled: true })).toEqual({});
+  });
+
+  it("does not push a decoded archive default from a legacy reference to a current server", () => {
+    const legacyReference = { ...reference, capabilities: {} };
+    const target = {
+      environmentId: EnvironmentId.make("current"),
+      label: "Current",
+      capabilities: { threadAutoArchive: true },
+      settings: { ...reference.settings, sidebarAutoArchiveSettled: true },
+    };
+    const plan = planAutoSettleSettingsSync(legacyReference, [target]);
+    expect(plan.mismatches).toEqual([]);
+    expect(plan.patch).not.toHaveProperty("sidebarAutoArchiveSettled");
   });
 });

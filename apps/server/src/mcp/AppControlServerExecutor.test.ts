@@ -9,6 +9,8 @@ import {
   type OrchestrationCommand,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
+import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 
@@ -17,6 +19,7 @@ import { AppControlTerminalCommandRunner } from "./AppControlTerminalCommandRunn
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
+import { ThreadArchiveError, ThreadArchiveService } from "../orchestration/ThreadArchiveService.ts";
 
 const scope = {
   environmentId: EnvironmentId.make("environment-1"),
@@ -85,6 +88,90 @@ const terminalProjections = ProjectionSnapshotQuery.of({
       } as never),
     ),
 } as never);
+
+const makeArchiveService = (
+  dispatch: ThreadArchiveService["Service"]["dispatch"],
+  runWithWork: ThreadArchiveService["Service"]["runWithWork"] = (_threadId, work) => work,
+) =>
+  ThreadArchiveService.of({
+    dispatch,
+    prepareForWork: () => Effect.void,
+    runWithWork,
+    sweep: Effect.void,
+    reconcile: Effect.void,
+    start: () => Effect.void,
+    drain: Effect.void,
+  });
+
+for (const action of ["thread.archive", "thread.unarchive"] as const) {
+  it.effect(`waits for shared ${action} completion before returning an action receipt`, () =>
+    Effect.gen(function* () {
+      const entered = yield* Deferred.make<OrchestrationCommand>();
+      const finished = yield* Deferred.make<{ sequence: number }, ThreadArchiveError>();
+      let rawDispatchCount = 0;
+      const executor = yield* makeExecutor(() =>
+        Effect.sync(() => {
+          rawDispatchCount += 1;
+          return { sequence: 1 };
+        }),
+      ).pipe(
+        Effect.provideService(
+          ThreadArchiveService,
+          makeArchiveService((command) =>
+            Deferred.succeed(entered, command).pipe(Effect.andThen(Deferred.await(finished))),
+          ),
+        ),
+      );
+      const result = yield* Effect.forkChild(
+        executor.execute({
+          scope,
+          invocation: {
+            actionId: AppActionId.make(`${action}-native-pending`),
+            commandId: AppCommandId.make(action),
+            args: { threadId: "thread-1" },
+          },
+        }),
+      );
+      expect(yield* Deferred.await(entered)).toMatchObject({ type: action, threadId: "thread-1" });
+      expect(result.pollUnsafe()).toBeUndefined();
+      yield* Deferred.succeed(finished, { sequence: 47 });
+      expect(yield* Fiber.join(result)).toMatchObject({
+        status: "completed",
+        receipt: { sequence: 47, revision: 47 },
+      });
+      expect(rawDispatchCount).toBe(0);
+    }),
+  );
+
+  it.effect(`reports native ${action} failure instead of a successful engine receipt`, () =>
+    Effect.gen(function* () {
+      let rawDispatchCount = 0;
+      const executor = yield* makeExecutor(() =>
+        Effect.sync(() => {
+          rawDispatchCount += 1;
+          return { sequence: 1 };
+        }),
+      ).pipe(
+        Effect.provideService(
+          ThreadArchiveService,
+          makeArchiveService(() =>
+            Effect.fail(new ThreadArchiveError({ message: "Native provider unavailable" })),
+          ),
+        ),
+      );
+      const result = yield* executor.execute({
+        scope,
+        invocation: {
+          actionId: AppActionId.make(`${action}-native-failed`),
+          commandId: AppCommandId.make(action),
+          args: { threadId: "thread-1" },
+        },
+      });
+      expect(result).toMatchObject({ status: "failed", error: { code: "execution-failed" } });
+      expect(rawDispatchCount).toBe(0);
+    }),
+  );
+}
 
 it.effect("maps a rename to the canonical orchestration command and returns its receipt", () =>
   Effect.gen(function* () {
@@ -508,6 +595,95 @@ it.effect("runs a confirmed one-shot command in the current thread worktree", ()
       receipt: { idempotentReplay: false },
       result: { stdout: "opened\n", exitCode: 0 },
     });
+  }),
+);
+
+it.effect("waits for shared work admission before running a one-shot terminal command", () =>
+  Effect.gen(function* () {
+    const entered = yield* Deferred.make<ThreadId>();
+    const admitted = yield* Deferred.make<void, ThreadArchiveError>();
+    let runCount = 0;
+    const executor = yield* makeExecutor(() => Effect.die("Terminal work must not dispatch."), {
+      projections: terminalProjections,
+      terminalRun: () =>
+        Effect.sync(() => {
+          runCount += 1;
+          return {
+            cwd: "/workspace/project/.worktrees/thread-1",
+            stdout: "ready\n",
+            stderr: "",
+            exitCode: 0,
+            timedOut: false,
+            stdoutTruncated: false,
+            stderrTruncated: false,
+          };
+        }),
+    }).pipe(
+      Effect.provideService(
+        ThreadArchiveService,
+        makeArchiveService(
+          () => Effect.die("Terminal work must not dispatch."),
+          (threadId, work) =>
+            Deferred.succeed(entered, threadId).pipe(
+              Effect.andThen(Deferred.await(admitted)),
+              Effect.andThen(work),
+            ),
+        ),
+      ),
+    );
+    const result = yield* Effect.forkChild(
+      executor.execute({
+        scope,
+        invocation: {
+          actionId: AppActionId.make("terminal-waiting-for-native-restore"),
+          commandId: AppCommandId.make("terminal.command.run"),
+          args: { command: "pwd" },
+        },
+      }),
+    );
+    expect(yield* Deferred.await(entered)).toBe(scope.principal.threadId);
+    expect(runCount).toBe(0);
+    expect(result.pollUnsafe()).toBeUndefined();
+    yield* Deferred.succeed(admitted, undefined);
+    expect(yield* Fiber.join(result)).toMatchObject({
+      status: "completed",
+      result: { stdout: "ready\n", exitCode: 0 },
+    });
+    expect(runCount).toBe(1);
+  }),
+);
+
+it.effect("reports failed native work admission without running a one-shot terminal command", () =>
+  Effect.gen(function* () {
+    let runCount = 0;
+    const executor = yield* makeExecutor(() => Effect.die("Terminal work must not dispatch."), {
+      projections: terminalProjections,
+      terminalRun: () =>
+        Effect.sync(() => {
+          runCount += 1;
+        }).pipe(Effect.andThen(Effect.die("Failed work admission must not run terminal work."))),
+    }).pipe(
+      Effect.provideService(
+        ThreadArchiveService,
+        makeArchiveService(
+          () => Effect.die("Terminal work must not dispatch."),
+          () => Effect.fail(new ThreadArchiveError({ message: "Native restore failed" })),
+        ),
+      ),
+    );
+    const result = yield* executor.execute({
+      scope,
+      invocation: {
+        actionId: AppActionId.make("terminal-native-restore-failed"),
+        commandId: AppCommandId.make("terminal.command.run"),
+        args: { command: "pwd" },
+      },
+    });
+    expect(result).toMatchObject({
+      status: "failed",
+      error: { code: "execution-failed", message: "Native restore failed" },
+    });
+    expect(runCount).toBe(0);
   }),
 );
 

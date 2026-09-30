@@ -107,6 +107,8 @@ function thread(
     archivedAt: null,
     settledOverride: null,
     settledAt: null,
+    settledSince: null,
+    archiveLifecycle: null,
     session: null,
     latestUserMessageAt: NOW,
     hasPendingApprovals: false,

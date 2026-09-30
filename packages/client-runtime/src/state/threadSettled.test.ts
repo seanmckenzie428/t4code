@@ -160,6 +160,8 @@ function makeShell(input: {
     archivedAt: null,
     settledOverride: input.settledOverride ?? null,
     settledAt: input.settledOverride === "settled" ? NOW : null,
+    settledSince: null,
+    archiveLifecycle: null,
     session:
       input.sessionStatus === undefined
         ? null

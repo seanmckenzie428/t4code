@@ -502,6 +502,255 @@ function makeProviderServiceLayer(
   };
 }
 
+describe("native archive routing", () => {
+  const firstId = ProviderInstanceId.make("codex-archive-owner");
+  const secondId = ProviderInstanceId.make("codex-archive-other");
+  const first = makeFakeCodexAdapter();
+  const second = makeFakeCodexAdapter();
+  const firstRead = vi.fn<NonNullable<typeof first.adapter.nativeArchive>["readStates"]>(
+    (targets: Parameters<NonNullable<typeof first.adapter.nativeArchive>["readStates"]>[0]) =>
+      Effect.succeed(targets.map((target) => ({ target, state: "archived" as const }))),
+  );
+  const secondRead = vi.fn<NonNullable<typeof second.adapter.nativeArchive>["readStates"]>(
+    (targets: Parameters<NonNullable<typeof second.adapter.nativeArchive>["readStates"]>[0]) =>
+      Effect.succeed(targets.map((target) => ({ target, state: "active" as const }))),
+  );
+  const firstSet = vi.fn(() => Effect.void);
+  const secondSet = vi.fn(() => Effect.void);
+  const registry = makeStaticInstanceRegistry([
+    [
+      firstId,
+      { ...first.adapter, nativeArchive: { readStates: firstRead, setArchived: firstSet } },
+    ],
+    [
+      secondId,
+      { ...second.adapter, nativeArchive: { readStates: secondRead, setArchived: secondSet } },
+    ],
+  ]);
+  const { layer } = makeProviderServiceLayer({ registry });
+
+  layer("captures and groups stopped bindings through their owning instances", (it) => {
+    it.effect("reads native state without starting stopped provider sessions", () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+        const { getThreadArchiveTarget, readNativeArchiveStates } = provider;
+        if (!getThreadArchiveTarget || !readNativeArchiveStates)
+          throw new Error("Missing native archive API");
+        const targets = [];
+        for (const [suffix, instanceId] of [
+          ["one", firstId],
+          ["two", firstId],
+          ["three", secondId],
+        ] as const) {
+          const threadId = asThreadId(`archive-${suffix}`);
+          yield* directory.upsert({
+            threadId,
+            provider: CODEX_DRIVER,
+            providerInstanceId: instanceId,
+            status: "stopped",
+            resumeCursor: { threadId: `native-${suffix}` },
+            runtimePayload: { cwd: fixtureCwd(`archive-${suffix}`) },
+          });
+          const target = yield* getThreadArchiveTarget(threadId);
+          if (!target) throw new Error("Stopped binding lost archive target");
+          targets.push(target);
+        }
+        firstRead.mockClear();
+        secondRead.mockClear();
+        const results = yield* readNativeArchiveStates(targets);
+        assert.deepEqual(
+          results.map((result) => result.state),
+          ["archived", "archived", "active"],
+        );
+        assert.equal(firstRead.mock.calls.length, 1);
+        assert.equal(secondRead.mock.calls.length, 1);
+        assert.equal(firstRead.mock.calls[0]?.[0].length, 2);
+        assert.equal(first.startSession.mock.calls.length, 0);
+        assert.equal(second.startSession.mock.calls.length, 0);
+        assert.equal(targets[0]?.continuationKey, `codex:instance:${firstId}`);
+      }),
+    );
+
+    it.effect("rejects a captured target after its provider binding switches", () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+        const { getThreadArchiveTarget, setNativeThreadArchived, readNativeArchiveStates } =
+          provider;
+        if (!getThreadArchiveTarget || !setNativeThreadArchived || !readNativeArchiveStates)
+          throw new Error("Missing native archive API");
+        const threadId = asThreadId("archive-switched");
+        yield* directory.upsert({
+          threadId,
+          provider: CODEX_DRIVER,
+          providerInstanceId: firstId,
+          status: "stopped",
+          resumeCursor: { threadId: "native-original" },
+        });
+        const target = yield* getThreadArchiveTarget(threadId);
+        if (!target) throw new Error("Missing archive target");
+        firstSet.mockClear();
+        secondSet.mockClear();
+        yield* directory.upsert({
+          threadId,
+          provider: CODEX_DRIVER,
+          providerInstanceId: secondId,
+          resumeCursor: { threadId: "native-original" },
+        });
+        assert.equal(yield* setNativeThreadArchived(target, true), false);
+        assert.equal((yield* readNativeArchiveStates([target]))[0]?.state, "unknown");
+        assert.equal(firstSet.mock.calls.length, 0);
+        assert.equal(secondSet.mock.calls.length, 0);
+      }),
+    );
+
+    it.effect("keeps another native home observable when one provider probe fails", () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+        const { getThreadArchiveTarget, readNativeArchiveStates } = provider;
+        if (!getThreadArchiveTarget || !readNativeArchiveStates)
+          throw new Error("Missing native archive API");
+        const targets = [];
+        for (const [suffix, providerInstanceId] of [
+          ["failed-home", firstId],
+          ["healthy-home", secondId],
+        ] as const) {
+          const threadId = asThreadId(suffix);
+          yield* directory.upsert({
+            threadId,
+            provider: CODEX_DRIVER,
+            providerInstanceId,
+            status: "stopped",
+            resumeCursor: { threadId: `native-${suffix}` },
+          });
+          const target = yield* getThreadArchiveTarget(threadId);
+          if (!target) throw new Error("Missing archive target");
+          targets.push(target);
+        }
+        firstRead.mockImplementationOnce(() =>
+          Effect.fail(
+            new ProviderAdapterRequestError({
+              provider: "codex",
+              method: "thread/list",
+              detail: "isolated home unavailable",
+            }),
+          ),
+        );
+        const results = yield* readNativeArchiveStates(targets);
+        assert.deepEqual(
+          results.map((result) => result.state),
+          ["unknown", "active"],
+        );
+      }),
+    );
+
+    it.effect("prepares restoration before recovery and shares the lifecycle fence", () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+        const {
+          getThreadArchiveTarget,
+          setNativeThreadArchived,
+          withThreadArchiveLock,
+          registerThreadResumePreparation,
+        } = provider;
+        if (
+          !getThreadArchiveTarget ||
+          !setNativeThreadArchived ||
+          !withThreadArchiveLock ||
+          !registerThreadResumePreparation
+        )
+          throw new Error("Missing native archive API");
+        const threadId = asThreadId("archive-resume-fenced");
+        yield* directory.upsert({
+          threadId,
+          provider: CODEX_DRIVER,
+          providerInstanceId: firstId,
+          status: "stopped",
+          resumeCursor: { threadId: "native-resume" },
+        });
+        let restored = false;
+        yield* registerThreadResumePreparation((id) =>
+          Effect.gen(function* () {
+            const target = yield* getThreadArchiveTarget(id);
+            if (target) yield* setNativeThreadArchived(target, false);
+            restored = true;
+          }),
+        );
+        first.startSession.mockClear();
+        yield* withThreadArchiveLock(
+          threadId,
+          provider.sendTurn({ threadId, input: "continue", interactionMode: "default" }),
+        );
+        assert.equal(restored, true);
+        assert.equal(first.startSession.mock.calls.length, 1);
+        assert.equal(
+          first.startSession.mock.calls[0]?.[0].resumeCursor &&
+            encodeJson(first.startSession.mock.calls[0][0].resumeCursor),
+          encodeJson({ threadId: "native-resume" }),
+        );
+      }),
+    );
+  });
+
+  const sharedRegistry = {
+    ...registry,
+    getInstanceInfo: (instanceId: ProviderInstanceId) =>
+      registry.getInstanceInfo(instanceId).pipe(
+        Effect.map((info) => ({
+          ...info,
+          continuationIdentity: {
+            ...info.continuationIdentity,
+            continuationKey: "codex:home:/shared-native-home",
+          },
+        })),
+      ),
+  };
+  makeProviderServiceLayer({ registry: sharedRegistry }).layer(
+    "shared native archive namespace",
+    (it) => {
+      it.effect("scans one home once even when two configured instances own its threads", () =>
+        Effect.gen(function* () {
+          const provider = yield* ProviderService.ProviderService;
+          const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+          const { getThreadArchiveTarget, readNativeArchiveStates } = provider;
+          if (!getThreadArchiveTarget || !readNativeArchiveStates)
+            throw new Error("Missing native archive API");
+          const targets = [];
+          for (const [suffix, providerInstanceId] of [
+            ["shared-one", firstId],
+            ["shared-two", secondId],
+          ] as const) {
+            const threadId = asThreadId(suffix);
+            yield* directory.upsert({
+              threadId,
+              provider: CODEX_DRIVER,
+              providerInstanceId,
+              status: "stopped",
+              resumeCursor: { threadId: `native-${suffix}` },
+            });
+            const target = yield* getThreadArchiveTarget(threadId);
+            if (!target) throw new Error("Missing archive target");
+            targets.push(target);
+          }
+          firstRead.mockClear();
+          secondRead.mockClear();
+          const results = yield* readNativeArchiveStates(targets);
+          assert.deepEqual(
+            results.map((result) => result.state),
+            ["archived", "archived"],
+          );
+          assert.equal(firstRead.mock.calls.length, 1);
+          assert.equal(firstRead.mock.calls[0]?.[0].length, 2);
+          assert.equal(secondRead.mock.calls.length, 0);
+        }),
+      );
+    },
+  );
+});
+
 for (const [enabled, completed] of [
   [false, false],
   [true, false],

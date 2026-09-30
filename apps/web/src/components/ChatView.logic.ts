@@ -487,6 +487,8 @@ export function buildLocalDraftThread(
     archivedAt: null,
     settledOverride: null,
     settledAt: null,
+    settledSince: null,
+    archiveLifecycle: null,
     deletedAt: null,
     latestTurn: null,
     branch: draftThread.branch,

@@ -247,6 +247,11 @@ export interface ProjectionSnapshotQueryShape {
   /**
    * Read a single active thread shell row by id.
    */
+  /** Read one undeleted thread shell, including archived threads for restore operations. */
+  readonly getThreadArchiveShellById?: (
+    threadId: ThreadId,
+  ) => Effect.Effect<Option.Option<OrchestrationThreadShell>, ProjectionRepositoryError>;
+
   readonly getThreadShellById: (
     threadId: ThreadId,
   ) => Effect.Effect<Option.Option<OrchestrationThreadShell>, ProjectionRepositoryError>;

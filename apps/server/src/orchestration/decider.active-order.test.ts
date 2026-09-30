@@ -42,6 +42,8 @@ function makeReadModel(overrides: Partial<OrchestrationThread> = {}): Orchestrat
         archivedAt: null,
         settledOverride: null,
         settledAt: null,
+        settledSince: null,
+        archiveLifecycle: null,
         unsettledAt: null,
         activeOrderKey: null,
         snoozedUntil: null,

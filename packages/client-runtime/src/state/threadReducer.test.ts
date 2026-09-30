@@ -38,6 +38,8 @@ const baseThread: OrchestrationThread = {
   archivedAt: null,
   settledOverride: null,
   settledAt: null,
+  settledSince: null,
+  archiveLifecycle: null,
   pullRequests: [],
   deletedAt: null,
   messages: [],
@@ -178,6 +180,38 @@ describe("applyThreadDetailEvent", () => {
   });
 
   describe("thread.settled / thread.unsettled", () => {
+    it("uses server occurrence time for the continuous interval and preserves it on repeated settle", () => {
+      const firstOccurredAt = "2026-04-03T05:00:00.000Z";
+      const historicalActivityAt = "2026-03-01T05:00:00.000Z";
+      const settledEvent = {
+        ...baseEventFields,
+        sequence: 5,
+        occurredAt: firstOccurredAt,
+        aggregateKind: "thread" as const,
+        aggregateId: baseThread.id,
+        type: "thread.settled" as const,
+        payload: {
+          threadId: baseThread.id,
+          settledAt: historicalActivityAt,
+          updatedAt: firstOccurredAt,
+        },
+      };
+      const first = applyThreadDetailEvent(baseThread, settledEvent);
+      expect(first.kind).toBe("updated");
+      if (first.kind !== "updated") return;
+      expect(first.thread.settledSince).toBe(firstOccurredAt);
+      expect(first.thread.settledAt).toBe(historicalActivityAt);
+      const repeated = applyThreadDetailEvent(first.thread, {
+        ...settledEvent,
+        sequence: 6,
+        occurredAt: "2026-04-05T05:00:00.000Z",
+      });
+      expect(repeated.kind).toBe("updated");
+      if (repeated.kind === "updated") {
+        expect(repeated.thread.settledSince).toBe(firstOccurredAt);
+      }
+    });
+
     it("sets the settled override and timestamp", () => {
       const settledAt = "2026-04-01T05:00:00.000Z";
       const result = applyThreadDetailEvent(
@@ -201,6 +235,7 @@ describe("applyThreadDetailEvent", () => {
       if (result.kind === "updated") {
         expect(result.thread.settledOverride).toBe("settled");
         expect(result.thread.settledAt).toBe(settledAt);
+        expect(result.thread.settledSince).toBe(settledAt);
         expect(result.thread.activeOrderKey).toBeNull();
       }
     });
@@ -213,6 +248,7 @@ describe("applyThreadDetailEvent", () => {
         ...baseThread,
         settledOverride: "settled",
         settledAt: "2026-04-01T05:00:00.000Z",
+        settledSince: "2026-04-01T05:00:00.000Z",
       };
       const updatedAt = "2026-04-01T06:00:00.000Z";
       const result = applyThreadDetailEvent(settledThread, {
@@ -233,8 +269,32 @@ describe("applyThreadDetailEvent", () => {
       if (result.kind === "updated") {
         expect(result.thread.settledOverride).toBe(settledOverride);
         expect(result.thread.settledAt).toBeNull();
+        expect(result.thread.settledSince).toBeNull();
       }
     });
+  });
+
+  it("projects retry state without changing the thread activity timestamp", () => {
+    const archiveLifecycle = {
+      operationId: "archive-1",
+      direction: "archive" as const,
+      status: "retrying" as const,
+      lastError: "Provider offline",
+    };
+    const result = applyThreadDetailEvent(baseThread, {
+      ...baseEventFields,
+      sequence: 7,
+      occurredAt: "2026-04-08T05:00:00.000Z",
+      aggregateKind: "thread",
+      aggregateId: baseThread.id,
+      type: "thread.archive-lifecycle-set",
+      payload: { threadId: baseThread.id, archiveLifecycle, updatedAt: baseThread.updatedAt },
+    });
+    expect(result.kind).toBe("updated");
+    if (result.kind === "updated") {
+      expect(result.thread.archiveLifecycle).toEqual(archiveLifecycle);
+      expect(result.thread.updatedAt).toBe(baseThread.updatedAt);
+    }
   });
 
   describe("thread.pinned / thread.unpinned", () => {

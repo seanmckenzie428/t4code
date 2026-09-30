@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import type { OrchestrationShellSnapshot, OrchestrationShellStreamEvent } from "@t3tools/contracts";
 
-import { applyShellStreamEvent } from "./shellReducer.ts";
+import { applyShellStreamEvent, shellEventChangesArchive } from "./shellReducer.ts";
 
 const baseSnapshot: OrchestrationShellSnapshot = {
   snapshotSequence: 0,
@@ -38,6 +38,8 @@ const stubThread = {
   archivedAt: null,
   settledOverride: null,
   settledAt: null,
+  settledSince: null,
+  archiveLifecycle: null,
   pullRequests: [],
   latestUserMessageAt: null,
   hasPendingApprovals: false,
@@ -45,6 +47,75 @@ const stubThread = {
   hasActionableProposedPlan: false,
   session: null,
 } as const;
+
+describe("shell archive invalidation", () => {
+  const snapshot = { ...baseSnapshot, threads: [stubThread] };
+  it("ignores streaming updates and omitted quick-chat removals", () => {
+    expect(
+      shellEventChangesArchive(snapshot, {
+        kind: "thread-upserted",
+        sequence: 1,
+        thread: { ...stubThread, updatedAt: "2026-04-01T00:00:01.000Z" },
+      }),
+    ).toBe(false);
+    expect(
+      shellEventChangesArchive(snapshot, {
+        kind: "thread-removed",
+        sequence: 1,
+        threadId: ThreadId.make("quick-chat"),
+      }),
+    ).toBe(false);
+  });
+
+  it("refreshes an archived restore status even though its thread is absent from the live shell", () => {
+    expect(
+      shellEventChangesArchive(snapshot, {
+        kind: "thread-removed",
+        sequence: 1,
+        threadId: ThreadId.make("archived"),
+        archiveChanged: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("refreshes when lifecycle status changes, while identical decoded summaries stay quiet", () => {
+    const archiveLifecycle = {
+      operationId: "operation",
+      direction: "archive" as const,
+      status: "pending" as const,
+      lastError: null,
+    };
+    const pending = { ...snapshot, threads: [{ ...stubThread, archiveLifecycle }] };
+    expect(
+      shellEventChangesArchive(pending, {
+        kind: "thread-upserted",
+        sequence: 1,
+        thread: { ...stubThread, archiveLifecycle: { ...archiveLifecycle } },
+      }),
+    ).toBe(false);
+    expect(
+      shellEventChangesArchive(pending, {
+        kind: "thread-upserted",
+        sequence: 1,
+        thread: {
+          ...stubThread,
+          archiveLifecycle: { ...archiveLifecycle, status: "retrying", lastError: "offline" },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it("refreshes when an archive is restored and ignores already-applied events", () => {
+    const event = {
+      kind: "thread-upserted" as const,
+      sequence: 1,
+      thread: stubThread,
+      archiveChanged: true,
+    };
+    expect(shellEventChangesArchive(baseSnapshot, event)).toBe(true);
+    expect(shellEventChangesArchive({ ...baseSnapshot, snapshotSequence: 1 }, event)).toBe(false);
+  });
+});
 
 describe("applyShellStreamEvent", () => {
   it("ignores stale project upserts without mutating the snapshot", () => {

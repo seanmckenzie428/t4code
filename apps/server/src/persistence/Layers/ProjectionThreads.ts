@@ -16,6 +16,7 @@ import {
   ModelSelection,
   OrchestrationWorkspaceBinding,
   ThreadLinkedPullRequest,
+  ThreadArchiveLifecycle,
   ThreadTitleState,
 } from "@t3tools/contracts";
 
@@ -26,6 +27,7 @@ const ProjectionThreadDbRow = ProjectionThread.mapFields(
     titleState: Schema.NullOr(Schema.fromJsonString(ThreadTitleState)),
     linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
     branchPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
+    archiveLifecycle: Schema.NullOr(Schema.fromJsonString(ThreadArchiveLifecycle)),
   }),
 );
 
@@ -56,6 +58,8 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           archived_at,
           settled_override,
           settled_at,
+          settled_since,
+          archive_lifecycle_json,
           unsettled_at,
           snoozed_until,
           snoozed_at,
@@ -91,6 +95,8 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.archivedAt},
           ${row.settledOverride},
           ${row.settledAt},
+          ${row.settledSince ?? null},
+          ${row.archiveLifecycle == null ? null : JSON.stringify(row.archiveLifecycle)},
           ${row.unsettledAt},
           ${row.snoozedUntil},
           ${row.snoozedAt},
@@ -126,6 +132,8 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           archived_at = excluded.archived_at,
           settled_override = excluded.settled_override,
           settled_at = excluded.settled_at,
+          settled_since = excluded.settled_since,
+          archive_lifecycle_json = excluded.archive_lifecycle_json,
           unsettled_at = excluded.unsettled_at,
           snoozed_until = excluded.snoozed_until,
           snoozed_at = excluded.snoozed_at,
@@ -168,6 +176,8 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           archived_at AS "archivedAt",
           settled_override AS "settledOverride",
           settled_at AS "settledAt",
+          settled_since AS "settledSince",
+          archive_lifecycle_json AS "archiveLifecycle",
           unsettled_at AS "unsettledAt",
           snoozed_until AS "snoozedUntil",
           snoozed_at AS "snoozedAt",

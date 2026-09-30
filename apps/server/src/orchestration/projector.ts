@@ -33,6 +33,7 @@ import {
   ProjectMetaUpdatedPayload,
   ThreadActivityAppendedPayload,
   ThreadArchivedPayload,
+  ThreadArchiveLifecycleSetPayload,
   ThreadCreatedPayload,
   ThreadDeletedPayload,
   ThreadInteractionModeSetPayload,
@@ -463,6 +464,8 @@ export function projectEvent(
             archivedAt: null,
             settledOverride: null,
             settledAt: null,
+            settledSince: null,
+            archiveLifecycle: null,
             unsettledAt: null,
             activeOrderKey: null,
             autoSettleDisabledAt: null,
@@ -520,18 +523,41 @@ export function projectEvent(
         })),
       );
 
-    case "thread.settled":
-      return decodeForEvent(ThreadSettledPayload, event.payload, event.type, "payload").pipe(
+    case "thread.archive-lifecycle-set":
+      return decodeForEvent(
+        ThreadArchiveLifecycleSetPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
         Effect.map((payload) => ({
           ...nextBase,
           threads: updateThread(nextBase.threads, payload.threadId, {
-            settledOverride: "settled",
-            settledAt: payload.settledAt,
-            unsettledAt: null,
-            activeOrderKey: null,
+            archiveLifecycle: payload.archiveLifecycle,
             updatedAt: payload.updatedAt,
           }),
         })),
+      );
+
+    case "thread.settled":
+      return decodeForEvent(ThreadSettledPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const existing = nextBase.threads.find((thread) => thread.id === payload.threadId);
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              settledOverride: "settled",
+              settledAt: payload.settledAt,
+              settledSince:
+                existing?.settledOverride === "settled"
+                  ? (existing.settledSince ?? event.occurredAt)
+                  : event.occurredAt,
+              unsettledAt: null,
+              activeOrderKey: null,
+              updatedAt: payload.updatedAt,
+            }),
+          };
+        }),
       );
 
     case "thread.unsettled":
@@ -543,6 +569,7 @@ export function projectEvent(
             threads: updateThread(nextBase.threads, payload.threadId, {
               settledOverride: payload.reason === "user" ? "active" : null,
               settledAt: null,
+              settledSince: null,
               // Re-entry stamp for active-list ordering. A thread already
               // pinned active keeps its stamp: the activity reset that clears
               // the pin is not a re-entry and must not reorder the list.

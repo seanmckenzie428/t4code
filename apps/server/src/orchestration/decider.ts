@@ -497,12 +497,34 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.archive": {
-      yield* requireThreadNotArchived({
+      const thread = yield* requireThreadNotArchived({
         readModel,
         command,
         threadId: command.threadId,
       });
       const occurredAt = yield* nowIso;
+      if (
+        command.expectedSettledSince !== undefined &&
+        (thread.settledOverride !== "settled" ||
+          thread.settledSince !== command.expectedSettledSince)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} changed before automatic archive`,
+        });
+      }
+      if (
+        (command.onlyIfIdle === true || command.expectedSettledSince !== undefined) &&
+        (thread.session?.status === "starting" ||
+          thread.session?.status === "running" ||
+          openRequests(thread).size > 0 ||
+          hasQueuedTurnStartForThread(thread, occurredAt))
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has live work and cannot be archived`,
+        });
+      }
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -537,6 +559,32 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "thread.archive.cancel":
+    case "thread.archive-lifecycle.set": {
+      const thread = yield* requireThread({ readModel, command, threadId: command.threadId });
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.archive-lifecycle-set",
+        payload: {
+          threadId: command.threadId,
+          archiveLifecycle:
+            command.type === "thread.archive.cancel"
+              ? null
+              : command.expectedOperationId !== undefined &&
+                  (thread.archiveLifecycle?.operationId ?? null) !== command.expectedOperationId
+                ? thread.archiveLifecycle
+                : command.archiveLifecycle,
+          updatedAt: thread.updatedAt,
         },
       };
     }

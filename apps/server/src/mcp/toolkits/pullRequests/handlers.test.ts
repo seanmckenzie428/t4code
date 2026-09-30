@@ -90,6 +90,8 @@ function makeThread(pullRequests: ReadonlyArray<ThreadPullRequestLink>): Orchest
     archivedAt: null,
     settledOverride: null,
     settledAt: null,
+    settledSince: null,
+    archiveLifecycle: null,
     session: null,
     latestUserMessageAt: "2026-08-20T00:00:00.000Z",
     hasPendingApprovals: false,

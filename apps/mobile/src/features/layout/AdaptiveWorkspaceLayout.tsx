@@ -68,6 +68,7 @@ interface AdaptiveWorkspaceContextValue {
   readonly fileInspector: FileInspectorPaneLayout;
   readonly primarySidebarSearchQuery: string;
   readonly selectThread: (thread: EnvironmentThreadShell) => void;
+  readonly onThreadArchived: (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) => void;
   readonly activateAuxiliaryPaneRole: (role: WorkspaceAuxiliaryPaneRole) => () => void;
   /**
    * Route screens hand their inspector pane content to the workspace so it
@@ -102,6 +103,7 @@ const AdaptiveWorkspaceContext = createContext<AdaptiveWorkspaceContextValue>({
   fileInspector: compactFileInspector,
   primarySidebarSearchQuery: "",
   selectThread: () => undefined,
+  onThreadArchived: () => undefined,
   activateAuxiliaryPaneRole: () => () => undefined,
   registerWorkspaceInspector: () => () => undefined,
   setPrimarySidebarSearchQuery: () => undefined,
@@ -534,6 +536,24 @@ function AdaptiveWorkspaceLayoutContent(
     [layout.usesSplitView, pathname, navigation, selectedThreadKey, props.workspaceRouteKey],
   );
 
+  const handleThreadArchived = useCallback(
+    (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) => {
+      const state = navigation.getState();
+      const currentRoute = state?.routes[state.index];
+      const params = currentRoute?.params;
+      if (
+        params &&
+        "environmentId" in params &&
+        "threadId" in params &&
+        params.environmentId === thread.environmentId &&
+        params.threadId === thread.id
+      ) {
+        navigation.navigate("Home");
+      }
+    },
+    [navigation],
+  );
+
   const contextValue = useMemo(
     () => ({
       layout,
@@ -541,6 +561,7 @@ function AdaptiveWorkspaceLayoutContent(
       fileInspector,
       primarySidebarSearchQuery,
       selectThread: handleSelectThread,
+      onThreadArchived: handleThreadArchived,
       activateAuxiliaryPaneRole,
       registerWorkspaceInspector,
       setPrimarySidebarSearchQuery,
@@ -553,6 +574,7 @@ function AdaptiveWorkspaceLayoutContent(
       activateAuxiliaryPaneRole,
       fileInspector,
       handleSelectThread,
+      handleThreadArchived,
       layout,
       panes,
       primarySidebarSearchQuery,

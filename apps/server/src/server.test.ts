@@ -359,6 +359,8 @@ const makeDefaultOrchestrationReadModel = () => {
         archivedAt: null,
         settledOverride: null,
         settledAt: null,
+        settledSince: null,
+        archiveLifecycle: null,
         latestTurn: null,
         messages: [],
         session: null,
@@ -391,6 +393,8 @@ const makeDefaultOrchestrationThreadShell = (
     archivedAt: null,
     settledOverride: null,
     settledAt: null,
+    settledSince: null,
+    archiveLifecycle: null,
     session: null,
     latestUserMessageAt: null,
     hasPendingApprovals: false,
@@ -8915,6 +8919,8 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             archivedAt: null,
             settledOverride: null,
             settledAt: null,
+            settledSince: null,
+            archiveLifecycle: null,
             latestTurn: null,
             messages: [],
             session: null,
@@ -10545,6 +10551,56 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(replayLimit, 50);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
+
+  for (const lifecycleChanged of [false, true]) {
+    it.effect(
+      `subscribeShell preserves archive invalidation through coalescing: ${lifecycleChanged}`,
+      () =>
+        Effect.gen(function* () {
+          const activity = makeLiveToolActivityEvent(3);
+          const archiveEvent: OrchestrationEvent = {
+            ...makeLiveToolActivityEvent(2),
+            type: "thread.archive-lifecycle-set",
+            payload: {
+              threadId: defaultThreadId,
+              archiveLifecycle: {
+                operationId: "restore-operation",
+                direction: "restore",
+                status: "retrying",
+                lastError: "Provider unavailable",
+              },
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          };
+          yield* buildAppUnderTest({
+            layers: {
+              orchestrationEngine: {
+                latestSequence: Effect.succeed(3),
+                readEvents: () =>
+                  Stream.fromIterable(lifecycleChanged ? [archiveEvent, activity] : [activity]),
+              },
+              projectionSnapshotQuery: { getThreadShellById: () => Effect.succeedNone },
+            },
+          });
+          const wsUrl = yield* getWsServerUrl("/ws");
+          const items = yield* Effect.scoped(
+            withWsRpcClient(wsUrl, (client) =>
+              client[ORCHESTRATION_WS_METHODS.subscribeShell]({
+                afterSequence: 0,
+                requestCompletionMarker: true,
+              }).pipe(
+                Stream.takeUntil((item) => item.kind === "synchronized"),
+                Stream.runCollect,
+              ),
+            ),
+          );
+          const removal = items.find((item) => item.kind === "thread-removed");
+          assertTrue(removal?.kind === "thread-removed");
+          assert.equal(removal.sequence, 3);
+          assert.equal(removal.archiveChanged === true, lifecycleChanged);
+        }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+    );
+  }
 
   it.effect("subscribeShell coalesces live bursts after the synchronization marker", () =>
     Effect.gen(function* () {

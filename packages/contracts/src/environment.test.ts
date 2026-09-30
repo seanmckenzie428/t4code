@@ -14,6 +14,21 @@ const descriptor = {
 } as const;
 
 describe("ExecutionEnvironmentDescriptor", () => {
+  it("requires separate advertised support for automatic archiving under version skew", () => {
+    const legacy = decodeDescriptor({
+      ...descriptor,
+      capabilities: { ...descriptor.capabilities, threadAutoSettlement: true },
+    });
+    expect(legacy.capabilities.threadAutoSettlement).toBe(true);
+    expect(legacy.capabilities.threadAutoArchive).toBeUndefined();
+    expect(
+      decodeDescriptor({
+        ...descriptor,
+        capabilities: { ...descriptor.capabilities, threadAutoArchive: true },
+      }).capabilities.threadAutoArchive,
+    ).toBe(true);
+  });
+
   it("requires an advertised required-worktree bootstrap capability", () => {
     expect(decodeDescriptor(descriptor).capabilities.requiredWorktreeBootstrap).toBeUndefined();
     expect(

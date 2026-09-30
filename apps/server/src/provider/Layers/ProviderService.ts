@@ -77,6 +77,8 @@ import {
   ProviderWorkspaceMissingError,
 } from "../Errors.ts";
 import type { ProviderAdapterShape } from "../Services/ProviderAdapter.ts";
+import type { ProviderServiceError } from "../Errors.ts";
+import { makeThreadArchiveLock } from "../threadArchiveLock.ts";
 import * as ProviderAdapterRegistry from "../Services/ProviderAdapterRegistry.ts";
 import * as ProviderService from "../Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.ts";
@@ -508,6 +510,96 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 
   const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistry;
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+  const withThreadArchiveLock = makeThreadArchiveLock();
+  let prepareThreadResume: (threadId: ThreadId) => Effect.Effect<void, ProviderServiceError> = () =>
+    Effect.void;
+  const registerThreadResumePreparation = (
+    prepare: (threadId: ThreadId) => Effect.Effect<void, ProviderServiceError>,
+  ) =>
+    Effect.sync(() => {
+      prepareThreadResume = prepare;
+    });
+  const getThreadArchiveTarget = Effect.fn("ProviderService.getThreadArchiveTarget")(function* (
+    threadId: ThreadId,
+  ) {
+    const binding = Option.getOrUndefined(yield* directory.getBinding(threadId));
+    if (!binding?.providerInstanceId || binding.resumeCursor == null) return undefined;
+    const adapter = Option.getOrUndefined(
+      yield* registry.getByInstance(binding.providerInstanceId).pipe(Effect.option),
+    );
+    if (!adapter?.nativeArchive || adapter.provider !== binding.provider) return undefined;
+    const info = Option.getOrUndefined(
+      yield* registry.getInstanceInfo(binding.providerInstanceId).pipe(Effect.option),
+    );
+    if (!info || info.driverKind !== binding.provider) return undefined;
+    const cwd = readPersistedCwd(binding.runtimePayload);
+    return {
+      threadId,
+      provider: binding.provider,
+      providerInstanceId: binding.providerInstanceId,
+      resumeCursor: binding.resumeCursor,
+      ...(cwd ? { cwd } : {}),
+      continuationKey: info.continuationIdentity.continuationKey,
+    } satisfies ProviderService.ProviderThreadArchiveTarget;
+  });
+  const archiveTargetIsCurrent = Effect.fn("ProviderService.archiveTargetIsCurrent")(function* (
+    target: ProviderService.ProviderThreadArchiveTarget,
+  ) {
+    const current = yield* getThreadArchiveTarget(target.threadId);
+    return (
+      current !== undefined &&
+      current.providerInstanceId === target.providerInstanceId &&
+      current.provider === target.provider &&
+      current.continuationKey === target.continuationKey &&
+      encodePromptJson(current.resumeCursor) === encodePromptJson(target.resumeCursor)
+    );
+  });
+  const readNativeArchiveStates = Effect.fn("ProviderService.readNativeArchiveStates")(function* (
+    targets: ReadonlyArray<ProviderService.ProviderThreadArchiveTarget>,
+  ) {
+    const states = new Map<
+      ProviderService.ProviderThreadArchiveTarget,
+      "active" | "archived" | "unknown"
+    >(targets.map((target) => [target, "unknown"]));
+    const groups = new Map<string, ProviderService.ProviderThreadArchiveTarget[]>();
+    for (const target of targets) {
+      if (!(yield* archiveTargetIsCurrent(target))) continue;
+      const namespace = encodePromptJson([target.provider, target.continuationKey]);
+      const group = groups.get(namespace) ?? [];
+      group.push(target);
+      groups.set(namespace, group);
+    }
+    for (const group of groups.values()) {
+      const owner = group[0];
+      if (!owner) continue;
+      const adapter = yield* registry.getByInstance(owner.providerInstanceId);
+      if (!adapter.nativeArchive) continue;
+      const results = yield* adapter.nativeArchive.readStates(group).pipe(
+        Effect.catch((cause) =>
+          Effect.logWarning("native archive state read failed", {
+            providerInstanceId: owner.providerInstanceId,
+            cause,
+          }).pipe(Effect.as(group.map((target) => ({ target, state: "unknown" as const })))),
+        ),
+      );
+      for (const target of group) {
+        if (!(yield* archiveTargetIsCurrent(target))) continue;
+        const result = results.find((result) => result.target.threadId === target.threadId);
+        if (result) states.set(target, result.state);
+      }
+    }
+    return targets.map((target) => ({ target, state: states.get(target) ?? "unknown" }));
+  });
+  const setNativeThreadArchived = Effect.fn("ProviderService.setNativeThreadArchived")(
+    function* (target: ProviderService.ProviderThreadArchiveTarget, archived: boolean) {
+      if (!(yield* archiveTargetIsCurrent(target))) return false;
+      const adapter = yield* registry.getByInstance(target.providerInstanceId);
+      if (!adapter.nativeArchive) return false;
+      yield* adapter.nativeArchive.setArchived(target, archived);
+      return yield* archiveTargetIsCurrent(target);
+    },
+    (effect, target) => withThreadArchiveLock(target.threadId, effect),
+  );
   const serverSettings = yield* ServerSettings.ServerSettingsService;
   const projectionQuery = yield* Effect.serviceOption(
     ProjectionSnapshotQuery.ProjectionSnapshotQuery,
@@ -1300,142 +1392,149 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     () => reconcileInstanceSubscriptions,
   ).pipe(Effect.forkScoped);
 
-  const recoverSessionForThread = Effect.fn("recoverSessionForThread")(function* (input: {
-    readonly binding: ProviderSessionDirectory.ProviderRuntimeBinding;
-    readonly operation: string;
-  }) {
-    const bindingInstanceId = yield* requireBindingInstanceId(input.operation, input.binding);
-    yield* Effect.annotateCurrentSpan({
-      "provider.operation": "recover-session",
-      "provider.kind": input.binding.provider,
-      "provider.instance_id": bindingInstanceId,
-      "provider.thread_id": input.binding.threadId,
-    });
-    return yield* Effect.gen(function* () {
-      const adapter = yield* registry.getByInstance(bindingInstanceId);
-      const hasResumeCursor =
-        input.binding.resumeCursor !== null && input.binding.resumeCursor !== undefined;
-      const hasActiveSession = yield* adapter.hasSession(input.binding.threadId);
-      if (hasActiveSession) {
-        const activeSessions = yield* adapter.listSessions();
-        const existing = activeSessions.find(
-          (session) => session.threadId === input.binding.threadId,
-        );
-        if (existing) {
-          yield* upsertSessionBinding(
-            { ...existing, providerInstanceId: bindingInstanceId },
-            input.binding.threadId,
-          );
-          yield* analytics.record("provider.session.recovered", {
-            provider: existing.provider,
-            strategy: "adopt-existing",
-            hasResumeCursor: existing.resumeCursor !== undefined,
-          });
-          return { adapter, session: existing } as const;
-        }
-      }
-
-      if (!hasResumeCursor) {
-        return yield* toValidationError(
-          input.operation,
-          `Cannot recover thread '${input.binding.threadId}' because no provider resume state is persisted.`,
-        );
-      }
-
-      const persistedCwd = readPersistedCwd(input.binding.runtimePayload);
-      const persistedModelSelection = readPersistedModelSelection(input.binding.runtimePayload);
-
-      yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
-      const sessionProfile = yield* resolveSessionProfile(input.binding.threadId);
-      const resumed = yield* adapter
-        .startSession({
-          threadId: input.binding.threadId,
-          provider: input.binding.provider,
-          providerInstanceId: bindingInstanceId,
-          ...(persistedCwd ? { cwd: persistedCwd } : {}),
-          ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
-          ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
-          runtimeMode: input.binding.runtimeMode ?? "full-access",
-          ...(sessionProfile ? { sessionProfile } : {}),
-        })
-        .pipe(Effect.onError(() => clearMcpSession(input.binding.threadId)));
-      if (resumed.provider !== adapter.provider) {
-        yield* clearMcpSession(input.binding.threadId);
-        return yield* toValidationError(
-          input.operation,
-          `Adapter/provider mismatch while recovering thread '${input.binding.threadId}'. Expected '${adapter.provider}', received '${resumed.provider}'.`,
-        );
-      }
-
-      yield* upsertSessionBinding(
-        { ...resumed, providerInstanceId: bindingInstanceId },
-        input.binding.threadId,
-      );
-      yield* analytics.record("provider.session.recovered", {
-        provider: resumed.provider,
-        strategy: "resume-thread",
-        hasResumeCursor: resumed.resumeCursor !== undefined,
+  const recoverSessionForThread = Effect.fn("recoverSessionForThread")(
+    function* (input: {
+      readonly binding: ProviderSessionDirectory.ProviderRuntimeBinding;
+      readonly operation: string;
+    }) {
+      const bindingInstanceId = yield* requireBindingInstanceId(input.operation, input.binding);
+      yield* Effect.annotateCurrentSpan({
+        "provider.operation": "recover-session",
+        "provider.kind": input.binding.provider,
+        "provider.instance_id": bindingInstanceId,
+        "provider.thread_id": input.binding.threadId,
       });
-      return { adapter, session: resumed } as const;
-    }).pipe(
-      withMetrics({
-        counter: providerSessionsTotal,
-        attributes: providerMetricAttributes(input.binding.provider, {
-          operation: "recover",
+      return yield* Effect.gen(function* () {
+        yield* prepareThreadResume(input.binding.threadId);
+        const adapter = yield* registry.getByInstance(bindingInstanceId);
+        const hasResumeCursor =
+          input.binding.resumeCursor !== null && input.binding.resumeCursor !== undefined;
+        const hasActiveSession = yield* adapter.hasSession(input.binding.threadId);
+        if (hasActiveSession) {
+          const activeSessions = yield* adapter.listSessions();
+          const existing = activeSessions.find(
+            (session) => session.threadId === input.binding.threadId,
+          );
+          if (existing) {
+            yield* upsertSessionBinding(
+              { ...existing, providerInstanceId: bindingInstanceId },
+              input.binding.threadId,
+            );
+            yield* analytics.record("provider.session.recovered", {
+              provider: existing.provider,
+              strategy: "adopt-existing",
+              hasResumeCursor: existing.resumeCursor !== undefined,
+            });
+            return { adapter, session: existing } as const;
+          }
+        }
+
+        if (!hasResumeCursor) {
+          return yield* toValidationError(
+            input.operation,
+            `Cannot recover thread '${input.binding.threadId}' because no provider resume state is persisted.`,
+          );
+        }
+
+        const persistedCwd = readPersistedCwd(input.binding.runtimePayload);
+        const persistedModelSelection = readPersistedModelSelection(input.binding.runtimePayload);
+
+        yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
+        const sessionProfile = yield* resolveSessionProfile(input.binding.threadId);
+        const resumed = yield* adapter
+          .startSession({
+            threadId: input.binding.threadId,
+            provider: input.binding.provider,
+            providerInstanceId: bindingInstanceId,
+            ...(persistedCwd ? { cwd: persistedCwd } : {}),
+            ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
+            ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
+            runtimeMode: input.binding.runtimeMode ?? "full-access",
+            ...(sessionProfile ? { sessionProfile } : {}),
+          })
+          .pipe(Effect.onError(() => clearMcpSession(input.binding.threadId)));
+        if (resumed.provider !== adapter.provider) {
+          yield* clearMcpSession(input.binding.threadId);
+          return yield* toValidationError(
+            input.operation,
+            `Adapter/provider mismatch while recovering thread '${input.binding.threadId}'. Expected '${adapter.provider}', received '${resumed.provider}'.`,
+          );
+        }
+
+        yield* upsertSessionBinding(
+          { ...resumed, providerInstanceId: bindingInstanceId },
+          input.binding.threadId,
+        );
+        yield* analytics.record("provider.session.recovered", {
+          provider: resumed.provider,
+          strategy: "resume-thread",
+          hasResumeCursor: resumed.resumeCursor !== undefined,
+        });
+        return { adapter, session: resumed } as const;
+      }).pipe(
+        withMetrics({
+          counter: providerSessionsTotal,
+          attributes: providerMetricAttributes(input.binding.provider, {
+            operation: "recover",
+          }),
         }),
-      }),
-    );
-  });
-
-  const resolveRoutableSession = Effect.fn("resolveRoutableSession")(function* (input: {
-    readonly threadId: ThreadId;
-    readonly operation: string;
-    readonly allowRecovery: boolean;
-  }) {
-    const bindingOption = yield* directory.getBinding(input.threadId);
-    const binding = Option.getOrUndefined(bindingOption);
-    if (!binding) {
-      return yield* toValidationError(
-        input.operation,
-        `Cannot route thread '${input.threadId}' because no persisted provider binding exists.`,
       );
-    }
-    const instanceId = yield* requireBindingInstanceId(input.operation, binding);
-    const adapter = yield* registry.getByInstance(instanceId);
+    },
+    (effect, input) => withThreadArchiveLock(input.binding.threadId, effect),
+  );
 
-    const hasRequestedSession = yield* adapter.hasSession(input.threadId);
-    if (hasRequestedSession) {
+  const resolveRoutableSession = Effect.fn("resolveRoutableSession")(
+    function* (input: {
+      readonly threadId: ThreadId;
+      readonly operation: string;
+      readonly allowRecovery: boolean;
+    }) {
+      const bindingOption = yield* directory.getBinding(input.threadId);
+      const binding = Option.getOrUndefined(bindingOption);
+      if (!binding) {
+        return yield* toValidationError(
+          input.operation,
+          `Cannot route thread '${input.threadId}' because no persisted provider binding exists.`,
+        );
+      }
+      const instanceId = yield* requireBindingInstanceId(input.operation, binding);
+      const adapter = yield* registry.getByInstance(instanceId);
+
+      const hasRequestedSession = yield* adapter.hasSession(input.threadId);
+      if (hasRequestedSession) {
+        return {
+          adapter,
+          instanceId,
+          threadId: input.threadId,
+          runtimeMode: binding.runtimeMode,
+          isActive: true,
+        } as const;
+      }
+
+      if (!input.allowRecovery) {
+        return {
+          adapter,
+          instanceId,
+          threadId: input.threadId,
+          runtimeMode: binding.runtimeMode,
+          isActive: false,
+        } as const;
+      }
+
+      const recovered = yield* recoverSessionForThread({
+        binding,
+        operation: input.operation,
+      });
       return {
-        adapter,
+        adapter: recovered.adapter,
         instanceId,
         threadId: input.threadId,
-        runtimeMode: binding.runtimeMode,
+        runtimeMode: recovered.session.runtimeMode,
         isActive: true,
       } as const;
-    }
-
-    if (!input.allowRecovery) {
-      return {
-        adapter,
-        instanceId,
-        threadId: input.threadId,
-        runtimeMode: binding.runtimeMode,
-        isActive: false,
-      } as const;
-    }
-
-    const recovered = yield* recoverSessionForThread({
-      binding,
-      operation: input.operation,
-    });
-    return {
-      adapter: recovered.adapter,
-      instanceId,
-      threadId: input.threadId,
-      runtimeMode: recovered.session.runtimeMode,
-      isActive: true,
-    } as const;
-  });
+    },
+    (effect, input) => withThreadArchiveLock(input.threadId, effect),
+  );
 
   const stopStaleSessionsForThread = Effect.fn("stopStaleSessionsForThread")(function* (input: {
     readonly threadId: ThreadId;
@@ -1474,6 +1573,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 
   const startSession: ProviderServiceMethod<"startSession"> = Effect.fn("startSession")(
     function* (threadId, rawInput) {
+      yield* prepareThreadResume(threadId);
       const parsed = yield* decodeInputOrValidationError({
         operation: "ProviderService.startSession",
         schema: ProviderSessionStartInput,
@@ -1644,6 +1744,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         }),
       );
     },
+    (effect, threadId) => withThreadArchiveLock(threadId, effect),
   );
 
   const sendTurn: ProviderServiceMethod<"sendTurn"> = Effect.fn("sendTurn")(function* (rawInput) {
@@ -1652,6 +1753,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       schema: ProviderSendTurnInput,
       payload: rawInput,
     });
+    yield* withThreadArchiveLock(parsed.threadId, prepareThreadResume(parsed.threadId));
 
     const attachments = parsed.attachments ?? [];
     if (!parsed.input && attachments.length === 0 && parsed.continuation !== true) {
@@ -2191,6 +2293,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         }),
       );
     },
+    (effect, input) => withThreadArchiveLock(input.threadId, effect),
   );
 
   const listSessions: ProviderServiceMethod<"listSessions"> = Effect.fn("listSessions")(
@@ -2504,6 +2607,11 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   );
 
   return {
+    getThreadArchiveTarget,
+    readNativeArchiveStates,
+    setNativeThreadArchived,
+    withThreadArchiveLock,
+    registerThreadResumePreparation,
     startSession,
     sendTurn,
     compactThread,

@@ -36,6 +36,8 @@ const thread: OrchestrationThread = {
   archivedAt: null,
   settledOverride: null,
   settledAt: null,
+  settledSince: null,
+  archiveLifecycle: null,
   deletedAt: null,
   pullRequests: [],
   messages: Array.from({ length: 100 }, (_, index) => ({

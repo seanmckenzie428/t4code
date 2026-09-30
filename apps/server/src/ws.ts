@@ -72,7 +72,9 @@ import {
   EnvironmentAuthorizationError,
   ThreadId,
   type TerminalAttachStreamEvent,
+  type TerminalAttachInput,
   type TerminalError,
+  TerminalArchiveAdmissionError,
   type TerminalEvent,
   type TerminalMetadataStreamEvent,
   type PullRequestRef,
@@ -105,6 +107,8 @@ import {
 } from "./orchestration/Normalizer.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ThreadArchiveService } from "./orchestration/ThreadArchiveService.ts";
+import { OrchestrationCommandInvariantError } from "./orchestration/Errors.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
@@ -527,6 +531,7 @@ const makeWsRpcLayer = (
               Effect.orElseSucceed(() => null),
             );
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+      const archiveService = yield* Effect.serviceOption(ThreadArchiveService);
       const threadDeletionReactor = yield* ThreadDeletionReactor;
       const analytics = yield* AnalyticsService.AnalyticsService;
       // Every command dispatched on this connection carries the connecting
@@ -537,10 +542,66 @@ const makeWsRpcLayer = (
       const dispatchFromClient: OrchestrationEngine.OrchestrationEngineShape["dispatch"] = (
         command,
       ) =>
-        orchestrationEngine.dispatch(
-          command,
-          hasClientOrigin ? { origin: clientOrigin } : undefined,
-        );
+        Option.isSome(archiveService) &&
+        (command.type === "thread.archive" ||
+          command.type === "thread.unarchive" ||
+          command.type === "thread.archive.cancel" ||
+          command.type === "thread.unsettle" ||
+          command.type === "thread.turn.start" ||
+          command.type === "thread.pin")
+          ? archiveService.value
+              .dispatch(command, hasClientOrigin ? { origin: clientOrigin } : undefined)
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new OrchestrationCommandInvariantError({
+                      commandType: command.type,
+                      detail: cause.message,
+                      cause,
+                    }),
+                ),
+              )
+          : orchestrationEngine.dispatch(
+              command,
+              hasClientOrigin ? { origin: clientOrigin } : undefined,
+            );
+      const runTerminalWork = <A, R>(
+        threadId: ThreadId,
+        terminalId: string,
+        work: Effect.Effect<A, TerminalError, R>,
+      ) =>
+        Option.isSome(archiveService)
+          ? archiveService.value.runWithWork(threadId, work).pipe(
+              Effect.mapError((cause) =>
+                cause._tag === "ThreadArchiveError"
+                  ? new TerminalArchiveAdmissionError({
+                      threadId,
+                      terminalId,
+                      message: cause.message,
+                      cause,
+                    })
+                  : cause,
+              ),
+            )
+          : work;
+      const runTerminalAttach = <A, R>(
+        input: TerminalAttachInput,
+        work: (input: TerminalAttachInput) => Effect.Effect<A, TerminalError, R>,
+      ) => {
+        if (Option.isNone(archiveService)) return work(input);
+        const threadId = ThreadId.make(input.threadId);
+        const attach = Effect.gen(function* () {
+          const startsShell = yield* (
+            terminalManager.willStartOnAttach?.(input) ?? Effect.succeed(input.cwd !== undefined)
+          );
+          if (startsShell) return yield* runTerminalWork(threadId, input.terminalId, work(input));
+          // Cwd grants cold launch. A passive reconnect stays passive even if
+          // cleanup removes the shell between inspection and attachment.
+          const { cwd: _cwd, ...passiveInput } = input;
+          return yield* work(passiveInput);
+        });
+        return providerService.withThreadArchiveLock?.(threadId, attach) ?? attach;
+      };
       const recordClientCommandAnalytics = (command: OrchestrationCommand) => {
         switch (command.type) {
           case "thread.create":
@@ -588,8 +649,6 @@ const makeWsRpcLayer = (
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
-      const fileSystem = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
       const canReplayPersistedRange = Effect.fnUntraced(function* (
         afterSequence: number,
         headSequence: number,
@@ -872,6 +931,11 @@ const makeWsRpcLayer = (
         aggregateKind,
         aggregateId,
         sequence,
+        archiveChanged:
+          type === "thread.archive-lifecycle-set" ||
+          type === "thread.archived" ||
+          type === "thread.unarchived" ||
+          type === "thread.deleted",
       });
       type ShellEvent = ReturnType<typeof toShellEvent>;
 
@@ -894,14 +958,23 @@ const makeWsRpcLayer = (
               kind: "thread-removed" as const,
               sequence: event.sequence,
               threadId: ThreadId.make(event.aggregateId),
+              archiveChanged: true,
             });
           case "thread.unarchived":
-            return threadUpsertOrRemove(ThreadId.make(event.aggregateId), event.sequence);
+            return threadUpsertOrRemove(
+              ThreadId.make(event.aggregateId),
+              event.sequence,
+              event.archiveChanged,
+            );
           default:
             if (event.aggregateKind !== "thread") {
               return Effect.succeedNone;
             }
-            return threadUpsertOrRemove(ThreadId.make(event.aggregateId), event.sequence);
+            return threadUpsertOrRemove(
+              ThreadId.make(event.aggregateId),
+              event.sequence,
+              event.archiveChanged,
+            );
         }
       };
 
@@ -970,6 +1043,7 @@ const makeWsRpcLayer = (
       const threadUpsertOrRemove = (
         threadId: ThreadId,
         sequence: number,
+        archiveChanged = false,
       ): Effect.Effect<Option.Option<OrchestrationShellStreamEvent>, never, never> =>
         retryShellProjectionRead(
           "thread",
@@ -984,6 +1058,7 @@ const makeWsRpcLayer = (
                     kind: "thread-removed" as const,
                     sequence,
                     threadId,
+                    ...(archiveChanged ? { archiveChanged: true } : {}),
                   }),
                 onSome: (nextThread) =>
                   nextThread.kind === "assistant" || nextThread.kind === "quick"
@@ -991,11 +1066,13 @@ const makeWsRpcLayer = (
                         kind: "thread-removed" as const,
                         sequence,
                         threadId,
+                        ...(archiveChanged ? { archiveChanged: true } : {}),
                       })
                     : Option.some<OrchestrationShellStreamEvent>({
                         kind: "thread-upserted" as const,
                         sequence,
                         thread: nextThread,
+                        ...(archiveChanged ? { archiveChanged: true } : {}),
                       }),
               }),
             ),
@@ -1024,7 +1101,12 @@ const makeWsRpcLayer = (
           }
           const latestByAggregate = new Map<string, ShellEvent>();
           for (const event of events) {
-            latestByAggregate.set(`${event.aggregateKind}:${event.aggregateId}`, event);
+            const key = `${event.aggregateKind}:${event.aggregateId}`;
+            const previous = latestByAggregate.get(key);
+            latestByAggregate.set(key, {
+              ...event,
+              archiveChanged: event.archiveChanged || previous?.archiveChanged === true,
+            });
           }
           const survivors = Array.from(latestByAggregate.values()).sort(
             (left, right) => left.sequence - right.sequence,
@@ -1920,7 +2002,9 @@ const makeWsRpcLayer = (
               // Settlement cleanup is driven by thread.settled events in the
               // provider reactor, including settlements that have no client.
               const archiveCommand =
-                normalizedCommand.type === "thread.archive" ? normalizedCommand : undefined;
+                normalizedCommand.type === "thread.archive" && Option.isNone(archiveService)
+                  ? normalizedCommand
+                  : undefined;
               // Best-effort on purpose: the user's archive must not
               // fail because this cleanup read blipped, so a failed read
               // logs and skips the stop instead of propagating.
@@ -3470,24 +3554,42 @@ const makeWsRpcLayer = (
             { "rpc.aggregate": "review" },
           ),
         [WS_METHODS.terminalOpen]: (input) =>
-          observeRpcEffect(WS_METHODS.terminalOpen, terminalManager.open(input), {
-            "rpc.aggregate": "terminal",
-          }),
+          observeRpcEffect(
+            WS_METHODS.terminalOpen,
+            runTerminalWork(
+              ThreadId.make(input.threadId),
+              input.terminalId,
+              terminalManager.open(input),
+            ),
+            {
+              "rpc.aggregate": "terminal",
+            },
+          ),
         [WS_METHODS.terminalAttach]: (input) =>
           observeRpcStream(
             WS_METHODS.terminalAttach,
             Stream.callback<TerminalAttachStreamEvent, TerminalError>((queue) =>
               Effect.acquireRelease(
-                terminalManager.attachStream(input, (event) => Queue.offer(queue, event)),
+                runTerminalAttach(input, (attachInput) =>
+                  terminalManager.attachStream(attachInput, (event) => Queue.offer(queue, event)),
+                ),
                 (unsubscribe) => Effect.sync(unsubscribe),
               ),
             ),
             { "rpc.aggregate": "terminal" },
           ),
         [WS_METHODS.terminalWrite]: (input) =>
-          observeRpcEffect(WS_METHODS.terminalWrite, terminalManager.write(input), {
-            "rpc.aggregate": "terminal",
-          }),
+          observeRpcEffect(
+            WS_METHODS.terminalWrite,
+            runTerminalWork(
+              ThreadId.make(input.threadId),
+              input.terminalId,
+              terminalManager.write(input),
+            ),
+            {
+              "rpc.aggregate": "terminal",
+            },
+          ),
         [WS_METHODS.terminalResize]: (input) =>
           observeRpcEffect(WS_METHODS.terminalResize, terminalManager.resize(input), {
             "rpc.aggregate": "terminal",
@@ -3497,13 +3599,28 @@ const makeWsRpcLayer = (
             "rpc.aggregate": "terminal",
           }),
         [WS_METHODS.terminalRestart]: (input) =>
-          observeRpcEffect(WS_METHODS.terminalRestart, terminalManager.restart(input), {
-            "rpc.aggregate": "terminal",
-          }),
+          observeRpcEffect(
+            WS_METHODS.terminalRestart,
+            runTerminalWork(
+              ThreadId.make(input.threadId),
+              input.terminalId,
+              terminalManager.restart(input),
+            ),
+            {
+              "rpc.aggregate": "terminal",
+            },
+          ),
         [WS_METHODS.terminalClose]: (input) =>
-          observeRpcEffect(WS_METHODS.terminalClose, terminalManager.close(input), {
-            "rpc.aggregate": "terminal",
-          }),
+          observeRpcEffect(
+            WS_METHODS.terminalClose,
+            providerService.withThreadArchiveLock?.(
+              ThreadId.make(input.threadId),
+              terminalManager.close(input),
+            ) ?? terminalManager.close(input),
+            {
+              "rpc.aggregate": "terminal",
+            },
+          ),
         [WS_METHODS.subscribeTerminalEvents]: (_input) =>
           observeRpcStream(
             WS_METHODS.subscribeTerminalEvents,

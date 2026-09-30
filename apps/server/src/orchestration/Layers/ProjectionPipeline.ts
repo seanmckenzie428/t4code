@@ -635,6 +635,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             archivedAt: null,
             settledOverride: null,
             settledAt: null,
+            settledSince: null,
+            archiveLifecycle: null,
             unsettledAt: null,
             snoozedUntil: null,
             snoozedAt: null,
@@ -684,6 +686,19 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        case "thread.archive-lifecycle-set": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) return;
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            archiveLifecycle: event.payload.archiveLifecycle,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
         case "thread.settled": {
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
@@ -695,6 +710,10 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...existingRow.value,
             settledOverride: "settled",
             settledAt: event.payload.settledAt,
+            settledSince:
+              existingRow.value.settledOverride === "settled"
+                ? (existingRow.value.settledSince ?? event.occurredAt)
+                : event.occurredAt,
             unsettledAt: null,
             activeOrderKey: null,
             updatedAt: event.payload.updatedAt,
@@ -713,6 +732,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...existingRow.value,
             settledOverride: event.payload.reason === "user" ? "active" : null,
             settledAt: null,
+            settledSince: null,
             // Re-entry stamp for active-list ordering. A thread already pinned
             // active keeps its stamp: the activity reset that clears the pin
             // is not a re-entry and must not reorder the list.

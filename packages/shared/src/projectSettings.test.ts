@@ -105,6 +105,33 @@ describe("resolveProjectSettings", () => {
     expect(resolveProjectSettings(settings, otherProjectId).settings.defaultAutoPull).toBe(true);
   });
 
+  it("lets a project opt out of archiving and restores inheritance when reset", () => {
+    const settings = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      sidebarAutoArchiveSettled: true,
+      projectSettingsOverrides: {
+        [projectId]: { sidebarAutoArchiveSettled: false, sidebarAutoSettleOnMerge: false },
+      },
+    });
+    const overridden = resolveProjectSettings(settings, projectId);
+    expect(overridden.settings.sidebarAutoArchiveSettled).toBe(false);
+    expect(overridden.sources.sidebarAutoArchiveSettled).toBe("project");
+    expect(
+      resolveProjectSettings(settings, otherProjectId).settings.sidebarAutoArchiveSettled,
+    ).toBe(true);
+
+    const reset = applyServerSettingsPatch(settings, {
+      projectSettingsOverrides: {
+        [projectId]: clearProjectSettingsOverrides(settings, projectId, [
+          "sidebarAutoArchiveSettled",
+        ]),
+      },
+    });
+    const inherited = resolveProjectSettings(reset, projectId);
+    expect(inherited.settings.sidebarAutoArchiveSettled).toBe(true);
+    expect(inherited.sources.sidebarAutoArchiveSettled).toBe("environment");
+    expect(inherited.settings.sidebarAutoSettleOnMerge).toBe(false);
+  });
+
   it("keeps the environment text generation model when the override's provider is disabled", () => {
     const disabledSelection = createModelSelection(ProviderInstanceId.make("claudeAgent"), "opus");
     const settings = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {

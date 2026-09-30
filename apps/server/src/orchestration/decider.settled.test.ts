@@ -54,6 +54,8 @@ function makeReadModel(
         archivedAt,
         settledOverride,
         settledAt: settledOverride === "settled" ? SETTLED_AT : null,
+        settledSince: settledOverride === "settled" ? SETTLED_AT : null,
+        archiveLifecycle: null,
         snoozedUntil: lifecycle.snoozedUntil ?? null,
         snoozedAt: lifecycle.snoozedAt ?? (lifecycle.snoozedUntil != null ? SETTLED_AT : null),
         pinnedAt: lifecycle.pinnedAt ?? null,
@@ -82,6 +84,123 @@ function makeSession(status: OrchestrationSession["status"]): OrchestrationSessi
 }
 
 it.layer(NodeServices.layer)("settled thread decider", (it) => {
+  it.effect("archives only the same settled interval when its final guard is requested", () =>
+    Effect.gen(function* () {
+      const command = {
+        type: "thread.archive" as const,
+        commandId: CommandId.make("cmd-archive-guarded"),
+        threadId: ThreadId.make("thread-1"),
+        expectedSettledSince: SETTLED_AT,
+      };
+      const accepted = yield* decideOrchestrationCommand({
+        command,
+        readModel: makeReadModel("settled"),
+      });
+      expect((Array.isArray(accepted) ? accepted : [accepted])[0]?.type).toBe("thread.archived");
+      for (const readModel of [makeReadModel(null), makeReadModel("active")]) {
+        const error = yield* decideOrchestrationCommand({ command, readModel }).pipe(Effect.flip);
+        expect(error._tag).toBe("OrchestrationCommandInvariantError");
+      }
+      const changedInterval = yield* decideOrchestrationCommand({
+        command: { ...command, expectedSettledSince: NOW },
+        readModel: makeReadModel("settled"),
+      }).pipe(Effect.flip);
+      expect(changedInterval._tag).toBe("OrchestrationCommandInvariantError");
+    }),
+  );
+
+  it.effect("blocks guarded archive when live work appeared before the final commit", () =>
+    Effect.gen(function* () {
+      const command = {
+        type: "thread.archive" as const,
+        commandId: CommandId.make("cmd-archive-live"),
+        threadId: ThreadId.make("thread-1"),
+        onlyIfIdle: true,
+      };
+      const approval: OrchestrationThread["activities"][number] = {
+        id: EventId.make("approval-open"),
+        tone: "approval",
+        kind: "approval.requested",
+        summary: "Approval required",
+        payload: { requestId: "approval-1" },
+        turnId: null,
+        createdAt: NOW,
+      };
+      const queued: OrchestrationThread["messages"][number] = {
+        id: MessageId.make("queued-before-archive"),
+        role: "user",
+        text: "Continue",
+        turnId: null,
+        streaming: false,
+        createdAt: "1969-12-31T23:59:30.000Z",
+        updatedAt: "1969-12-31T23:59:30.000Z",
+      };
+      for (const readModel of [
+        makeReadModel("settled", null, makeSession("starting")),
+        makeReadModel("settled", null, makeSession("running")),
+        makeReadModel("settled", null, null, [approval]),
+        makeReadModel("settled", null, null, [], [queued]),
+      ]) {
+        const error = yield* decideOrchestrationCommand({ command, readModel }).pipe(Effect.flip);
+        expect(error._tag).toBe("OrchestrationCommandInvariantError");
+      }
+    }),
+  );
+
+  it.effect("records and cancels lifecycle status for archived threads without waking them", () =>
+    Effect.gen(function* () {
+      const readModel = makeReadModel("settled", NOW);
+      const result = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.archive-lifecycle.set",
+          commandId: CommandId.make("cmd-restore-retry"),
+          threadId: ThreadId.make("thread-1"),
+          archiveLifecycle: {
+            operationId: "restore-1",
+            direction: "restore",
+            status: "retrying",
+            lastError: "Provider unavailable",
+          },
+        },
+        readModel,
+      });
+      const event = (Array.isArray(result) ? result : [result])[0]!;
+      const retrying = yield* projectEvent(readModel, { ...event, sequence: 1 });
+      expect(retrying.threads[0]?.archiveLifecycle?.status).toBe("retrying");
+      expect(retrying.threads[0]?.archivedAt).toBe(NOW);
+      expect(retrying.threads[0]?.updatedAt).toBe(NOW);
+      const staleClear = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.archive-lifecycle.set",
+          commandId: CommandId.make("cmd-stale-restore-clear"),
+          threadId: ThreadId.make("thread-1"),
+          expectedOperationId: "superseded-restore",
+          archiveLifecycle: null,
+        },
+        readModel: retrying,
+      });
+      const stillRetrying = yield* projectEvent(retrying, {
+        ...(Array.isArray(staleClear) ? staleClear : [staleClear])[0]!,
+        sequence: 2,
+      });
+      expect(stillRetrying.threads[0]?.archiveLifecycle?.operationId).toBe("restore-1");
+      const cancellation = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.archive.cancel",
+          commandId: CommandId.make("cmd-cancel-restore"),
+          threadId: ThreadId.make("thread-1"),
+        },
+        readModel: stillRetrying,
+      });
+      const cancelled = yield* projectEvent(stillRetrying, {
+        ...(Array.isArray(cancellation) ? cancellation : [cancellation])[0]!,
+        sequence: 3,
+      });
+      expect(cancelled.threads[0]?.archiveLifecycle).toBeNull();
+      expect(cancelled.threads[0]?.archivedAt).toBe(NOW);
+    }),
+  );
+
   it.effect("preserves the activity stamp when automatically settling", () =>
     Effect.gen(function* () {
       const result = yield* decideOrchestrationCommand({
@@ -100,6 +219,10 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
       // updatedAt stays the command time so the row still moves on settle.
       expect(settled?.payload.updatedAt).toBe(settled?.occurredAt);
       expect(settled?.payload.updatedAt).not.toBe(SETTLED_AT);
+      if (settled) {
+        const projected = yield* projectEvent(makeReadModel(null), { ...settled, sequence: 1 });
+        expect(projected.threads[0]?.settledSince).toBe(settled.occurredAt);
+      }
     }),
   );
 
@@ -623,6 +746,7 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
       } as OrchestrationEvent);
       const thread = projected.threads[0]!;
       expect(thread.settledOverride).toBe("active");
+      expect(thread.settledSince).toBeNull();
       // The stamp is the decider's accept time: every thread created before
       // the un-settle anchors below it.
       expect(thread.unsettledAt).toBe(unsettled.occurredAt);

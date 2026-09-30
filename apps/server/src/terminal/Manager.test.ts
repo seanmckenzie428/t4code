@@ -452,6 +452,38 @@ it.layer(
     }),
   );
 
+  it.effect("classifies launching attaches without waking running or exited terminals", () =>
+    Effect.gen(function* () {
+      const { manager, ptyAdapter } = yield* createManager();
+      const willStart = manager.willStartOnAttach;
+      if (!willStart) throw new Error("Missing attach admission inspection");
+      const passive = { threadId: "thread-1", terminalId: DEFAULT_TERMINAL_ID };
+      assert.equal(yield* willStart(passive), false);
+      assert.equal(yield* willStart(openInput()), true);
+      assert.equal(yield* willStart({ ...openInput(), restartIfNotRunning: false }), true);
+      expect(ptyAdapter.spawnInputs).toHaveLength(0);
+
+      yield* manager.open(openInput());
+      assert.equal(yield* willStart(openInput()), false);
+      assert.equal(yield* willStart({ ...openInput(), restartIfNotRunning: true }), false);
+      const exited = yield* Deferred.make<void>();
+      const unsubscribe = yield* manager.subscribe((event) =>
+        event.type === "exited"
+          ? Deferred.succeed(exited, undefined).pipe(Effect.asVoid)
+          : Effect.void,
+      );
+      yield* Effect.addFinalizer(() => Effect.sync(unsubscribe));
+      const process = ptyAdapter.processes[0];
+      if (!process) throw new Error("Missing terminal process");
+      process.emitExit({ exitCode: 0, signal: 0 });
+      yield* Deferred.await(exited);
+      assert.equal(yield* willStart(openInput()), false);
+      assert.equal(yield* willStart({ ...openInput(), restartIfNotRunning: true }), true);
+      assert.equal(yield* willStart({ ...passive, restartIfNotRunning: true }), false);
+      expect(ptyAdapter.spawnInputs).toHaveLength(1);
+    }),
+  );
+
   it.effect("keeps attach streams live when a terminal id is closed and reopened", () =>
     Effect.gen(function* () {
       const { manager, ptyAdapter } = yield* createManager();

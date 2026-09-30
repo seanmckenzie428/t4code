@@ -66,6 +66,7 @@ const BaseTestLayer = makeProjectionPipelinePrefixedTestLayer("t3-projection-pip
 const encodeThreadLinkedPullRequest = Schema.encodeSync(
   Schema.fromJsonString(ThreadLinkedPullRequest),
 );
+const decodeArchiveLifecycleJson = Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-cursor-batch-")))(
   "OrchestrationProjectionPipeline cursor batches",
@@ -606,7 +607,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         metadata: {},
         payload: {
           threadId: ThreadId.make("thread-1"),
-          settledAt: "2026-01-01T00:00:01.000Z",
+          settledAt: "2025-12-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:01.000Z",
         },
       });
@@ -615,12 +616,14 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       const settledRows = yield* sql<{
         readonly settledOverride: string | null;
         readonly settledAt: string | null;
+        readonly settledSince: string | null;
         readonly unsettledAt: string | null;
         readonly activeOrderKey: string | null;
       }>`
         SELECT
           settled_override AS "settledOverride",
           settled_at AS "settledAt",
+          settled_since AS "settledSince",
           unsettled_at AS "unsettledAt",
           active_order_key AS "activeOrderKey"
         FROM projection_threads
@@ -629,11 +632,62 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       assert.deepEqual(settledRows, [
         {
           settledOverride: "settled",
-          settledAt: "2026-01-01T00:00:01.000Z",
+          settledAt: "2025-12-01T00:00:00.000Z",
+          settledSince: "2026-01-01T00:00:01.000Z",
           unsettledAt: null,
           activeOrderKey: null,
         },
       ]);
+
+      yield* eventStore.append({
+        type: "thread.settled",
+        eventId: EventId.make("evt-settle-duplicate"),
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        occurredAt: "2026-01-01T00:00:01.500Z",
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          settledAt: "2025-12-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:01.500Z",
+        },
+      });
+      const archiveLifecycle = {
+        operationId: "archive-1",
+        direction: "archive" as const,
+        status: "retrying" as const,
+        lastError: "Provider offline",
+      };
+      yield* eventStore.append({
+        type: "thread.archive-lifecycle-set",
+        eventId: EventId.make("evt-archive-retry"),
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        occurredAt: "2026-01-01T00:00:01.750Z",
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          archiveLifecycle,
+          updatedAt: "2026-01-01T00:00:01.500Z",
+        },
+      });
+      yield* projectionPipeline.bootstrap;
+      const retryRows = yield* sql`
+        SELECT settled_since AS "settledSince", archive_lifecycle_json AS "archiveLifecycle",
+          updated_at AS "updatedAt" FROM projection_threads WHERE thread_id = 'thread-1'
+      `;
+      assert.equal(retryRows[0]?.settledSince, "2026-01-01T00:00:01.000Z");
+      assert.equal(retryRows[0]?.updatedAt, "2026-01-01T00:00:01.500Z");
+      const projectedLifecycle = yield* decodeArchiveLifecycleJson(
+        String(retryRows[0]?.archiveLifecycle),
+      );
+      assert.deepEqual(projectedLifecycle, archiveLifecycle);
 
       yield* eventStore.append({
         type: "thread.unsettled",
@@ -656,12 +710,14 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       const unsettledRows = yield* sql<{
         readonly settledOverride: string | null;
         readonly settledAt: string | null;
+        readonly settledSince: string | null;
         readonly unsettledAt: string | null;
         readonly activeOrderKey: string | null;
       }>`
         SELECT
           settled_override AS "settledOverride",
           settled_at AS "settledAt",
+          settled_since AS "settledSince",
           unsettled_at AS "unsettledAt",
           active_order_key AS "activeOrderKey"
         FROM projection_threads
@@ -673,6 +729,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         {
           settledOverride: "active",
           settledAt: null,
+          settledSince: null,
           unsettledAt: "2026-01-01T00:00:02.000Z",
           activeOrderKey: null,
         },

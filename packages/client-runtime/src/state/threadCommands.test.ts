@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   CommandId,
   EnvironmentId,
+  MessageId,
   ORCHESTRATION_WS_METHODS,
   ProjectId,
   ProviderInstanceId,
@@ -46,6 +47,8 @@ const SNAPSHOT: OrchestrationShellSnapshot = {
       archivedAt: null,
       settledOverride: null,
       settledAt: null,
+      settledSince: null,
+      archiveLifecycle: null,
       pullRequests: [],
       session: null,
       latestUserMessageAt: null,
@@ -101,6 +104,59 @@ const makeHarness = Effect.fn("TestThreadCommands.makeHarness")(function* () {
 });
 
 describe("remote thread lifecycle commands", () => {
+  it.effect("sends and completes new work while archive is still awaiting a remote reply", () =>
+    Effect.gen(function* () {
+      const h = yield* makeHarness();
+      const archive = h.commands.archive.run(h.registry, {
+        environmentId: ENVIRONMENT_ID,
+        input: { threadId: THREAD_ID },
+      });
+      const pendingArchive = yield* Queue.take(h.requests);
+      const turn = h.commands.startTurn.run(h.registry, {
+        environmentId: ENVIRONMENT_ID,
+        input: {
+          threadId: THREAD_ID,
+          message: {
+            messageId: MessageId.make("work-during-archive"),
+            role: "user",
+            text: "Continue",
+            attachments: [],
+          },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+        },
+      });
+      const pendingTurn = yield* Queue.take(h.requests);
+      expect(pendingTurn.command.type).toBe("thread.turn.start");
+      yield* Deferred.succeed(pendingTurn.reply, { sequence: 2 });
+      expect((yield* Effect.promise(() => turn))._tag).toBe("Success");
+      yield* Deferred.succeed(pendingArchive.reply, { sequence: 3 });
+      expect((yield* Effect.promise(() => archive))._tag).toBe("Success");
+    }),
+  );
+
+  it.effect("sends archive cancellation while its archive request is still pending", () =>
+    Effect.gen(function* () {
+      const h = yield* makeHarness();
+      const archive = h.commands.archive.run(h.registry, {
+        environmentId: ENVIRONMENT_ID,
+        input: { threadId: THREAD_ID },
+      });
+      const pendingArchive = yield* Queue.take(h.requests);
+      expect(pendingArchive.command.type).toBe("thread.archive");
+      const cancel = h.commands.cancelArchive.run(h.registry, {
+        environmentId: ENVIRONMENT_ID,
+        input: { threadId: THREAD_ID },
+      });
+      const pendingCancel = yield* Queue.take(h.requests);
+      expect(pendingCancel.command.type).toBe("thread.archive.cancel");
+      yield* Deferred.succeed(pendingCancel.reply, { sequence: 2 });
+      expect((yield* Effect.promise(() => cancel))._tag).toBe("Success");
+      yield* Deferred.succeed(pendingArchive.reply, { sequence: 3 });
+      expect((yield* Effect.promise(() => archive))._tag).toBe("Success");
+    }),
+  );
+
   const actions = [
     ["settle", {}, { settledOverride: "settled", pinnedAt: null, snoozedUntil: null }],
     ["unsettle", { reason: "user" }, { settledOverride: "active", settledAt: null }],

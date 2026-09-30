@@ -20,7 +20,11 @@ import {
   AndroidSettingsEnvironmentFilter,
   SettingsEnvironmentFilterHeader,
 } from "./components/SettingsEnvironmentFilterHeader";
-import { planAutoSettleSettingsSync, type AutoSettleSettings } from "./autoSettleSettingsSync";
+import {
+  filterAutoSettleSettingsPatch,
+  planAutoSettleSettingsSync,
+  type AutoSettleSettings,
+} from "./autoSettleSettingsSync";
 import { useSettingsEnvironmentFilter } from "./settings-environment-filter";
 import {
   planMobileScopedSettingsClear,
@@ -54,7 +58,7 @@ export function SettingsThreadsRouteScreen() {
 const AUTO_SETTLE_DEFAULT_DAYS = DEFAULT_SERVER_SETTINGS.sidebarAutoSettleAfterDays ?? 3;
 
 /**
- * Mobile edits auto-settle defaults across selected capable targets.
+ * Mobile edits settlement and archive defaults across selected capable targets.
  */
 function AutoSettleSettingsRows() {
   const { selectedTargets, projectGroups, selectedProjectKey } = useSettingsEnvironmentFilter();
@@ -86,7 +90,19 @@ function AutoSettleSettingsRows() {
 
   const writeToAll = (patch: Partial<AutoSettleSettings>) => {
     if (writeInFlight.current) return;
-    const writes = planMobileScopedSettingsPatch(syncTargets, projectSelected, patch);
+    const writes = [true, false].flatMap((supportsArchive) => {
+      const targets = syncTargets.filter(
+        (target) =>
+          (target.environment.serverConfig.environment.capabilities.threadAutoArchive === true) ===
+          supportsArchive,
+      );
+      const supportedPatch = filterAutoSettleSettingsPatch(patch, {
+        threadAutoArchive: supportsArchive,
+      });
+      return Object.keys(supportedPatch).length === 0
+        ? []
+        : planMobileScopedSettingsPatch(targets, projectSelected, supportedPatch);
+    });
     if (writes.length === 0) return;
     writeInFlight.current = true;
     setPendingTargets(syncTargets);
@@ -107,12 +123,14 @@ function AutoSettleSettingsRows() {
       environmentId: reference.environment.environmentId,
       projectId: reference.projectId,
       settings: referenceSettings,
+      capabilities: reference.environment.serverConfig.environment.capabilities,
     },
     displayTargets.map((target) => ({
       environmentId: target.environment.environmentId,
       projectId: target.projectId,
       label: target.environment.label,
       settings: target.settings,
+      capabilities: target.environment.serverConfig.environment.capabilities,
     })),
   );
 
@@ -120,19 +138,24 @@ function AutoSettleSettingsRows() {
     (target) =>
       target.environment.serverConfig.environment.capabilities.projectSettingsOverrides === true,
   );
+  const supportsAutoArchive = displayTargets.every(
+    (target) => target.environment.serverConfig.environment.capabilities.threadAutoArchive === true,
+  );
   const disabled = pendingWrites > 0 || (projectSelected && !supportsProjectOverrides);
   const hasProjectOverrides =
     projectSelected &&
     syncTargets.some(
       (target) =>
         target.sources.sidebarAutoSettleOnMerge === "project" ||
-        target.sources.sidebarAutoSettleAfterDays === "project",
+        target.sources.sidebarAutoSettleAfterDays === "project" ||
+        target.sources.sidebarAutoArchiveSettled === "project",
     );
   const clearProjectOverrides = () => {
     if (writeInFlight.current) return;
     const writes = planMobileScopedSettingsClear(syncTargets, [
       "sidebarAutoSettleOnMerge",
       "sidebarAutoSettleAfterDays",
+      "sidebarAutoArchiveSettled",
     ]);
     if (writes.length === 0) return;
     writeInFlight.current = true;
@@ -191,10 +214,21 @@ function AutoSettleSettingsRows() {
           </View>
         ) : null}
       </SettingsSection>
+      {supportsAutoArchive ? (
+        <SettingsSection title="Archive">
+          <SettingsSwitchRow
+            icon="archivebox"
+            label="Auto-archive after 7 days settled"
+            value={referenceSettings.sidebarAutoArchiveSettled}
+            disabled={disabled}
+            onValueChange={(value) => writeToAll({ sidebarAutoArchiveSettled: value })}
+          />
+        </SettingsSection>
+      ) : null}
       {pendingWrites === 0 && mismatches.length > 0 ? (
         <SettingsSection title="Across environments">
           <View className="gap-3 p-4">
-            <Text className="text-base text-foreground">Auto-settle defaults differ</Text>
+            <Text className="text-base text-foreground">Thread defaults differ</Text>
             <Text className="text-sm text-foreground-muted">
               {mismatches.map((mismatch) => mismatch.label).join(", ")}
             </Text>
@@ -204,9 +238,7 @@ function AutoSettleSettingsRows() {
               onPress={() => writeToAll(autoSettlePatch)}
               className="self-start rounded-full bg-subtle px-4 py-2 active:opacity-70"
             >
-              <Text className="text-sm font-t3-medium text-foreground">
-                Apply auto-settle defaults
-              </Text>
+              <Text className="text-sm font-t3-medium text-foreground">Apply thread defaults</Text>
             </Pressable>
           </View>
         </SettingsSection>

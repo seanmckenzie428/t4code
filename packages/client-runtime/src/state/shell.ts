@@ -23,7 +23,7 @@ import { EnvironmentCacheStore } from "../platform/persistence.ts";
 import { subscribeDynamic } from "../rpc/client.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import { ShellSnapshotLoader } from "./shellSnapshotHttp.ts";
-import { applyShellStreamEvent } from "./shellReducer.ts";
+import { applyShellStreamEvent, shellEventChangesArchive } from "./shellReducer.ts";
 import { type EnvironmentCatalogState, enabledEnvironmentIds } from "./connections.ts";
 import { followStreamInEnvironment } from "./runtime.ts";
 
@@ -33,6 +33,7 @@ export interface EnvironmentShellState {
   readonly snapshot: Option.Option<OrchestrationShellSnapshot>;
   readonly status: EnvironmentShellStatus;
   readonly error: Option.Option<string>;
+  readonly archiveRevision?: number;
 }
 
 const EMPTY_SHELL_STATE: EnvironmentShellState = {
@@ -164,11 +165,15 @@ export const makeEnvironmentShellState = Effect.fn("EnvironmentShellState.make")
                   : snapshot,
             });
       if (nextSnapshot === null) continue;
+      const archiveChanged =
+        item.kind === "snapshot" ||
+        (Option.isSome(next.snapshot) && shellEventChangesArchive(next.snapshot.value, item));
       receivedSnapshot ||= item.kind === "snapshot";
       next = {
         snapshot: Option.some(nextSnapshot),
         status: waiting ? "synchronizing" : "live",
         error: Option.none(),
+        archiveRevision: (next.archiveRevision ?? 0) + (archiveChanged ? 1 : 0),
       };
     }
     yield* Ref.set(awaitingCompletion, waiting);
@@ -415,9 +420,16 @@ export function createEnvironmentShellAtoms<R, E>(
     ).pipe(Atom.withLabel(`environment-shell-state-value:${environmentId}`)),
   );
 
+  const archiveRevisionAtom = Atom.family((environmentId: EnvironmentId) =>
+    Atom.make((get) => get(stateValueAtom(environmentId)).archiveRevision ?? 0).pipe(
+      Atom.withLabel(`environment-archive-revision:${environmentId}`),
+    ),
+  );
+
   return {
     stateAtom,
     stateValueAtom,
+    archiveRevisionAtom,
   };
 }
 

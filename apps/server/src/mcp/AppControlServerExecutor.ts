@@ -35,6 +35,7 @@ import {
   validateDelegationTarget,
 } from "./AppControlDelegation.ts";
 import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
+import { ThreadArchiveService } from "../orchestration/ThreadArchiveService.ts";
 import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 
@@ -157,6 +158,7 @@ const decodeArgs = <S extends Schema.Top>(
 
 export const make = Effect.gen(function* AppControlServerExecutorMake() {
   const engine = yield* OrchestrationEngineService;
+  const archiveService = yield* Effect.serviceOption(ThreadArchiveService);
   const projections = yield* Effect.serviceOption(ProjectionSnapshotQuery);
   const settings = yield* Effect.serviceOption(ServerSettingsService);
   const terminalCommands = yield* AppControlTerminalCommandRunner;
@@ -207,14 +209,16 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
           controlError("forbidden", "Terminal commands require a current workspace project."),
         );
       }
-      const output = yield* terminalCommands
-        .run({
-          command: args.success.command,
-          allowedRoot: thread.success.value.worktreePath ?? project.success.value.workspaceRoot,
-          ...(args.success.cwd === undefined ? {} : { cwd: args.success.cwd }),
-        })
-        .pipe(Effect.result);
-      if (output._tag === "Failure") return failed(invocation, output.failure);
+      const work = terminalCommands.run({
+        command: args.success.command,
+        allowedRoot: thread.success.value.worktreePath ?? project.success.value.workspaceRoot,
+        ...(args.success.cwd === undefined ? {} : { cwd: args.success.cwd }),
+      });
+      const output = yield* Option.isSome(archiveService)
+        ? archiveService.value.runWithWork(scope.principal.threadId, work).pipe(Effect.result)
+        : work.pipe(Effect.result);
+      if (output._tag === "Failure")
+        return failed(invocation, controlError("execution-failed", output.failure.message));
       const receipt: AppActionReceipt = {
         receiptId: `app-control-receipt:${scope.providerSessionId}:${invocation.actionId}`,
         actionId: invocation.actionId,
@@ -698,7 +702,9 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
     }).pipe(Effect.result);
     if (command._tag === "Failure") return failed(invocation, command.failure);
 
-    const dispatched = yield* engine.dispatch(command.success).pipe(Effect.result);
+    const dispatched = yield* Option.isSome(archiveService)
+      ? archiveService.value.dispatch(command.success).pipe(Effect.result)
+      : engine.dispatch(command.success).pipe(Effect.result);
     if (dispatched._tag === "Failure") {
       return failed(
         invocation,

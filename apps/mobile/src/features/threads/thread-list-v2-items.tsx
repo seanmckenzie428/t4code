@@ -48,6 +48,7 @@ import {
 } from "./threadListV2";
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
+import { ArchiveLifecycleNotice } from "./ArchiveLifecycleNotice";
 
 /**
  * Thread List v2 renders one flat native list: rich edge-to-edge rows for
@@ -1231,6 +1232,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
           </ControlPillMenu>
         )}
       </ThreadSwipeable>
+      {thread.archiveLifecycle ? (
+        <View className={sidebarPane ? "px-3" : "px-5"}>
+          <ArchiveLifecycleNotice key={thread.archiveLifecycle.operationId} thread={thread} />
+        </View>
+      ) : null}
     </View>
   );
 });

@@ -1,4 +1,5 @@
 import { requestCustomSnooze } from "./CustomSnoozeDialog";
+import { ArchiveLifecycleNotice } from "./sidebar/ArchiveLifecycleNotice";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
 import { useAtomValue } from "@effect/atom-react";
@@ -1758,6 +1759,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           </TooltipTrigger>
           {detailsTooltip}
         </Tooltip>
+        {thread.archiveLifecycle ? (
+          <div className="px-2.5">
+            <ArchiveLifecycleNotice key={thread.archiveLifecycle.operationId} thread={thread} />
+          </div>
+        ) : null}
       </li>
     );
   }
@@ -2017,6 +2023,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         </TooltipTrigger>
         {detailsTooltip}
       </Tooltip>
+      {thread.archiveLifecycle ? (
+        <div className="px-2.5">
+          <ArchiveLifecycleNotice key={thread.archiveLifecycle.operationId} thread={thread} />
+        </div>
+      ) : null}
     </li>
   );
 });
@@ -2154,6 +2165,17 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
                 {threadTimeLabel(thread)}
               </span>
             </span>
+            {thread.archiveLifecycle ? (
+              <span className="text-xs text-muted-foreground">
+                {thread.archiveLifecycle.status === "retrying"
+                  ? thread.archiveLifecycle.direction === "archive"
+                    ? "Archive failed. Retrying…"
+                    : "Restore failed. Retrying…"
+                  : thread.archiveLifecycle.direction === "archive"
+                    ? "Archiving…"
+                    : "Restoring…"}
+              </span>
+            ) : null}
             {props.searchMatch ? (
               <ThreadSearchMatchExcerpt
                 match={{

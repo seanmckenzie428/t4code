@@ -41,6 +41,8 @@ function makeReadModel(checkpoints: ReadonlyArray<OrchestrationCheckpointSummary
         archivedAt: null,
         settledOverride: null,
         settledAt: null,
+        settledSince: null,
+        archiveLifecycle: null,
         snoozedUntil: null,
         snoozedAt: null,
         pinnedAt: null,

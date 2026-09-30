@@ -73,6 +73,13 @@ import {
 } from "./CodexSessionRuntime.ts";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 import { resolveCodexLaunchArgs } from "./codexLaunchArgs.ts";
+import { withCodexAppServerClient } from "./CodexProvider.ts";
+import {
+  readCodexThreadArchiveStates,
+  setCodexThreadArchived,
+  type CodexThreadArchiveClient,
+} from "./codexThreadArchive.ts";
+import type { ProviderNativeArchiveTarget } from "../Services/ProviderAdapter.ts";
 import { materializeCodexControlOnlyProfile } from "../../globalAssistant/CodexControlOnlyProfile.ts";
 import {
   type CodexRateLimitSnapshot,
@@ -2268,6 +2275,108 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
   const runtimeEventQueue = yield* Queue.unbounded<ProviderRuntimeEvent>();
   const sessions = new Map<ThreadId, CodexAdapterSessionContext>();
 
+  const makeArchiveClient = Effect.fn("CodexAdapter.makeArchiveClient")(function* (
+    targets: ReadonlyArray<ProviderNativeArchiveTarget>,
+  ) {
+    const resolved = options?.resolveRuntime
+      ? yield* options.resolveRuntime.pipe(
+          Effect.mapError(
+            (cause) =>
+              new ProviderAdapterValidationError({
+                provider: PROVIDER,
+                operation: "nativeArchive",
+                issue: cause.detail,
+              }),
+          ),
+        )
+      : undefined;
+    const config = resolved?.config ?? codexConfig;
+    const environment = resolved?.environment ?? options?.environment;
+    const capturedCwd = targets[0]?.cwd;
+    const cwdExists = capturedCwd
+      ? yield* fileSystem.stat(capturedCwd).pipe(
+          Effect.map((stat) => stat.type === "Directory"),
+          Effect.orElseSucceed(() => false),
+        )
+      : false;
+    const { client } = yield* withCodexAppServerClient({
+      binaryPath: config.binaryPath,
+      homePath: config.homePath,
+      launchArgs: resolveCodexLaunchArgs(config.launchArgs, environment),
+      cwd: cwdExists && capturedCwd ? capturedCwd : process.cwd(),
+      ...(environment ? { environment } : {}),
+    });
+    return {
+      listThreads: (params) =>
+        client.request("thread/list", params).pipe(
+          Effect.timeout("10 seconds"),
+          Effect.mapError(
+            (cause) =>
+              new ProviderAdapterRequestError({
+                provider: PROVIDER,
+                method: "thread/list",
+                detail: cause.message,
+                cause,
+              }),
+          ),
+        ),
+      setArchived: (threadId, archived) =>
+        (archived
+          ? client.request("thread/archive", { threadId }).pipe(Effect.asVoid)
+          : client.request("thread/unarchive", { threadId }).pipe(Effect.asVoid)
+        ).pipe(
+          Effect.timeout("10 seconds"),
+          Effect.mapError(
+            (cause) =>
+              new ProviderAdapterRequestError({
+                provider: PROVIDER,
+                method: archived ? "thread/archive" : "thread/unarchive",
+                detail: cause.message,
+                cause,
+              }),
+          ),
+        ),
+    } satisfies CodexThreadArchiveClient;
+  });
+
+  const nativeArchive = {
+    readStates: (targets: ReadonlyArray<ProviderNativeArchiveTarget>) =>
+      Effect.gen(function* () {
+        if (targets.length === 0) return [];
+        const client = yield* makeArchiveClient(targets).pipe(Effect.timeout("10 seconds"));
+        return yield* readCodexThreadArchiveStates(client, targets);
+      }).pipe(
+        Effect.scoped,
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
+        Effect.mapError(
+          (cause) =>
+            new ProviderAdapterRequestError({
+              provider: PROVIDER,
+              method: "thread/list",
+              detail: cause.message,
+              cause,
+            }),
+        ),
+      ),
+    setArchived: (target: ProviderNativeArchiveTarget, archived: boolean) =>
+      Effect.gen(function* () {
+        const client = yield* makeArchiveClient([target]).pipe(Effect.timeout("10 seconds"));
+        yield* setCodexThreadArchived(client, target, archived);
+      }).pipe(
+        Effect.scoped,
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, childProcessSpawner),
+        Effect.mapError(
+          (cause) =>
+            new ProviderAdapterRequestError({
+              provider: PROVIDER,
+              method: archived ? "thread/archive" : "thread/unarchive",
+              detail: cause.message,
+              cause,
+            }),
+        ),
+      ),
+  };
+
   const startSession: CodexAdapterShape["startSession"] = (input) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -2845,6 +2954,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     startSession,
     sendTurn,
     compaction: { type: "native", start: compactThread },
+    nativeArchive,
     interruptTurn,
     readThread,
     rollbackThread,

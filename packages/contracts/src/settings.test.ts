@@ -726,6 +726,30 @@ describe("ServerSettings thread settlement", () => {
   });
 });
 
+describe("ServerSettings settled thread archiving", () => {
+  it("keeps automatic archiving off for existing settings files", () => {
+    expect(decodeServerSettings({}).sidebarAutoArchiveSettled).toBe(false);
+  });
+
+  it.each([true, false])("preserves environment and project archive choices: %s", (value) => {
+    const input = {
+      sidebarAutoArchiveSettled: value,
+      projectSettingsOverrides: { project: { sidebarAutoArchiveSettled: value } },
+    };
+    expect(decodeServerSettings(input)).toMatchObject(input);
+    expect(decodeServerSettingsPatch(input)).toMatchObject(input);
+  });
+
+  it("rejects nonboolean archive choices", () => {
+    expect(() => decodeServerSettings({ sidebarAutoArchiveSettled: 7 })).toThrow();
+    expect(() =>
+      decodeServerSettingsPatch({
+        projectSettingsOverrides: { project: { sidebarAutoArchiveSettled: null } },
+      }),
+    ).toThrow();
+  });
+});
+
 describe("ClientSettings pull request merge methods", () => {
   it("defaults to no project overrides and accepts supported methods", () => {
     expect(decodeClientSettings({}).pullRequestMergeMethodOverrides).toEqual({});

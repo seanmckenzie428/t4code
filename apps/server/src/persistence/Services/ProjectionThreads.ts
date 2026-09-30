@@ -17,6 +17,7 @@ import {
   ProviderInteractionMode,
   RuntimeMode,
   ThreadLinkedPullRequest,
+  ThreadArchiveLifecycle,
   ThreadTitleState,
   ThreadId,
   TurnId,
@@ -53,6 +54,12 @@ export const ProjectionThread = Schema.Struct({
   archivedAt: Schema.NullOr(IsoDateTime),
   settledOverride: Schema.NullOr(Schema.Literals(["settled", "active"])),
   settledAt: Schema.NullOr(IsoDateTime),
+  settledSince: Schema.NullOr(IsoDateTime).pipe(
+    Schema.withDecodingDefault(RuntimeEffect.succeed(null)),
+  ),
+  archiveLifecycle: Schema.NullOr(ThreadArchiveLifecycle).pipe(
+    Schema.withDecodingDefault(RuntimeEffect.succeed(null)),
+  ),
   unsettledAt: Schema.NullOr(IsoDateTime),
   snoozedUntil: Schema.NullOr(IsoDateTime),
   snoozedAt: Schema.NullOr(IsoDateTime),

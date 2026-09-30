@@ -167,6 +167,11 @@ export class TerminalManager extends Context.Service<
       listener: (event: TerminalAttachStreamEvent) => Effect.Effect<void>,
     ) => Effect.Effect<() => void, TerminalError>;
 
+    /** Inspect under the caller's lifecycle fence before admitting an attach that launches work. */
+    readonly willStartOnAttach?: (
+      input: TerminalAttachInput,
+    ) => Effect.Effect<boolean, TerminalError>;
+
     /**
      * Write input bytes to a terminal session.
      */
@@ -2724,6 +2729,16 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
       }),
     );
 
+  const willStartOnAttach = Effect.fn("terminal.willStartOnAttach")(function* (
+    input: TerminalAttachInput,
+  ) {
+    if (!input.cwd) return false;
+    const existing = yield* getSession(input.threadId, input.terminalId);
+    return (
+      Option.isNone(existing) || (!existing.value.process && input.restartIfNotRunning === true)
+    );
+  });
+
   const readAllTerminalMetadata = () =>
     readManagerState.pipe(
       Effect.map((state) =>
@@ -3120,6 +3135,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
   return TerminalManager.of({
     open,
     attachStream,
+    willStartOnAttach,
     write,
     resize,
     clear,

@@ -133,6 +133,8 @@ export function applyThreadDetailEvent(
           archivedAt: null,
           settledOverride: null,
           settledAt: null,
+          settledSince: null,
+          archiveLifecycle: null,
           unsettledAt: null,
           activeOrderKey: null,
           autoSettleDisabledAt: null,
@@ -168,6 +170,16 @@ export function applyThreadDetailEvent(
         thread: { ...thread, archivedAt: null, updatedAt: event.payload.updatedAt },
       };
 
+    case "thread.archive-lifecycle-set":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          archiveLifecycle: event.payload.archiveLifecycle,
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
     case "thread.settled":
       return {
         kind: "updated",
@@ -175,6 +187,10 @@ export function applyThreadDetailEvent(
           ...thread,
           settledOverride: "settled",
           settledAt: event.payload.settledAt,
+          settledSince:
+            thread.settledOverride === "settled"
+              ? (thread.settledSince ?? event.occurredAt)
+              : event.occurredAt,
           unsettledAt: null,
           activeOrderKey: null,
           updatedAt: event.payload.updatedAt,
@@ -188,6 +204,7 @@ export function applyThreadDetailEvent(
           ...thread,
           settledOverride: event.payload.reason === "user" ? "active" : null,
           settledAt: null,
+          settledSince: null,
           // A thread already pinned active keeps its re-entry stamp: the
           // activity reset that clears the pin must not reorder the list.
           unsettledAt:

@@ -114,6 +114,8 @@ function makeThread(
     archivedAt: null,
     settledOverride: null,
     settledAt: null,
+    settledSince: null,
+    archiveLifecycle: null,
     session: null,
     latestUserMessageAt: "2026-08-20T00:00:00.000Z",
     hasPendingApprovals: false,
@@ -352,6 +354,28 @@ const startHarness = Effect.fn("startThreadSettlementHarness")(function* (
 });
 
 describe("ThreadSettlementReactor", () => {
+  it("detects environment and project auto archive changes for immediate sweeps", () => {
+    const baseline = ThreadSettlementReactor.autoSettlementSettingsKey(DEFAULT_SERVER_SETTINGS);
+    assert.notStrictEqual(
+      ThreadSettlementReactor.autoSettlementSettingsKey({
+        ...DEFAULT_SERVER_SETTINGS,
+        sidebarAutoArchiveSettled: true,
+      }),
+      baseline,
+    );
+    const projectEnabled = ThreadSettlementReactor.autoSettlementSettingsKey({
+      ...DEFAULT_SERVER_SETTINGS,
+      projectSettingsOverrides: { [PROJECT_ID]: { sidebarAutoArchiveSettled: true } },
+    });
+    const projectDisabled = ThreadSettlementReactor.autoSettlementSettingsKey({
+      ...DEFAULT_SERVER_SETTINGS,
+      projectSettingsOverrides: { [PROJECT_ID]: { sidebarAutoArchiveSettled: false } },
+    });
+    assert.notStrictEqual(projectEnabled, baseline);
+    assert.notStrictEqual(projectDisabled, baseline);
+    assert.notStrictEqual(projectEnabled, projectDisabled);
+  });
+
   it("distinguishes a project that inherits the threshold from one that disables it", () => {
     const inherits = ThreadSettlementReactor.autoSettlementSettingsKey({
       ...DEFAULT_SERVER_SETTINGS,

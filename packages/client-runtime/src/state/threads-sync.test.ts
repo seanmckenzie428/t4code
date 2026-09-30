@@ -75,6 +75,8 @@ const BASE_THREAD: OrchestrationThread = {
   archivedAt: null,
   settledOverride: null,
   settledAt: null,
+  settledSince: null,
+  archiveLifecycle: null,
   pullRequests: [],
   deletedAt: null,
   messages: [],

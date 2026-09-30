@@ -13,6 +13,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -24,6 +25,7 @@ import { forkParked } from "../serverActivation.ts";
 import * as OrchestrationEngine from "./Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./Services/ProjectionSnapshotQuery.ts";
 import { pullRequestMatchesProject, readSweepSnapshot } from "./ThreadPullRequestReactor.ts";
+import { ThreadArchiveService } from "./ThreadArchiveService.ts";
 import {
   isAutoSettlementCandidate,
   resolveAutoSettlementAt,
@@ -51,20 +53,22 @@ function autoSettlementConfigured(settings: ServerSettingsValue): boolean {
   );
 }
 
-/** Identity of every settlement input, so unrelated settings edits do not trigger a sweep. */
+/** Identity of automatic settlement and archive inputs, excluding unrelated settings edits. */
 /** @internal Exported for tests. */
 export function autoSettlementSettingsKey(settings: ServerSettingsValue): string {
   return JSON.stringify([
     settings.sidebarAutoSettleOnMerge,
     settings.sidebarAutoSettleAfterDays,
-    // Only entries that touch settlement, in a stable order, so a project
+    settings.sidebarAutoArchiveSettled,
+    // Only entries that touch settlement or archive, in a stable order, so a project
     // override on an unrelated key does not queue a sweep. JSON drops
     // undefined, so inherit (absent) and never (null) need distinct marks.
     Object.entries(settings.projectSettingsOverrides)
       .filter(
         ([, entry]) =>
           entry.sidebarAutoSettleOnMerge !== undefined ||
-          entry.sidebarAutoSettleAfterDays !== undefined,
+          entry.sidebarAutoSettleAfterDays !== undefined ||
+          entry.sidebarAutoArchiveSettled !== undefined,
       )
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([projectId, entry]) => [
@@ -73,6 +77,7 @@ export function autoSettlementSettingsKey(settings: ServerSettingsValue): string
         entry.sidebarAutoSettleAfterDays === undefined
           ? "inherit"
           : entry.sidebarAutoSettleAfterDays,
+        entry.sidebarAutoArchiveSettled ?? "inherit",
       ]),
   ]);
 }
@@ -86,6 +91,7 @@ export const make = Effect.gen(function* () {
   const pullRequests = yield* PullRequestService.PullRequestService;
   const crypto = yield* Crypto.Crypto;
   const fileSystem = yield* FileSystem.FileSystem;
+  const archive = yield* Effect.serviceOption(ThreadArchiveService);
 
   const sweep = Effect.fn("ThreadSettlementReactor.sweep")(function* (
     mergedPullRequest: PullRequestService.PullRequestMergeEvent | null,
@@ -326,6 +332,7 @@ export const make = Effect.gen(function* () {
             cause: Cause.pretty(cause),
           }),
       ),
+      Effect.andThen(Option.isSome(archive) ? archive.value.sweep : Effect.void),
     );
   const worker = yield* makeDrainableWorker((threadId: ThreadId | undefined) =>
     runSweep(null, threadId),

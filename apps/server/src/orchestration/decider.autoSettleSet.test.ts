@@ -38,6 +38,8 @@ function makeReadModel(input: {
         archivedAt: null,
         settledOverride: input.settledOverride ?? null,
         settledAt: input.settledOverride === "settled" ? NOW : null,
+        settledSince: null,
+        archiveLifecycle: null,
         autoSettleDisabledAt: input.autoSettleDisabledAt ?? null,
         deletedAt: null,
         messages: [],

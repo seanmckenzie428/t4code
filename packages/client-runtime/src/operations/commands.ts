@@ -34,6 +34,7 @@ export type DeleteProjectInput = CommandInput<"project.delete">;
 export type CreateThreadInput = CommandInput<"thread.create">;
 export type DeleteThreadInput = CommandInput<"thread.delete">;
 export type ArchiveThreadInput = CommandInput<"thread.archive">;
+export type CancelThreadArchiveInput = CommandInput<"thread.archive.cancel">;
 export type UnarchiveThreadInput = CommandInput<"thread.unarchive">;
 export type SettleThreadInput = CommandInput<"thread.settle">;
 export type UnsettleThreadInput = CommandInput<"thread.unsettle">;
@@ -153,6 +154,16 @@ export const archiveThread: (input: ArchiveThreadInput) => CommandEffect = Effec
   return yield* dispatch({
     ...input,
     type: "thread.archive",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const cancelThreadArchive: (input: CancelThreadArchiveInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.cancelThreadArchive",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "thread.archive.cancel",
     commandId: yield* commandId(input),
   });
 });

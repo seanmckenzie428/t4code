@@ -716,10 +716,14 @@ it.effect("defaults settled fields when decoding historical thread data", () =>
 
     assert.strictEqual(thread.settledOverride, null);
     assert.strictEqual(thread.settledAt, null);
+    assert.strictEqual(thread.settledSince, null);
+    assert.strictEqual(thread.archiveLifecycle, null);
     assert.strictEqual(thread.kind, undefined);
     assert.strictEqual(thread.workspaceBinding, undefined);
     assert.strictEqual(shell.settledOverride, null);
     assert.strictEqual(shell.settledAt, null);
+    assert.strictEqual(shell.settledSince, null);
+    assert.strictEqual(shell.archiveLifecycle, null);
     assert.strictEqual(shell.kind, undefined);
     // Pre-link servers omit the array entirely.
     assert.deepStrictEqual(thread.pullRequests, []);

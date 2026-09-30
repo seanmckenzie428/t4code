@@ -102,6 +102,8 @@ describe("mobile SQLite environment cache store", () => {
             archivedAt: null,
             settledOverride: null,
             settledAt: null,
+            settledSince: null,
+            archiveLifecycle: null,
             deletedAt: null,
             messages: [
               {
