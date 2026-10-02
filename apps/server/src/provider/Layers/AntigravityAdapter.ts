@@ -751,13 +751,6 @@ export const makeAntigravityAdapter = Effect.fn("makeAntigravityAdapter")(functi
             issue: "The Antigravity provider instance does not match the requested session.",
           });
         }
-        if (input.sessionProfile === "global-assistant") {
-          return yield* new ProviderAdapterValidationError({
-            provider: PROVIDER,
-            operation: "startSession",
-            issue: "Antigravity cannot enforce the control-only profile required by Quick Chat.",
-          });
-        }
         if (!input.cwd?.trim()) {
           return yield* new ProviderAdapterValidationError({
             provider: PROVIDER,

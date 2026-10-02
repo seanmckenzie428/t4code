@@ -3021,7 +3021,7 @@ pending_approval_requests AS (
                 snapshotSequence: computeSnapshotSequence(stateRows),
                 projects: Arr.filterMap(projectRows, (row) =>
                   row.deletedAt === null &&
-                  (row.kind !== "system" || row.systemRole === "quick-chat") &&
+                  row.kind !== "system" &&
                   activeProjectIds.has(row.projectId)
                     ? Result.succeed(
                         mapProjectShellRow(row, repositoryIdentities.get(row.projectId) ?? null),
@@ -3029,7 +3029,7 @@ pending_approval_requests AS (
                     : Result.failVoid,
                 ),
                 threads: threadRows
-                  .filter((row) => row.kind !== "assistant")
+                  .filter((row) => row.kind !== "assistant" && row.kind !== "quick")
                   .map((row): OrchestrationThreadShell => ({
                     id: row.threadId,
                     projectId: row.projectId,

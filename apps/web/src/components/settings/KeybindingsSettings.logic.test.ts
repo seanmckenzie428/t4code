@@ -57,11 +57,18 @@ describe("KeybindingsSettings.logic", () => {
       "usage.period.month",
       "usage.period.quarter",
     ];
-    const bindings = DEFAULT_RESOLVED_KEYBINDINGS.toReversed();
-    expect(buildKeybindingRows(bindings, "usage").map((row) => row.command)).toEqual(expected);
-    expect(
-      buildKeybindingCommandOptions(bindings).filter((command) => command.startsWith("usage.")),
-    ).toEqual(expected);
+    for (const bindings of [
+      DEFAULT_RESOLVED_KEYBINDINGS,
+      DEFAULT_RESOLVED_KEYBINDINGS.toReversed(),
+      DEFAULT_RESOLVED_KEYBINDINGS.toSorted((left, right) =>
+        left.command.localeCompare(right.command),
+      ),
+    ]) {
+      expect(buildKeybindingRows(bindings, "usage").map((row) => row.command)).toEqual(expected);
+      expect(
+        buildKeybindingCommandOptions(bindings).filter((command) => command.startsWith("usage.")),
+      ).toEqual(expected);
+    }
   });
 
   it("builds searchable rows with readable key and when values", () => {
@@ -220,7 +227,6 @@ describe("KeybindingsSettings.logic", () => {
 
   it("formats static and project script command labels", () => {
     expect(commandLabel("commandPalette.toggle")).toBe("Command Palette: Toggle");
-    expect(commandLabel("quickChat.toggle")).toBe("Quick Chat: Toggle");
     expect(commandLabel("themeEditor.toggle")).toBe("Theme Editor: Toggle");
     expect(commandLabel("script.setup-db.run")).toBe("Run Script: Setup Db");
   });

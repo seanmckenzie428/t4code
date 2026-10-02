@@ -302,25 +302,6 @@ const layer = ServerConfig.layerTest(process.cwd(), {
 }).pipe(Layer.provideMerge(NodeServices.layer));
 
 it.layer(layer)("AntigravityAdapter", (it) => {
-  it.effect("rejects Quick Chat before launching an unrestricted provider", () =>
-    Effect.gen(function* () {
-      const h = yield* makeHarness();
-      const error = yield* h.adapter
-        .startSession({
-          threadId,
-          cwd: process.cwd(),
-          runtimeMode: "approval-required",
-          sessionProfile: "global-assistant",
-        })
-        .pipe(Effect.flip);
-      expect(error).toMatchObject({
-        _tag: "ProviderAdapterValidationError",
-        issue: expect.stringContaining("control-only"),
-      });
-      expect(h.launches).toEqual([]);
-    }),
-  );
-
   it.effect(
     "runs native auth, resume, models, commands, and streaming through the ACP transport",
     () =>

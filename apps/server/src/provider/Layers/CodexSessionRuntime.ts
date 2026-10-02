@@ -45,10 +45,6 @@ import {
   buildCodexDeveloperInstructions,
   type T3CodeToolAvailability,
 } from "../CodexDeveloperInstructions.ts";
-import {
-  type CodexControlOnlyProfile,
-  verifyCodexControlOnlyConfig,
-} from "../../globalAssistant/CodexControlOnlyProfile.ts";
 const decodeV2TurnStartResponse = Schema.decodeUnknownEffect(EffectCodexSchema.V2TurnStartResponse);
 
 const PROVIDER = ProviderDriverKind.make("codex");
@@ -187,7 +183,6 @@ export interface CodexSessionRuntimeOptions {
   readonly serviceTier?: CodexServiceTier | undefined;
   readonly resumeCursor?: CodexResumeCursor;
   readonly appServerArgs?: ReadonlyArray<string>;
-  readonly controlOnlyProfile?: CodexControlOnlyProfile;
   /** The provider's model list; supplies the display name for runtime info. */
   readonly models?: Effect.Effect<ReadonlyArray<ServerProviderModel>>;
   /** Capabilities the session's `t3-code` MCP credential grants; drives the prompt blocks. */
@@ -558,18 +553,13 @@ function buildThreadStartParams(input: {
   readonly runtimeMode: RuntimeMode;
   readonly model: string | undefined;
   readonly serviceTier: CodexServiceTier | undefined;
-  readonly useConfiguredPermissionProfile?: boolean;
 }): EffectCodexSchema.V2ThreadStartParams {
   const config = runtimeModeToThreadConfig(input.runtimeMode);
   return {
     cwd: input.cwd,
-    ...(input.useConfiguredPermissionProfile
-      ? {}
-      : {
-          approvalPolicy: config.approvalPolicy,
-          sandbox: config.sandbox,
-          approvalsReviewer: config.approvalsReviewer,
-        }),
+    approvalPolicy: config.approvalPolicy,
+    sandbox: config.sandbox,
+    approvalsReviewer: config.approvalsReviewer,
     ...(input.model ? { model: input.model } : {}),
     ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
   };
@@ -642,7 +632,6 @@ export function buildTurnStartParams(input: {
   readonly serviceTier?: CodexServiceTier;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort;
   readonly interactionMode?: ProviderInteractionMode;
-  readonly useConfiguredPermissionProfile?: boolean;
   /** Defaults to true so callers that predate the agent-access gate are unchanged. */
   readonly browserToolsAvailable?: boolean | T3CodeToolAvailability;
 }): Effect.Effect<
@@ -672,13 +661,9 @@ export function buildTurnStartParams(input: {
   return decodeCodexTurnStartParamsWithCollaborationMode({
     threadId: input.threadId,
     input: turnInput,
-    ...(input.useConfiguredPermissionProfile
-      ? {}
-      : {
-          approvalPolicy: config.approvalPolicy,
-          approvalsReviewer: config.approvalsReviewer,
-          sandboxPolicy: runtimeModeToTurnSandboxPolicy(input.runtimeMode),
-        }),
+    approvalPolicy: config.approvalPolicy,
+    approvalsReviewer: config.approvalsReviewer,
+    sandboxPolicy: runtimeModeToTurnSandboxPolicy(input.runtimeMode),
     ...(input.model ? { model: input.model } : {}),
     ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
     ...(input.effort ? { effort: input.effort } : {}),
@@ -755,7 +740,6 @@ export const openCodexThread = (input: {
   readonly requestedModel: string | undefined;
   readonly serviceTier: CodexServiceTier | undefined;
   readonly resumeThreadId: string | undefined;
-  readonly useConfiguredPermissionProfile?: boolean;
 }): Effect.Effect<typeof CodexThreadResumeMetadata.Type, CodexErrors.CodexAppServerError> => {
   const resumeThreadId = input.resumeThreadId;
   const startParams = buildThreadStartParams({
@@ -763,7 +747,6 @@ export const openCodexThread = (input: {
     runtimeMode: input.runtimeMode,
     model: input.requestedModel,
     serviceTier: input.serviceTier,
-    ...(input.useConfiguredPermissionProfile ? { useConfiguredPermissionProfile: true } : {}),
   });
 
   if (resumeThreadId === undefined) {
@@ -2511,26 +2494,8 @@ export const makeCodexSessionRuntime = (
 
     const start = Effect.fn("CodexSessionRuntime.start")(function* () {
       yield* emitSessionEvent("session/connecting", "Starting Codex App Server session.");
-      const initialize = yield* client.request("initialize", buildCodexInitializeParams());
+      yield* client.request("initialize", buildCodexInitializeParams());
       yield* client.notify("initialized", undefined);
-
-      if (options.controlOnlyProfile) {
-        const config = yield* client.request("config/read", {
-          cwd: options.cwd,
-          includeLayers: true,
-        });
-        const refusalReason = verifyCodexControlOnlyConfig({
-          initialize,
-          config,
-          expected: options.controlOnlyProfile,
-        });
-        if (refusalReason) {
-          return yield* CodexErrors.CodexAppServerRequestError.invalidParams(
-            `Quick Chat startup refused: ${refusalReason}`,
-            { profile: options.controlOnlyProfile.profileName },
-          );
-        }
-      }
 
       const requestedModel = normalizeCodexModelSlug(options.model);
 
@@ -2542,7 +2507,6 @@ export const makeCodexSessionRuntime = (
         requestedModel,
         serviceTier: options.serviceTier,
         resumeThreadId: readResumeCursorThreadId(options.resumeCursor),
-        useConfiguredPermissionProfile: options.controlOnlyProfile !== undefined,
       });
 
       const providerThreadId = opened.thread.id;
@@ -2624,7 +2588,6 @@ export const makeCodexSessionRuntime = (
             ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
             ...(input.effort ? { effort: input.effort } : {}),
             ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
-            useConfiguredPermissionProfile: options.controlOnlyProfile !== undefined,
             // Derived from the session's own credential rather than the
             // setting, so the prompt describes the tools this turn actually
             // has even if the setting changed after the session started.

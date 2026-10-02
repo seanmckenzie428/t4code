@@ -17,7 +17,7 @@ describe("mergeClientDefaultKeybindings", () => {
   it("backfills client defaults missing from an older server snapshot", () => {
     const merged = mergeClientDefaultKeybindings([]);
 
-    expect(merged.some((binding) => binding.command === "quickChat.toggle")).toBe(true);
+    expect(merged.some((binding) => binding.command === "sidebar.toggle")).toBe(true);
   });
 
   it("keeps server bindings after defaults so custom conflicts win", () => {

@@ -9,18 +9,9 @@ describing a view, dashboard, control, or interactive tool, the shared app tools
 generated in-app UI request. This meaning comes from the provider-neutral Pilot MCP surface rather
 than one provider's prompt.
 
-Quick Chat opens from its floating button, the command palette, or `mod+shift+space`. It stays
-outside projects and the sidebar. Press Escape to save and close it; saved conversations live in
-**Settings** → **Archived** → **Quick Chat history**.
-
-Quick Chat requires an explicit Codex model selection. It refuses to start when the installed
-Codex runtime cannot prove enforcement of the control-only filesystem and network profile.
-Its Pilot controls remain available when agent browser access is disabled; that setting controls
-browser tools only.
-
 Regular project chats can inspect and control any project or thread in the same environment. They
 can create a thread or start delegated work in another existing thread while you continue in the
-current chat when **Settings** → **Quick Chat** → **Chat delegation** is enabled. Delegated threads
+current chat when **Settings** → **General** → **Agent delegation** → **Chat delegation** is enabled. Delegated threads
 cannot delegate again, and no chat can control another environment.
 
 Agents can present generated views in the thread's right panel. Native views use bounded Pilot
@@ -58,6 +49,5 @@ core Pilot behavior. Lotus remains responsible for its worktrees, containers,
 routes, databases, and lifecycle. Pilot marks observed runtime state as stale when
 appropriate.
 
-Current limitations: proactive Quick Chat suggestions are unavailable, remote
-rich-view resources and external origins stay blocked, and mobile hides the
-Quick Chat and generated-view controls.
+Current limitations: remote rich-view resources and external origins stay blocked, and mobile
+hides generated-view controls.

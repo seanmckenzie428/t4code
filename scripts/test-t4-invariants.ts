@@ -8,7 +8,7 @@ const invariantTests = [
   "apps/desktop/src/app/DesktopAppIdentity.test.ts",
   "apps/server/src/persistence/Migrations/041_049_ForkCompatibility.test.ts",
   "apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.test.ts",
-  "apps/server/src/quickChat/QuickChat.test.ts",
+  "apps/server/src/orchestration/decider.systemEntities.test.ts",
   "apps/server/src/mcp/AppControlPolicy.test.ts",
   "packages/contracts/src/appViews.test.ts",
   "apps/web/src/appViewCommandHost.test.ts",

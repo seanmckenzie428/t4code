@@ -1116,10 +1116,13 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       const archivedShellSnapshot = yield* snapshotQuery.getArchivedShellSnapshot();
       assert.deepEqual(
         archivedShellSnapshot.threads.map((thread) => thread.id),
-        [ThreadId.make("thread-archived"), ThreadId.make("thread-quick-archived")],
+        [ThreadId.make("thread-archived")],
       );
       assert.equal(archivedShellSnapshot.threads[0]?.archivedAt, "2026-04-06T00:00:06.000Z");
-      assert.equal(archivedShellSnapshot.threads[1]?.kind, "quick");
+      assert.equal(
+        archivedShellSnapshot.projects.some((project) => project.id === "project-quick-chat-test"),
+        false,
+      );
       assert.deepEqual(archivedShellSnapshot.threads[0]?.branchPullRequest, branchPullRequest);
       const restoreLifecycle = {
         operationId: "restore-archived",
@@ -1187,7 +1190,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       ]);
       assert.deepEqual(
         (yield* snapshotQuery.getArchivedShellSnapshot()).threads.map((thread) => thread.id),
-        [ThreadId.make("thread-quick-archived")],
+        [],
       );
       yield* sql`
         UPDATE projection_projects

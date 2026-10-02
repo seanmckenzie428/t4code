@@ -145,9 +145,7 @@ Change **Settings → General → Confirmations → Quit shortcut** to **Direct*
 single press or **Double press** for two presses only. Choosing **Quit** from the
 application menu always quits immediately.
 
-## Quick Chat and theme editor
+## Theme editor
 
-`quickChat.toggle` (`mod+shift+space`) opens or closes environment Quick Chat.
-Previous conversations remain in **Settings → Archived → Quick Chat history**.
 `themeEditor.toggle` (`mod+alt+shift+t`) opens or closes the floating theme editor.
 Use **Inspect** to select a color token; **Cancel** or `Escape` exits Inspect.

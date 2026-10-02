@@ -1061,32 +1061,29 @@ describe("ServerSettingsPatch string normalization", () => {
   });
 });
 
-describe("ServerSettings Quick Chat compatibility", () => {
-  it("defaults disabled without an implicit model selection", () => {
+describe("ServerSettings retired Quick Chat compatibility", () => {
+  it("defaults project delegation to disabled", () => {
     expect(decodeServerSettings({}).globalAssistant).toEqual({
-      enabled: false,
       delegationEnabled: false,
-      modelSelection: null,
     });
   });
 
-  it("decodes an explicit assistant model selection patch", () => {
-    expect(
-      decodeServerSettingsPatch({
-        globalAssistant: {
-          enabled: true,
-          modelSelection: {
-            instanceId: "codex",
-            model: "gpt-5.6",
-          },
+  it("discards retired Quick Chat settings while retaining delegation preferences", () => {
+    const legacySettings = {
+      globalAssistant: {
+        enabled: true,
+        delegationEnabled: true,
+        modelSelection: {
+          instanceId: "codex",
+          model: "gpt-5.6",
         },
-      }).globalAssistant,
-    ).toEqual({
-      enabled: true,
-      modelSelection: {
-        instanceId: "codex",
-        model: "gpt-5.6",
       },
+    };
+    expect(decodeServerSettings(legacySettings).globalAssistant).toEqual({
+      delegationEnabled: true,
+    });
+    expect(decodeServerSettingsPatch(legacySettings).globalAssistant).toEqual({
+      delegationEnabled: true,
     });
   });
 });

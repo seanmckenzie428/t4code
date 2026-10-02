@@ -21,12 +21,10 @@ const projectId = ProjectId.make("project-a");
 const otherProjectId = ProjectId.make("project-b");
 
 describe("resolveProjectSettings", () => {
-  it("preserves Quick Chat and extensions while resolving repository defaults", () => {
+  it("preserves delegation and extensions while resolving repository defaults", () => {
     const settings = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
       globalAssistant: {
-        enabled: true,
         delegationEnabled: true,
-        modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.6"),
       },
       extensions: [
         {

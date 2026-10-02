@@ -1025,12 +1025,9 @@ export const BackgroundActivitySettings = Schema.Struct({
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type BackgroundActivitySettings = typeof BackgroundActivitySettings.Type;
 
+// Keep the persisted key so retiring Quick Chat preserves project delegation preferences.
 export const GlobalAssistantSettings = Schema.Struct({
-  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   delegationEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  modelSelection: Schema.NullOr(ModelSelection).pipe(
-    Schema.withDecodingDefault(Effect.succeed(null)),
-  ),
 }).pipe(Schema.withDecodingDefault(Effect.succeed({})));
 export type GlobalAssistantSettings = typeof GlobalAssistantSettings.Type;
 /**
@@ -1546,9 +1543,7 @@ export const ServerSettingsPatch = Schema.Struct({
   enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
   globalAssistant: Schema.optionalKey(
     Schema.Struct({
-      enabled: Schema.optionalKey(Schema.Boolean),
       delegationEnabled: Schema.optionalKey(Schema.Boolean),
-      modelSelection: Schema.optionalKey(Schema.NullOr(ModelSelection)),
     }),
   ),
   // Whole-list replacement keeps extension identity, approval, and transport

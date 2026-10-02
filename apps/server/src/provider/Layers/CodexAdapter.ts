@@ -38,7 +38,6 @@ import * as Crypto from "effect/Crypto";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
-import * as Path from "effect/Path";
 import * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
@@ -80,7 +79,6 @@ import {
   type CodexThreadArchiveClient,
 } from "./codexThreadArchive.ts";
 import type { ProviderNativeArchiveTarget } from "../Services/ProviderAdapter.ts";
-import { materializeCodexControlOnlyProfile } from "../../globalAssistant/CodexControlOnlyProfile.ts";
 import {
   type CodexRateLimitSnapshot,
   codexRateLimitsToUpdate,
@@ -2259,7 +2257,6 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
 ) {
   const boundInstanceId = options?.instanceId ?? ProviderInstanceId.make("codex");
   const fileSystem = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
   const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const crypto = yield* Crypto.Crypto;
   const serverConfig = yield* Effect.service(ServerConfig);
@@ -2418,25 +2415,6 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
             ? getCodexServiceTierOptionValue(input.modelSelection)
             : undefined;
         const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
-        const controlOnlyProfile =
-          input.sessionProfile === "global-assistant"
-            ? yield* materializeCodexControlOnlyProfile({
-                assistantRoot: `${serverConfig.stateDir}/quick-chat`,
-                authHomePath: options?.authHomePath ?? effectiveConfig.homePath,
-              }).pipe(
-                Effect.provideService(FileSystem.FileSystem, fileSystem),
-                Effect.provideService(Path.Path, path),
-                Effect.mapError(
-                  (cause) =>
-                    new ProviderAdapterProcessError({
-                      provider: PROVIDER,
-                      threadId: input.threadId,
-                      detail: cause instanceof Error ? cause.message : String(cause),
-                      cause,
-                    }),
-                ),
-              )
-            : undefined;
         const runtimeInput: CodexSessionRuntimeOptions = {
           threadId: input.threadId,
           providerInstanceId: boundInstanceId,
@@ -2445,14 +2423,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           binaryPath: effectiveConfig.binaryPath,
           launchArgs: resolveCodexLaunchArgs(effectiveConfig.launchArgs, effectiveEnvironment),
           ...(effectiveEnvironment ? { environment: effectiveEnvironment } : {}),
-          ...(controlOnlyProfile
-            ? {
-                homePath: controlOnlyProfile.codexHome,
-                controlOnlyProfile,
-              }
-            : effectiveConfig.homePath
-              ? { homePath: effectiveConfig.homePath }
-              : {}),
+          ...(effectiveConfig.homePath ? { homePath: effectiveConfig.homePath } : {}),
           ...(isCodexResumeCursorSchema(input.resumeCursor)
             ? { resumeCursor: input.resumeCursor }
             : {}),
@@ -2471,7 +2442,6 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
                   T3_MCP_BEARER_TOKEN: mcpSession.authorizationHeader.replace(/^Bearer\s+/, ""),
                 },
                 appServerArgs: [
-                  ...(controlOnlyProfile ? ["--strict-config"] : []),
                   "-c",
                   `mcp_servers.t3-code.url=${mcpSession.endpoint}`,
                   "-c",
@@ -2479,11 +2449,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
                 ],
                 mcpCapabilities: mcpSession.capabilities,
               }
-            : controlOnlyProfile
-              ? {
-                  appServerArgs: ["--strict-config"],
-                }
-              : {}),
+            : {}),
         };
         const turnTokenUsage = makeCodexTurnTokenUsageState();
         // Codex reports a usage-limit stop as OpenAI's own sentence, which on a

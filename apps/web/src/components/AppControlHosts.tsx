@@ -17,7 +17,6 @@ import { registerWebAppCommandHandler, webAppCommandRegistry } from "../appComma
 import { resolveAppControlFocusedThread } from "../appControlFocusedClient";
 import { randomHex } from "../lib/utils";
 import { useUpdateClientSettings } from "../hooks/useSettings";
-import { useQuickChatStore } from "../quickChatStore";
 import { selectThreadAppViews, useAppViewStore } from "../appViewStore";
 import { useEnvironments } from "../state/environments";
 import { useProjects, useThreadShells } from "../state/entities";
@@ -65,9 +64,6 @@ function AppControlHost({
     routeThreadRef: routeTarget?.kind === "server" ? routeTarget.threadRef : null,
     threads,
   });
-  const quickChatOpen = useQuickChatStore(
-    (state) => state.byEnvironment[String(environmentId)]?.open ?? false,
-  );
   const appViewsByThread = useAppViewStore((state) => state.byThreadKey);
   const respond = useAtomCommand(appControlEnvironment.respond, "app control response");
   const focusHost = useAtomCommand(appControlEnvironment.focusHost, "app control host focus");
@@ -158,7 +154,6 @@ function AppControlHost({
             surface: window.desktopBridge ? "desktop" : "web",
             projectId: focusedThread?.projectId ?? null,
             threadId: statusThreadId,
-            quickChatOpen,
             activePanel: null,
             revision: 0,
           },
@@ -230,7 +225,7 @@ function AppControlHost({
         result: result ?? null,
       };
     },
-    [appViewsByThread, clientId, environmentId, focusedThread, projects, quickChatOpen, threads],
+    [appViewsByThread, clientId, environmentId, focusedThread, projects, threads],
   );
   const [requestHandlerAtom] = useState(() => Atom.make({ handle: handleRequest }));
   const setRequestHandler = useAtomSet(requestHandlerAtom);

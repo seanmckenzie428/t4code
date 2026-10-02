@@ -89,7 +89,6 @@ function compile(bindings: TestBinding[]): ResolvedKeybindingsConfig {
 
 const DEFAULT_BINDINGS = compile([
   { shortcut: modShortcut("b"), command: "sidebar.toggle" },
-  { shortcut: modShortcut(" ", { shiftKey: true }), command: "quickChat.toggle" },
   { shortcut: modShortcut("j"), command: "terminal.toggle" },
   { shortcut: modShortcut("b", { altKey: true }), command: "rightPanel.toggle" },
   {
@@ -695,15 +694,6 @@ describe("chat/editor shortcuts", () => {
         context: { terminalFocus: true },
       }),
       "commandPalette.toggle",
-    );
-  });
-
-  it("matches quickChat.toggle globally", () => {
-    assert.strictEqual(
-      resolveShortcutCommand(event({ key: " ", metaKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
-        platform: "MacIntel",
-      }),
-      "quickChat.toggle",
     );
   });
 

@@ -40,7 +40,6 @@ it("shows regular chats all projects and threads in their environment", () => {
       surface: "web",
       projectId: otherProjectId,
       threadId: otherThreadId,
-      quickChatOpen: false,
       activePanel: null,
       revision: 1,
     },

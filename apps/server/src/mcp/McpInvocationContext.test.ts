@@ -48,7 +48,7 @@ it.effect("requires both an app-control capability and typed principal", () => {
     threadId: ThreadId.make("thread-1"),
     providerSessionId: "provider-session-1",
     providerInstanceId: ProviderInstanceId.make("codex"),
-    capabilities: new Set(["app-control"]),
+    capabilities: new Set<McpInvocationContext.McpCapability>(["app-control"]),
     grants: new Set<string>(),
     issuedAt: 1,
   };
@@ -131,5 +131,24 @@ it.effect("does not let non-browser MCP credentials gain app control", () =>
     );
     expect(scope.principal).toEqual(principal);
     expect(scope.capabilities.has("preview")).toBe(false);
+  }),
+);
+
+it.effect("rejects retired assistant principals even with app-control capability", () =>
+  Effect.gen(function* () {
+    const error = yield* McpInvocationContext.requireAppControlScope().pipe(
+      Effect.provideService(McpInvocationContext.McpInvocationContext, {
+        environmentId: EnvironmentId.make("environment-1"),
+        threadId: ThreadId.make("old-assistant"),
+        providerSessionId: "old-session",
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        capabilities: new Set<McpInvocationContext.McpCapability>(["app-control"]),
+        grants: new Set(["view:mutate"]),
+        issuedAt: 1,
+        principal: { kind: "global-assistant", assistantThreadId: ThreadId.make("old-assistant") },
+      }),
+      Effect.flip,
+    );
+    expect(error).toBeInstanceOf(AppControlUnavailableError);
   }),
 );

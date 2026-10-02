@@ -225,6 +225,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 > {
   switch (command.type) {
     case "project.create": {
+      if (command.kind === "system" || command.systemRole !== undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Quick Chat and assistant system projects are no longer supported.",
+        });
+      }
       yield* requireProjectAbsent({
         readModel,
         command,
@@ -237,27 +243,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         exceptProjectId: command.projectId,
       });
       const projectKind = command.kind ?? "workspace";
-      if (
-        (projectKind === "system" && command.systemRole === undefined) ||
-        (projectKind === "workspace" && command.systemRole !== undefined)
-      ) {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: "System projects require a system role, and workspace projects cannot hold one.",
-        });
-      }
-      if (
-        command.systemRole !== undefined &&
-        readModel.projects.some(
-          (project) => project.deletedAt === null && project.systemRole === command.systemRole,
-        )
-      ) {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: `An active '${command.systemRole}' system project already exists.`,
-        });
-      }
-
       return {
         ...(yield* withEventBase({
           aggregateKind: "project",
@@ -411,33 +396,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         projectId: command.projectId,
       });
       const threadKind = command.kind ?? "project";
-      if (threadKind === "assistant" && project.systemRole !== "global-assistant") {
+      if (threadKind !== "project" || project.kind === "system") {
         return yield* new OrchestrationCommandInvariantError({
           commandType: command.type,
-          detail: `Assistant thread '${command.threadId}' requires a global-assistant system project.`,
-        });
-      }
-      if (threadKind === "quick" && project.systemRole !== "quick-chat") {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: `Quick-chat thread '${command.threadId}' requires a quick-chat system project.`,
-        });
-      }
-      if (threadKind === "project" && project.kind === "system") {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: `Project thread '${command.threadId}' cannot belong to system project '${project.id}'.`,
-        });
-      }
-      if (
-        threadKind === "assistant" &&
-        listThreadsByProjectId(readModel, command.projectId).some(
-          (thread) => thread.deletedAt === null && thread.kind === "assistant",
-        )
-      ) {
-        return yield* new OrchestrationCommandInvariantError({
-          commandType: command.type,
-          detail: `System project '${project.id}' already has an active assistant thread.`,
+          detail:
+            "Quick Chat and assistant threads are no longer supported. Create a project thread instead.",
         });
       }
       yield* requireThreadAbsent({
@@ -1512,6 +1475,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      if (targetThread.kind === "assistant" || targetThread.kind === "quick") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail:
+            "Quick Chat and assistant threads are no longer supported. Create a project thread instead.",
+        });
+      }
       const sourceProposedPlan = command.sourceProposedPlan;
       const sourceThread = sourceProposedPlan
         ? yield* requireThread({

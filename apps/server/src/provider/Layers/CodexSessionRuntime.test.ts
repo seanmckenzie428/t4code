@@ -706,29 +706,6 @@ describe("hasConfiguredMcpServer", () => {
   });
 });
 
-describe("control-only Codex launch", () => {
-  it("uses the isolated base config without a runtime-only profile flag", () => {
-    NodeAssert.deepStrictEqual(codexSessionAppServerArgs(["--strict-config"], undefined), [
-      "app-server",
-      "--strict-config",
-    ]);
-  });
-
-  it.effect("omits legacy approval and sandbox overrides from assistant turns", () =>
-    Effect.gen(function* () {
-      const params = yield* buildTurnStartParams({
-        threadId: "assistant-thread",
-        runtimeMode: "approval-required",
-        prompt: "status",
-        useConfiguredPermissionProfile: true,
-      });
-      NodeAssert.equal("approvalPolicy" in params, false);
-      NodeAssert.equal("approvalsReviewer" in params, false);
-      NodeAssert.equal("sandboxPolicy" in params, false);
-    }),
-  );
-});
-
 function makeThreadStartedNotification(
   threadId: string,
   source: EffectCodexSchema.V2ThreadStartedNotification["thread"]["source"],

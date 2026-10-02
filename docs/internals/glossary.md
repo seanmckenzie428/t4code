@@ -81,19 +81,13 @@ server-owned app command may translate into orchestration commands.
 
 #### App-control principal
 
-The scope identity: either a project/thread agent or environment-wide Quick
-Chat, further constrained by provider session, capabilities, and grants.
+The project/thread agent identity, further constrained by provider session,
+capabilities, and grants.
 
 #### Focused-client lease
 
 The environment/provider-session assignment used to route client-owned commands
 to a live focused web or desktop host.
-
-#### Quick Chat
-
-The environment-scoped Codex conversation in a floating popup. Its threads
-live in a hidden system project and its provider uses an isolated control-only
-permission profile.
 
 #### Generated view
 

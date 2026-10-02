@@ -123,6 +123,9 @@ const checkScope = (
   scope: Scope,
   invocation: AppCommandInvocation,
 ): AppControlError | undefined => {
+  if (scope.principal.kind === "global-assistant") {
+    return error("forbidden", "Quick Chat and assistant sessions are no longer supported.");
+  }
   const args = recordArgs(invocation.args);
   if (typeof args.environmentId === "string" && args.environmentId !== scope.environmentId) {
     return error("forbidden", "Cross-environment app control is not permitted.");

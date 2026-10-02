@@ -60,7 +60,6 @@ import {
   useSidebarVisibility,
 } from "./ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
-import { QuickChatLayout } from "./QuickChatLayout";
 import { useActiveEnvironmentId } from "../state/entities";
 import {
   invokeKeybindingAppCommand,
@@ -386,7 +385,9 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
           )}
           <SidebarRail onDoubleClick={resetSidebarWidth} />
         </Sidebar>
-        <QuickChatLayout>{children}</QuickChatLayout>
+        <div className="flex min-h-0 min-w-0 flex-1">
+          <div className="min-w-0 flex-1">{children}</div>
+        </div>
         <SidebarControl />
         <NavigationHistoryShortcuts />
         <MainAppLocationTracker />

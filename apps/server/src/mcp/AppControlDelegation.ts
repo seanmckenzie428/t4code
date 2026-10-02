@@ -46,7 +46,8 @@ export function validateDelegationPrincipal(input: {
   readonly principal: AppControlPrincipal;
   readonly source?: OrchestrationThread | undefined;
 }): string | undefined {
-  if (input.principal.kind === "global-assistant") return undefined;
+  if (input.principal.kind === "global-assistant")
+    return "Quick Chat and assistant sessions are no longer supported.";
   if (input.source === undefined || input.source.deletedAt !== null) {
     return "Delegation source does not exist.";
   }

@@ -63,7 +63,10 @@ export const requireMcpCapability = <const C extends McpCapability>(
 
 export const requireAppControlScope = Effect.fn("mcp.requireAppControlScope")(function* () {
   const invocation = yield* McpInvocationContext;
-  if (!invocation.capabilities.has("app-control") || invocation.principal === undefined) {
+  if (
+    !invocation.capabilities.has("app-control") ||
+    invocation.principal?.kind !== "thread-agent"
+  ) {
     return yield* new AppControlUnavailableError({
       capability: "app-control",
       environmentId: invocation.environmentId,

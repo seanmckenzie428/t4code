@@ -203,7 +203,10 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       assert.equal(defaultsByCommand.get("filePicker.toggle"), "mod+p");
       assert.equal(defaultsByCommand.get("projectSearch.toggle"), "mod+shift+f");
       assert.equal(defaultsByCommand.get("sidebar.toggle"), "mod+b");
-      assert.equal(defaultsByCommand.get("quickChat.toggle"), "mod+shift+space");
+      assert.equal(
+        [...defaultsByCommand.keys()].some((command) => String(command) === "quickChat.toggle"),
+        false,
+      );
       assert.equal(defaultsByCommand.get("rightPanel.toggle"), "mod+alt+b");
       assert.equal(defaultsByCommand.get("rightPanel.close"), "mod+w");
       assert.equal(

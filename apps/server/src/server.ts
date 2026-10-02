@@ -168,7 +168,6 @@ import {
   persistServerRuntimeState,
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
-import { watchConfiguredQuickChat } from "./quickChat/QuickChat.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -586,8 +585,6 @@ const RuntimeDependenciesLive = RuntimeCoreDependenciesLive.pipe(
   Layer.provide(NetService.layer),
 );
 
-const QuickChatStartupLive = Layer.effectDiscard(watchConfiguredQuickChat());
-
 const commandReadinessLayer = HttpRouter.middleware(
   (httpEffect) =>
     Effect.flatMap(ServerRuntimeStartup.ServerRuntimeStartup, (startup) =>
@@ -966,7 +963,6 @@ const makeServerLayer = Layer.unwrap(
           { concurrency: "unbounded" },
         ).pipe(Effect.asVoid),
       }),
-      QuickChatStartupLive,
     ).pipe(Layer.provideMerge(RuntimeDependenciesLive), Layer.provide(launcherLayer));
 
     const routesLayer = HttpRouter.serve(makeRoutesLayer.pipe(Layer.provide(launcherLayer)), {

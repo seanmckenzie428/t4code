@@ -499,3 +499,24 @@ it.effect("bounds completed idempotency receipts without evicting active work", 
     expect(executionCount).toBe(APP_CONTROL_COMPLETED_ACTION_LIMIT + 2);
   }),
 );
+
+it("rejects all commands from retired global-assistant sessions", () => {
+  for (const commandId of ["thread.list", "ui.preview.open", "thread.turn.start"]) {
+    expect(
+      evaluateAppControlAccess({
+        scope: {
+          ...scope(),
+          principal: {
+            kind: "global-assistant",
+            assistantThreadId: ThreadId.make("old-assistant"),
+          },
+        },
+        invocation: {
+          actionId: AppActionId.make("retired-action"),
+          commandId: AppCommandId.make(commandId),
+          args: {},
+        },
+      }),
+    ).toMatchObject({ status: "deny", error: { code: "forbidden" } });
+  }
+});

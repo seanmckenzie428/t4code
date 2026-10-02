@@ -36,12 +36,6 @@ it.effect("parses keybinding rules", () =>
     });
     assert.strictEqual(parsedSidebarToggle.command, "sidebar.toggle");
 
-    const parsedLegacyAssistantToggle = yield* decode(KeybindingRule, {
-      key: "mod+shift+a",
-      command: "assistant.toggle",
-    });
-    assert.strictEqual(parsedLegacyAssistantToggle.command, "assistant.toggle");
-
     const parsedRightPanelToggle = yield* decode(KeybindingRule, {
       key: "mod+alt+b",
       command: "rightPanel.toggle",
@@ -258,6 +252,8 @@ it.effect("drops resolved rules with commands this build does not know", () =>
     const parsed = yield* decode(ResolvedKeybindingsConfig, [
       { command: "terminal.toggle", shortcut },
       { command: "someFuture.toggle", shortcut },
+      { command: "assistant.toggle", shortcut },
+      { command: "quickChat.toggle", shortcut },
       { command: "filePicker.toggle", shortcut },
     ]);
     assert.deepEqual(

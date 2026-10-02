@@ -145,40 +145,42 @@ it.layer(NodeServices.layer)("system entity invariants", (it) => {
     }),
   );
 
-  it.effect("allows assistant turns through the control-only provider profile", () =>
-    Effect.gen(function* () {
-      const readModel = yield* seedSystemEntities;
-      const result = yield* decideOrchestrationCommand({
-        readModel,
-        command: {
-          type: "thread.turn.start",
-          commandId: CommandId.make("start-assistant-turn"),
-          threadId,
-          message: {
-            messageId: MessageId.make("assistant-user-message"),
-            role: "user",
-            text: "Inspect the environment",
-            attachments: [],
+  for (const kind of ["assistant", "quick"] as const) {
+    it.effect(`rejects turns on historical ${kind} threads`, () =>
+      Effect.gen(function* () {
+        const readModel = yield* seedSystemEntities;
+        const historical = {
+          ...readModel,
+          threads: readModel.threads.map((thread) => ({ ...thread, kind })),
+        };
+        const result = yield* decideOrchestrationCommand({
+          readModel: historical,
+          command: {
+            type: "thread.turn.start",
+            commandId: CommandId.make("start-assistant-turn"),
+            threadId,
+            message: {
+              messageId: MessageId.make("assistant-user-message"),
+              role: "user",
+              text: "Inspect the environment",
+              attachments: [],
+            },
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5.6",
+            },
+            runtimeMode: "approval-required",
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            createdAt: now,
           },
-          modelSelection: {
-            instanceId: ProviderInstanceId.make("codex"),
-            model: "gpt-5.6",
-          },
-          runtimeMode: "approval-required",
-          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-          createdAt: now,
-        },
-      });
+        }).pipe(Effect.flip);
 
-      const events = Array.isArray(result) ? result : [result];
-      expect(events.map((event) => event.type)).toEqual([
-        "thread.message-sent",
-        "thread.turn-start-requested",
-      ]);
-    }),
-  );
+        expect(result.message).toContain("no longer supported");
+      }),
+    );
+  }
 
-  it.effect("allows disposable quick threads only in the quick-chat system project", () =>
+  it.effect("rejects creating retired quick threads", () =>
     Effect.gen(function* () {
       const readModel = yield* seedQuickProject;
       const command = {
@@ -199,17 +201,28 @@ it.layer(NodeServices.layer)("system entity invariants", (it) => {
         createdAt: now,
       } as const;
 
-      const event = yield* decideOrchestrationCommand({ command, readModel });
-      expect(Array.isArray(event)).toBe(false);
-      expect(event).toMatchObject({ type: "thread.created", payload: { kind: "quick" } });
-
-      const wrongProjectError = yield* Effect.flip(
-        decideOrchestrationCommand({
-          command: { ...command, commandId: CommandId.make("wrong-quick-project"), projectId },
-          readModel: yield* seedSystemEntities,
-        }),
-      );
-      expect(wrongProjectError.message).toContain("requires a quick-chat system project");
+      const error = yield* decideOrchestrationCommand({ command, readModel }).pipe(Effect.flip);
+      expect(error.message).toContain("no longer supported");
     }),
   );
+  for (const systemRole of ["global-assistant", "quick-chat"] as const) {
+    it.effect(`rejects provisioning retired ${systemRole} projects`, () =>
+      Effect.gen(function* () {
+        const result = yield* decideOrchestrationCommand({
+          readModel: createEmptyReadModel(now),
+          command: {
+            type: "project.create",
+            commandId: CommandId.make(`create-${systemRole}`),
+            projectId,
+            kind: "system",
+            systemRole,
+            title: "Retired",
+            workspaceRoot: "/retired",
+            createdAt: now,
+          },
+        }).pipe(Effect.flip);
+        expect(result.message).toContain("no longer supported");
+      }),
+    );
+  }
 });

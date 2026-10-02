@@ -1889,6 +1889,7 @@ function OpenCommandPaletteDialog(props: {
     pushPaletteView,
   ]);
 
+  const actionEnvironmentId = currentProjectEnvironmentId ?? primaryEnvironmentId;
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
   if (projects.length > 0) {
@@ -1990,9 +1991,9 @@ function OpenCommandPaletteDialog(props: {
     keepOpen: true,
     shortcutCommand: "filePicker.toggle",
     run: async () => {
-      if (assistantEnvironmentId === null) return;
+      if (actionEnvironmentId === null) return;
       await invokeWebAppCommand("ui.files.toggle", {
-        environmentId: assistantEnvironmentId,
+        environmentId: actionEnvironmentId,
         source: "palette",
       });
     },
@@ -2007,9 +2008,9 @@ function OpenCommandPaletteDialog(props: {
     keepOpen: true,
     shortcutCommand: "projectSearch.toggle",
     run: async () => {
-      if (assistantEnvironmentId === null) return;
+      if (actionEnvironmentId === null) return;
       await invokeWebAppCommand("ui.project-search.toggle", {
-        environmentId: assistantEnvironmentId,
+        environmentId: actionEnvironmentId,
         source: "palette",
       });
     },
@@ -2080,23 +2081,6 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  const assistantEnvironmentId = currentProjectEnvironmentId ?? primaryEnvironmentId;
-  actionItems.push({
-    kind: "action",
-    value: "action:quick-chat-toggle",
-    searchTerms: ["quick chat", "assistant", "control", "ephemeral", "ai", "codex"],
-    title: "Toggle Quick Chat",
-    disabled: assistantEnvironmentId === null,
-    icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
-    shortcutCommand: "quickChat.toggle",
-    run: async () => {
-      if (assistantEnvironmentId === null) return;
-      await invokeWebAppCommand("quick-chat.toggle", {
-        environmentId: assistantEnvironmentId,
-        source: "palette",
-      });
-    },
-  });
   const changeThemeItem: CommandPaletteSubmenuItem = {
     kind: "submenu",
     value: "action:change-theme",

@@ -129,8 +129,8 @@ export function useThread(
   ref: ScopedThreadRef | null,
   options?: {
     /**
-     * Reserved thread ids (for example client drafts, the system assistant,
-     * and Quick Chat) may intentionally not exist yet. Waiting for the authoritative
+     * Reserved thread ids (for example client drafts) may intentionally not
+     * exist yet. Waiting for the authoritative
      * shell index avoids retrying a detail subscription for a missing thread.
      */
     waitForShell?: boolean;

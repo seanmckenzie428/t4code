@@ -345,9 +345,9 @@ export function appControlPrincipalForThread(
     readonly kind?: "project" | "assistant" | "quick" | undefined;
     readonly projectId: ProjectId;
   },
-): AppControlPrincipal {
+): AppControlPrincipal | undefined {
   return thread.kind === "assistant" || thread.kind === "quick"
-    ? { kind: "global-assistant", assistantThreadId: threadId }
+    ? undefined
     : { kind: "thread-agent", threadId, projectId: thread.projectId };
 }
 
@@ -625,16 +625,29 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   });
   let turnAnalyticsRequestId = 0;
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
-  const resolveSessionProfile = (threadId: ThreadId) =>
+  const requireProjectSession = (threadId: ThreadId) =>
     Effect.gen(function* () {
       if (Option.isNone(projectionQuery)) return undefined;
-      const thread = yield* projectionQuery.value
-        .getThreadShellById(threadId)
-        .pipe(Effect.orElseSucceed(() => Option.none()));
-      return Option.isSome(thread) &&
+      const thread = yield* (
+        projectionQuery.value.getThreadArchiveShellById ?? projectionQuery.value.getThreadShellById
+      )(threadId).pipe(
+        Effect.mapError((cause) =>
+          toValidationError(
+            "ProviderService.startSession",
+            "Cannot verify the thread before starting a provider session.",
+            cause,
+          ),
+        ),
+      );
+      if (
+        Option.isSome(thread) &&
         (thread.value.kind === "assistant" || thread.value.kind === "quick")
-        ? ("global-assistant" as const)
-        : undefined;
+      ) {
+        return yield* toValidationError(
+          "ProviderService.startSession",
+          "Quick Chat and assistant sessions are no longer supported. Create a project thread instead.",
+        );
+      }
     });
 
   const finishTurnAnalytics = (
@@ -1397,6 +1410,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       readonly binding: ProviderSessionDirectory.ProviderRuntimeBinding;
       readonly operation: string;
     }) {
+      yield* requireProjectSession(input.binding.threadId);
       const bindingInstanceId = yield* requireBindingInstanceId(input.operation, input.binding);
       yield* Effect.annotateCurrentSpan({
         "provider.operation": "recover-session",
@@ -1440,7 +1454,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         const persistedModelSelection = readPersistedModelSelection(input.binding.runtimePayload);
 
         yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
-        const sessionProfile = yield* resolveSessionProfile(input.binding.threadId);
         const resumed = yield* adapter
           .startSession({
             threadId: input.binding.threadId,
@@ -1450,7 +1463,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
             ...(persistedModelSelection ? { modelSelection: persistedModelSelection } : {}),
             ...(hasResumeCursor ? { resumeCursor: input.binding.resumeCursor } : {}),
             runtimeMode: input.binding.runtimeMode ?? "full-access",
-            ...(sessionProfile ? { sessionProfile } : {}),
           })
           .pipe(Effect.onError(() => clearMcpSession(input.binding.threadId)));
         if (resumed.provider !== adapter.provider) {
@@ -1573,6 +1585,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 
   const startSession: ProviderServiceMethod<"startSession"> = Effect.fn("startSession")(
     function* (threadId, rawInput) {
+      yield* requireProjectSession(threadId);
       yield* prepareThreadResume(threadId);
       const parsed = yield* decodeInputOrValidationError({
         operation: "ProviderService.startSession",
@@ -1679,11 +1692,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         const adapter = yield* registry.getByInstance(resolvedInstanceId);
         yield* clearTurnAnalyticsSession(resolvedInstanceId, threadId);
         yield* prepareMcpSession(threadId, resolvedInstanceId);
-        const sessionProfile = yield* resolveSessionProfile(threadId);
+
         const session = yield* adapter
           .startSession({
             ...input,
-            ...(sessionProfile ? { sessionProfile } : {}),
             providerInstanceId: resolvedInstanceId,
             ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
             ...(effectiveResumeCursor !== undefined ? { resumeCursor: effectiveResumeCursor } : {}),
@@ -1753,6 +1765,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       schema: ProviderSendTurnInput,
       payload: rawInput,
     });
+    yield* requireProjectSession(parsed.threadId);
     yield* withThreadArchiveLock(parsed.threadId, prepareThreadResume(parsed.threadId));
 
     const attachments = parsed.attachments ?? [];

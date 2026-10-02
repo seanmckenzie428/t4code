@@ -26,7 +26,6 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
-import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Queue from "effect/Queue";
@@ -3142,64 +3141,6 @@ it.effect("managed runtime rotation restarts app-server and resumes the same nat
     NodeAssert.equal(runtimes[1]?.options.binaryPath, "/t3/tools/codex/0.155.1/bin/codex");
   }).pipe(Effect.provide(layer));
 });
-
-it.effect(
-  "managed Quick Chat keeps its isolated control-only profile across credential rotation",
-  () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const root = yield* fs.makeTempDirectoryScoped({ prefix: "codex-managed-quick-chat-" });
-      const runtimes: FakeCodexRuntime[] = [];
-      let revision = "first";
-      const layer = Layer.effect(
-        CodexAdapter,
-        makeCodexAdapter(decodeCodexSettings({ homePath: NodePath.join(root, "unused") }), {
-          resolveRuntime: Effect.sync(() => ({
-            config: decodeCodexSettings({
-              binaryPath: "/managed/bin/codex",
-              homePath: NodePath.join(root, "managed-home"),
-              launchArgs: "-c 'model_provider=managed'",
-            }),
-            environment: { ACCESS_TOKEN: `dummy-${revision}` },
-            revision,
-          })),
-          makeRuntime: (options) => {
-            const runtime = new FakeCodexRuntime(options);
-            runtimes.push(runtime);
-            return Effect.succeed(runtime);
-          },
-        }),
-      ).pipe(
-        Layer.provideMerge(ServerConfig.layerTest(root, root)),
-        Layer.provideMerge(ServerSettingsService.layerTest()),
-        Layer.provideMerge(providerSessionDirectoryTestLayer),
-        Layer.provideMerge(NodeServices.layer),
-      );
-      yield* Effect.gen(function* () {
-        const adapter = yield* CodexAdapter;
-        const threadId = asThreadId("managed-quick-chat");
-        yield* adapter.startSession({
-          threadId,
-          runtimeMode: "approval-required",
-          sessionProfile: "global-assistant",
-        });
-        revision = "rotated";
-        yield* adapter.sendTurn({ threadId, input: "status" });
-        NodeAssert.equal(runtimes.length, 2);
-        for (const runtime of runtimes) {
-          NodeAssert.equal(runtime.options.binaryPath, "/managed/bin/codex");
-          NodeAssert.equal(runtime.options.launchArgs, "-c 'model_provider=managed'");
-          NodeAssert.equal(runtime.options.homePath, runtime.options.controlOnlyProfile?.codexHome);
-          NodeAssert.notEqual(runtime.options.homePath, NodePath.join(root, "managed-home"));
-          NodeAssert.deepEqual(runtime.options.appServerArgs, ["--strict-config"]);
-          const config = yield* fs.readFileString(runtime.options.controlOnlyProfile!.configFile);
-          NodeAssert.match(config, /default_permissions = "t3-control-only"/);
-          NodeAssert.match(config, /shell_tool = false/);
-        }
-        NodeAssert.equal(runtimes[1]?.options.environment?.ACCESS_TOKEN, "dummy-rotated");
-      }).pipe(Effect.provide(layer));
-    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
-);
 
 it.effect("managed turn failures preserve the sharing-limit code for client notices", () => {
   const factory = makeRuntimeFactory();

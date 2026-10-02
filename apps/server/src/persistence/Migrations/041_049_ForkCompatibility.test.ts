@@ -125,7 +125,7 @@ it.effect("upgrades the shipped T4 ledger through 46 without losing fork data", 
 
     assert.deepStrictEqual(
       executed.map(([id]) => id),
-      Array.from({ length: 14 }, (_, index) => 47 + index),
+      Array.from({ length: 16 }, (_, index) => 47 + index),
     );
     assert.deepStrictEqual(
       yield* sql`
@@ -217,7 +217,7 @@ it.effect(
 );
 
 it.effect(
-  "appends migration 60 to a populated T4 ledger through 59 without losing fork or review data",
+  "appends migrations 60 through 62 to a populated T4 ledger through 59 without losing fork or review data",
   () =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
@@ -273,6 +273,8 @@ it.effect(
 
       assert.deepStrictEqual(yield* runMigrations(), [
         [60, "ProjectionThreadsAutoSettleDisabledAt"],
+        [61, "ProjectionThreadsArchiveLifecycle"],
+        [62, "ThreadArchiveOperations"],
       ]);
       assert.deepStrictEqual(
         yield* sql`

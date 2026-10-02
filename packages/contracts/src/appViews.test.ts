@@ -160,9 +160,9 @@ it.effect("decodes sandboxed views with an explicit command bridge", () =>
       scope: { kind: "personal" },
       kind: "sandboxed",
       html: "<!doctype html><p>Hello</p>",
-      commandIds: ["quick-chat.toggle"],
+      commandIds: ["ui.sidebar.toggle"],
     });
-    assert.strictEqual(parsed.commandIds[0], "quick-chat.toggle");
+    assert.strictEqual(parsed.commandIds[0], "ui.sidebar.toggle");
   }),
 );
 

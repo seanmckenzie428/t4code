@@ -66,7 +66,7 @@ export type AppCommandInvocation = typeof AppCommandInvocation.Type;
 
 /**
  * Authenticated client request for a server-owned semantic command. The
- * principal is the currently rendered thread/assistant scope; the server still
+ * principal is the currently rendered thread scope; the server still
  * revalidates it against the command arguments and projections before running.
  */
 export const AppControlServerInvocation = Schema.Struct({
@@ -130,9 +130,6 @@ export const ClientUiSnapshot = Schema.Struct({
   surface: Schema.Literals(["web", "desktop"]),
   projectId: Schema.NullOr(ProjectId),
   threadId: Schema.NullOr(ThreadId),
-  quickChatOpen: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  /** Legacy client field accepted during rolling upgrades. */
-  assistantOpen: Schema.optionalKey(Schema.Boolean),
   activePanel: Schema.NullOr(TrimmedNonEmptyString),
   revision: NonNegativeInt,
 });

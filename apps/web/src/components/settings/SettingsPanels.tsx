@@ -1,12 +1,4 @@
-import {
-  ArchiveIcon,
-  ArchiveX,
-  ChevronRightIcon,
-  CheckIcon,
-  MessageCircleIcon,
-  SettingsIcon,
-  Trash2Icon,
-} from "lucide-react";
+import { ArchiveIcon, ArchiveX, ChevronRightIcon, CheckIcon, SettingsIcon } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { SettingsGroup } from "./SettingsGroup";
 import { Spinner } from "~/components/ui/spinner";
@@ -21,7 +13,6 @@ import {
   type ProviderInstanceId,
   type ScopedThreadRef,
   type SidebarProjectGroupingMode,
-  type ThreadId,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
@@ -182,10 +173,6 @@ import {
 } from "./settingsLayout";
 import { searchableSetting } from "./settingsSearch";
 import { ProjectFavicon } from "../ProjectFavicon";
-import { useAtomCommand } from "../../state/use-atom-command";
-import { threadEnvironment } from "../../state/threads";
-import { useQuickChatStore } from "../../quickChatStore";
-import { invokeWebAppCommand } from "../../appCommandRegistry";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
 
 const ENVIRONMENT_IDENTIFICATION_LABELS: Record<EnvironmentIdentificationMode, string> = {
@@ -2458,22 +2445,6 @@ export function GeneralSettingsPanel() {
   const hasTextGenerationProvider = textGenerationModelInstanceEntries.some(
     (entry) => entry.enabled && entry.isAvailable,
   );
-  const quickChatCodexOptions = textGenerationModelInstanceEntries
-    .filter((entry) => entry.driverKind === "codex" && entry.enabled && entry.installed)
-    .flatMap((entry) =>
-      entry.models.map((model) => ({
-        value: JSON.stringify([entry.instanceId, model.slug]),
-        instanceId: entry.instanceId,
-        model: model.slug,
-        label: `${entry.displayName} · ${model.name ?? model.slug}`,
-      })),
-    );
-  const quickChatModelValue = settings.globalAssistant.modelSelection
-    ? JSON.stringify([
-        settings.globalAssistant.modelSelection.instanceId,
-        settings.globalAssistant.modelSelection.model,
-      ])
-    : "unconfigured";
   const textGenInstanceEntry = textGenerationModelInstanceEntries.find(
     (entry) => entry.instanceId === textGenInstanceId,
   );
@@ -2513,62 +2484,10 @@ export function GeneralSettingsPanel() {
   return (
     <SettingsPageContainer>
       {scope.kind !== "project" && scope.kind !== "checkout" ? (
-        <SettingsSection title="Quick Chat">
-          <SettingsRow
-            title="Codex model"
-            description="Quick Chat uses an isolated control-only Codex profile. Other providers are not supported."
-            control={
-              <Select
-                value={quickChatModelValue}
-                onValueChange={(value) => {
-                  if (value === "unconfigured") {
-                    updateSettings({
-                      globalAssistant: {
-                        ...settings.globalAssistant,
-                        enabled: false,
-                        modelSelection: null,
-                      },
-                    });
-                    return;
-                  }
-                  const option = quickChatCodexOptions.find(
-                    (candidate) => candidate.value === value,
-                  );
-                  if (!option) return;
-                  updateSettings({
-                    globalAssistant: {
-                      ...settings.globalAssistant,
-                      enabled: true,
-                      modelSelection: createModelSelection(option.instanceId, option.model),
-                    },
-                  });
-                }}
-              >
-                <SelectTrigger className="w-full sm:w-64" aria-label="Quick Chat Codex model">
-                  <SelectValue>
-                    {quickChatModelValue === "unconfigured"
-                      ? "Not configured"
-                      : (quickChatCodexOptions.find(
-                          (option) => option.value === quickChatModelValue,
-                        )?.label ?? "Unavailable Codex model")}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectPopup align="end" alignItemWithTrigger={false}>
-                  <SelectItem hideIndicator value="unconfigured">
-                    Not configured
-                  </SelectItem>
-                  {quickChatCodexOptions.map((option) => (
-                    <SelectItem key={option.value} hideIndicator value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-            }
-          />
+        <SettingsSection title="Agent delegation">
           <SettingsRow
             title="Chat delegation"
-            description="Allow Quick Chat and regular chats to create project threads and start up to three project turns at once."
+            description="Allow chats to create project threads and start up to three project turns at once."
             control={
               <Switch
                 checked={settings.globalAssistant.delegationEnabled}
@@ -3667,31 +3586,13 @@ export function GeneralSettingsPanel() {
 
 export function ArchivedThreadsPanel() {
   const { scope } = useSettingsScope();
-  const { archiveThread, unarchiveThread, confirmAndDeleteThread } = useThreadActions();
-  const deleteQuickChat = useAtomCommand(threadEnvironment.delete, { reportFailure: false });
-  const [quickChatDeleteCandidate, setQuickChatDeleteCandidate] = useState<ThreadId | null>(null);
+  const { unarchiveThread, confirmAndDeleteThread } = useThreadActions();
   const {
     snapshots: archivedSnapshots,
     error: archiveError,
     isLoading: isLoadingArchive,
     refresh: refreshArchivedThreads,
   } = useArchivedThreadSnapshots(scope.environmentIds);
-
-  const archivedQuickChats = useMemo(
-    () =>
-      (scope.kind === "project" || scope.kind === "checkout" ? [] : archivedSnapshots)
-        .flatMap(({ environmentId, snapshot }) =>
-          snapshot.threads
-            .filter((thread) => thread.kind === "quick")
-            .map((thread) => ({ ...thread, environmentId })),
-        )
-        .toSorted((left, right) => {
-          const leftKey = left.archivedAt ?? left.updatedAt;
-          const rightKey = right.archivedAt ?? right.updatedAt;
-          return rightKey.localeCompare(leftKey) || right.id.localeCompare(left.id);
-        }),
-    [archivedSnapshots, scope.kind],
-  );
 
   const archivedGroups = useMemo(() => {
     const selectedProjectKeys =
@@ -3797,126 +3698,6 @@ export function ArchivedThreadsPanel() {
 
   return (
     <SettingsPageContainer>
-      <SettingsSection title="Quick Chat history" icon={<MessageCircleIcon className="size-4" />}>
-        {archivedQuickChats.length === 0 ? (
-          <SettingsRow
-            title={isLoadingArchive ? "Loading Quick Chats" : "No saved Quick Chats"}
-            description={
-              isLoadingArchive
-                ? "Checking connected environments."
-                : "Closing a Quick Chat or starting a new one saves it here."
-            }
-          />
-        ) : (
-          archivedQuickChats.map((thread) => (
-            <SettingsRow
-              key={`${thread.environmentId}:${thread.id}`}
-              title={thread.title}
-              status={
-                thread.archiveLifecycle ? (
-                  <ArchiveLifecycleNotice
-                    key={thread.archiveLifecycle.operationId}
-                    thread={thread}
-                  />
-                ) : null
-              }
-              description={
-                <>
-                  Saved {formatRelativeTimeLabel(thread.archivedAt ?? thread.updatedAt)}
-                  {" \u00b7 Created "}
-                  {formatRelativeTimeLabel(thread.createdAt)}
-                </>
-              }
-              control={
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    disabled={thread.archiveLifecycle != null}
-                    onClick={() => {
-                      void (async () => {
-                        const current =
-                          useQuickChatStore.getState().byEnvironment[String(thread.environmentId)];
-                        if (current && current.threadId !== thread.id) {
-                          await archiveThread(
-                            scopeThreadRef(thread.environmentId, current.threadId),
-                          );
-                        }
-                        const result = await unarchiveThread(
-                          scopeThreadRef(thread.environmentId, thread.id),
-                        );
-                        if (result._tag === "Success") {
-                          await invokeWebAppCommand(
-                            "quick-chat.open",
-                            { environmentId: thread.environmentId, source: "button" },
-                            { threadId: thread.id },
-                          );
-                          refreshArchivedThreads();
-                          return;
-                        }
-                        if (!isAtomCommandInterrupted(result)) {
-                          const error = squashAtomCommandFailure(result);
-                          toastManager.add(
-                            stackedThreadToast({
-                              type: "error",
-                              title: "Failed to open Quick Chat",
-                              description:
-                                error instanceof Error ? error.message : "An error occurred.",
-                            }),
-                          );
-                        }
-                      })();
-                    }}
-                  >
-                    Open
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={quickChatDeleteCandidate === thread.id ? "destructive" : "ghost"}
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => {
-                      if (quickChatDeleteCandidate !== thread.id) {
-                        setQuickChatDeleteCandidate(thread.id);
-                        return;
-                      }
-                      void (async () => {
-                        const result = await deleteQuickChat({
-                          environmentId: thread.environmentId,
-                          input: { threadId: thread.id },
-                        });
-                        if (result._tag === "Success") {
-                          useQuickChatStore
-                            .getState()
-                            .forgetThread(thread.environmentId, thread.id);
-                          setQuickChatDeleteCandidate(null);
-                          refreshArchivedThreads();
-                          return;
-                        }
-                        const error = squashAtomCommandFailure(result);
-                        toastManager.add(
-                          stackedThreadToast({
-                            type: "error",
-                            title: "Failed to delete Quick Chat",
-                            description:
-                              error instanceof Error ? error.message : "An error occurred.",
-                          }),
-                        );
-                      })();
-                    }}
-                  >
-                    <Trash2Icon className="size-3.5" />
-                    {quickChatDeleteCandidate === thread.id ? "Confirm" : "Delete"}
-                  </Button>
-                </>
-              }
-            />
-          ))
-        )}
-      </SettingsSection>
-
       {archivedGroups.length === 0 ? (
         <SettingsSection
           id={isLoadingArchive ? undefined : searchableSetting("archive").id}

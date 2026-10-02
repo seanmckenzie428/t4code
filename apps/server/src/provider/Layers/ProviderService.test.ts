@@ -113,19 +113,16 @@ const CURSOR_DRIVER = ProviderDriverKind.make("cursor");
 it("derives app-control authority independently of provider driver", () => {
   const threadId = asThreadId("thread-provider-neutral");
   const projectId = ProjectId.make("project-provider-neutral");
-  assert.deepStrictEqual(appControlPrincipalForThread(threadId, { kind: "project", projectId }), {
+  assert.deepStrictEqual(appControlPrincipalForThread(threadId, { kind: "project", projectId })!, {
     kind: "thread-agent",
     threadId,
     projectId,
   });
-  assert.deepStrictEqual(appControlPrincipalForThread(threadId, { kind: "quick", projectId }), {
-    kind: "global-assistant",
-    assistantThreadId: threadId,
-  });
+  assert.equal(appControlPrincipalForThread(threadId, { kind: "quick", projectId }), undefined);
   assert.deepStrictEqual(
     [
       ...appControlGrantsForPrincipal(
-        appControlPrincipalForThread(threadId, { kind: "project", projectId }),
+        appControlPrincipalForThread(threadId, { kind: "project", projectId })!,
       ),
     ],
     ["thread:mutate", "view:mutate", "assistant:delegate"],
@@ -5346,9 +5343,6 @@ describe("agent browser access", () => {
       readonly withoutOrchestration?: boolean;
       readonly threadKind?: "project" | "assistant" | "quick";
       readonly captureRequest?: (request: McpCredentialRequest) => void;
-      readonly captureSessionProfile?: (
-        profile: ProviderSessionStartInput["sessionProfile"],
-      ) => void;
     },
   ) =>
     Effect.gen(function* () {
@@ -5469,7 +5463,6 @@ describe("agent browser access", () => {
         });
       }).pipe(Effect.provide(providerLayer));
       yield* startSession;
-      options?.captureSessionProfile?.(codex.startSession.mock.calls[0]?.[0]?.sessionProfile);
 
       return issued;
     });
@@ -5531,27 +5524,21 @@ describe("agent browser access", () => {
   );
 
   for (const threadKind of ["assistant", "quick"] as const) {
-    it.effect(
-      `keeps ${threadKind} app control and session profile when browser access is off`,
-      () =>
-        Effect.gen(function* () {
-          const threadId = asThreadId(`thread-${threadKind}-app-control-only`);
-          const requests: Array<McpCredentialRequest> = [];
-          const profiles: Array<ProviderSessionStartInput["sessionProfile"]> = [];
-          const issued = yield* startSessionWith(false, threadId, undefined, {
+    it.effect(`rejects retired ${threadKind} sessions before issuing credentials`, () =>
+      Effect.gen(function* () {
+        const requests: Array<McpCredentialRequest> = [];
+        const failure = yield* startSessionWith(
+          false,
+          asThreadId(`retired-${threadKind}`),
+          undefined,
+          {
             threadKind,
             captureRequest: (request) => requests.push(request),
-            captureSessionProfile: (profile) => profiles.push(profile),
-          });
-
-          assert.deepEqual(issued, [{ threadId, capabilities: ["pull-requests"] }]);
-          assert.deepEqual(requests[0]?.principal, {
-            kind: "global-assistant",
-            assistantThreadId: threadId,
-          });
-          assert.deepEqual([...(requests[0]?.grants ?? [])], ["view:mutate", "assistant:delegate"]);
-          assert.deepEqual(profiles, ["global-assistant"]);
-        }).pipe(Effect.provide(NodeServices.layer)),
+          },
+        ).pipe(Effect.flip);
+        assert.match(String(failure), /no longer supported/);
+        assert.deepEqual(requests, []);
+      }).pipe(Effect.provide(NodeServices.layer)),
     );
   }
 

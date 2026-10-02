@@ -201,8 +201,6 @@ describe("APP_COMMAND_CATALOG", () => {
   it("maps every shipped keybinding family to a registered semantic command", () => {
     const commands = [
       "sidebar.toggle",
-      "assistant.toggle",
-      "quickChat.toggle",
       "terminal.toggle",
       "terminal.split",
       "terminal.splitVertical",
@@ -237,15 +235,6 @@ describe("APP_COMMAND_CATALOG", () => {
       expect(commandId, keybinding).not.toBeNull();
       expect(isAppCommandId(commandId ?? ""), keybinding).toBe(true);
     }
-  });
-
-  it("allows Quick Chat to reopen an optional saved thread", () => {
-    const entry = APP_COMMAND_CATALOG.find(({ id }) => id === "quick-chat.open");
-    expect(entry?.descriptor.inputSchema).toMatchObject({
-      type: "object",
-      properties: { threadId: { type: "string" } },
-      additionalProperties: false,
-    });
   });
 });
 

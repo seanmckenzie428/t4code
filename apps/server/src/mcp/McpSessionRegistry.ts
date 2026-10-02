@@ -125,10 +125,8 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
       const rawToken = yield* crypto.randomBytes(32).pipe(Effect.map(tokenFromBytes), Effect.orDie);
       const tokenHash = yield* hashToken(rawToken);
       const principal =
-        request.principal !== undefined &&
-        (request.principal.kind === "thread-agent"
-          ? request.principal.threadId === request.threadId
-          : request.principal.assistantThreadId === request.threadId)
+        request.principal?.kind === "thread-agent" &&
+        request.principal.threadId === request.threadId
           ? request.principal
           : undefined;
       const capabilities = new Set<McpInvocationContext.McpCapability>(
