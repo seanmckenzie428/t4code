@@ -100,7 +100,7 @@ describe("mainViewStore", () => {
     ).toEqual(pullRequestSurface(updated));
   });
 
-  it("shows the linked list and selected detail inside the same PR view", () => {
+  it("resets explicit detail to follow the thread's default PR in the same view", () => {
     const mainViews = useMainViewStore.getState();
     mainViews.openPullRequest(refA, firstPr);
     mainViews.openPullRequests(refA);

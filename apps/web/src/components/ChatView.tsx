@@ -252,7 +252,6 @@ import {
 } from "../appViewCommandHost";
 import { AgentsPanel } from "./AgentsPanel";
 import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
-import { ThreadPullRequestsPanel } from "./pullRequest/ThreadPullRequestsPanel";
 import { useDeviceState } from "~/state/device";
 import { DeviceSetup } from "./device/DeviceSetup";
 import { Dialog } from "./ui/dialog";
@@ -311,6 +310,7 @@ import { usePanelAnimationSettings, usePanelPresence } from "../panelAnimations"
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useRemoveClonedProject } from "../hooks/useRemoveClonedProject";
 import { useOpenPanelPullRequestUrl } from "../hooks/useOpenPanelPullRequestUrl";
+import { useThreadMainPullRequest } from "../hooks/useThreadMainPullRequest";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { resolveAppModelSelectionForInstance } from "../modelSelection";
 import {
@@ -3942,9 +3942,7 @@ function ChatViewContent(props: ChatViewProps) {
   const mainViewUserActionRevision = useMainViewStore((state) =>
     activeThreadRef ? state.getUserActionRevision(activeThreadRef) : 0,
   );
-  const mainPullRequest = useMainViewStore((state) =>
-    selectThreadMainPullRequest(state.pullRequestByThreadKey, activeThreadRef),
-  );
+  const mainPullRequest = useThreadMainPullRequest(activeThreadRef);
   const activeMainView = resolveActiveMainView(
     selectedMainView,
     reviewAvailable,
@@ -4901,10 +4899,6 @@ function ChatViewContent(props: ChatViewProps) {
     if (!activeThreadRef) return;
     useRightPanelStore.getState().open(activeThreadRef, "agents");
   }, [activeThreadRef]);
-  const addPullRequestsSurface = useCallback(() => {
-    if (!activeThreadRef || !pullRequestsSurfaceAvailable) return;
-    useMainViewStore.getState().openPullRequests(activeThreadRef);
-  }, [activeThreadRef, pullRequestsSurfaceAvailable]);
   const { state: deviceState, loaded: deviceStateLoaded } = useDeviceState(
     activeThreadRef?.environmentId ?? null,
   );
@@ -4998,7 +4992,6 @@ function ChatViewContent(props: ChatViewProps) {
   );
   // The shell carries server PR updates even while thread detail is still loading.
   const activeThreadMetadata = activeThreadShell ?? activeThread;
-  const hasLinkedPullRequestDetail = activeThreadMetadata?.linkedPullRequest != null;
   const linkedThreadPullRequest =
     activeThreadMetadata?.linkedPullRequest ?? activeThreadMetadata?.branchPullRequest ?? null;
   const activeProjectRepository = sourceControlRepositorySelector(
@@ -5097,11 +5090,7 @@ function ChatViewContent(props: ChatViewProps) {
       linkedThreadPullRequest !== null &&
       panels.getUserActionRevision(activeThreadRef) === userActionRevision
     ) {
-      mainViews.openPullRequest(
-        activeThreadRef,
-        linkedThreadPullRequest,
-        mainViewObservation.userActionRevision,
-      );
+      mainViews.openPullRequests(activeThreadRef, mainViewObservation.userActionRevision);
     }
     if (!clientSettingsHydrated) return;
 
@@ -5120,20 +5109,10 @@ function ChatViewContent(props: ChatViewProps) {
       panels.getUserActionRevision(activeThreadRef) === userActionRevision
     ) {
       if (
-        pullRequestsSurfaceAvailable &&
-        (visiblePullRequestCount > 1 || !hasLinkedPullRequestDetail || !supportsPullRequests)
+        !followSelectedPullRequest &&
+        (pullRequestsSurfaceAvailable || (supportsPullRequests && linkedThreadPullRequest !== null))
       ) {
         mainViews.openPullRequests(activeThreadRef, mainViewObservation.userActionRevision);
-      } else if (
-        !followSelectedPullRequest &&
-        supportsPullRequests &&
-        linkedThreadPullRequest !== null
-      ) {
-        mainViews.openPullRequest(
-          activeThreadRef,
-          linkedThreadPullRequest,
-          mainViewObservation.userActionRevision,
-        );
       }
     }
     if (threadDetailLoading) return;
@@ -5186,11 +5165,9 @@ function ChatViewContent(props: ChatViewProps) {
     latestTurnSettled,
     linkedThreadPullRequest,
     proactivePullRequestsKey,
-    hasLinkedPullRequestDetail,
     selectMainView,
     pullRequestsCapabilityKnown,
     pullRequestsSurfaceAvailable,
-    visiblePullRequestCount,
     settings.proactivePanelsEnabled,
     shouldUseRightPanelSheet,
     supportsPullRequests,
@@ -6535,12 +6512,12 @@ function ChatViewContent(props: ChatViewProps) {
       },
     );
   }, [activeThreadReferenceCopyTarget]);
+  const pullRequestSurfaceAvailable =
+    supportsPullRequests && (linkedThreadPullRequest !== null || pullRequestsSurfaceAvailable);
   const addPullRequestSurface = useCallback(() => {
-    if (!supportsPullRequests || activeThreadRef === null || linkedThreadPullRequest === null)
-      return;
-    useMainViewStore.getState().openPullRequest(activeThreadRef, linkedThreadPullRequest);
-  }, [activeThreadRef, linkedThreadPullRequest, supportsPullRequests]);
-  const pullRequestSurfaceAvailable = supportsPullRequests && linkedThreadPullRequest !== null;
+    if (!activeThreadRef || !pullRequestSurfaceAvailable) return;
+    useMainViewStore.getState().openPullRequests(activeThreadRef);
+  }, [activeThreadRef, pullRequestSurfaceAvailable]);
   const supportsSettlement = serverConfig?.environment.capabilities.threadSettlement === true;
   const supportsSnooze = serverConfig?.environment.capabilities.threadSnooze === true;
   const supportsPinning = serverConfig?.environment.capabilities.threadPinning === true;
@@ -10977,14 +10954,17 @@ function ChatViewContent(props: ChatViewProps) {
               aria-label="PR"
               className="flex min-h-0 min-w-0 flex-1 flex-col"
             >
-              {mainPullRequest === null ? (
-                <ThreadPullRequestsPanel threadRef={activeThreadRef} />
-              ) : !pullRequestsCapabilityKnown ? (
+              {!pullRequestsCapabilityKnown ? (
                 <PullRequestDetailGhost />
               ) : !supportsPullRequests ? (
                 <PullRequestsUnavailableState
                   title="Pull requests unavailable"
                   error={`Update this environment's ${PRODUCT_NAME} server to browse pull requests.`}
+                />
+              ) : mainPullRequest === null ? (
+                <PullRequestsUnavailableState
+                  title="Pull request unavailable"
+                  error="The linked pull request could not be opened in this environment."
                 />
               ) : (
                 // Only the thread's own PR hides checkout; links can open other branches here.
@@ -11023,7 +11003,6 @@ function ChatViewContent(props: ChatViewProps) {
                     mainPullRequest,
                   )}
                   composerDraftTarget={composerDraftTarget}
-                  onBack={pullRequestsSurfaceAvailable ? addPullRequestsSurface : undefined}
                 />
               )}
             </div>
@@ -11084,14 +11063,14 @@ function ChatViewContent(props: ChatViewProps) {
           onManageAppViews={() => setGeneratedViewLibraryOpen(true)}
           onActivateAppViewPlacement={activatePlacedAppView}
           onAddPullRequest={addPullRequestSurface}
-          onAddPullRequests={addPullRequestsSurface}
+          onAddPullRequests={addPullRequestSurface}
           onAddAgents={addAgentsSurface}
           onAddDevice={addDeviceSurface}
           browserAvailable={isPreviewSupportedInRuntime()}
           terminalAvailable={activeProject !== null}
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
-          pullRequestsAvailable={pullRequestsSurfaceAvailable}
+          pullRequestsAvailable={false}
           agentsAvailable
           deviceAvailable={activeThreadRef !== null}
           liveAgentCount={agentPanelModel.liveCount}
@@ -11143,14 +11122,14 @@ function ChatViewContent(props: ChatViewProps) {
             onManageAppViews={() => setGeneratedViewLibraryOpen(true)}
             onActivateAppViewPlacement={activatePlacedAppView}
             onAddPullRequest={addPullRequestSurface}
-            onAddPullRequests={addPullRequestsSurface}
+            onAddPullRequests={addPullRequestSurface}
             onAddAgents={addAgentsSurface}
             onAddDevice={addDeviceSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
             terminalAvailable={activeProject !== null}
             filesAvailable={activeProject !== null}
             pullRequestAvailable={pullRequestSurfaceAvailable}
-            pullRequestsAvailable={pullRequestsSurfaceAvailable}
+            pullRequestsAvailable={false}
             agentsAvailable
             deviceAvailable={activeThreadRef !== null}
             liveAgentCount={agentPanelModel.liveCount}

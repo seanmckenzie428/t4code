@@ -8,11 +8,7 @@ import {
   resolvePullRequestReferenceHost,
 } from "../components/pullRequest/pullRequestDetail.logic";
 import { gitHubPullRequestBrowserUrl } from "../lib/openPullRequestLink";
-import {
-  selectThreadMainPullRequest,
-  selectThreadMainView,
-  useMainViewStore,
-} from "../mainViewStore";
+import { selectThreadMainView, useMainViewStore } from "../mainViewStore";
 import {
   PULL_REQUESTS_PANEL_REF,
   selectActiveRightPanelSurface,
@@ -22,6 +18,7 @@ import { useProject } from "../state/entities";
 import { pullRequestEnvironment } from "../state/pullRequests";
 import { useEnvironmentQuery } from "../state/query";
 import { useSupportsMultiplePullRequests } from "./useSupportsMultiplePullRequests";
+import { useThreadMainPullRequest } from "./useThreadMainPullRequest";
 
 export function useOpenPanelPullRequestUrl(threadRef: ScopedThreadRef | null) {
   const standalone =
@@ -30,14 +27,9 @@ export function useOpenPanelPullRequestUrl(threadRef: ScopedThreadRef | null) {
   const panelSurface = useRightPanelStore((state) =>
     standalone ? selectActiveRightPanelSurface(state.byThreadKey, threadRef) : null,
   );
-  const mainSurface = useMainViewStore((state) => {
-    if (standalone) return null;
-    const activeView = selectThreadMainView(state.byThreadKey, threadRef);
-    return activeView === "pull-request"
-      ? selectThreadMainPullRequest(state.pullRequestByThreadKey, threadRef)
-      : null;
-  });
-  const surface = standalone ? panelSurface : mainSurface;
+  const mainView = useMainViewStore((state) => selectThreadMainView(state.byThreadKey, threadRef));
+  const mainSurface = useThreadMainPullRequest(standalone ? null : threadRef);
+  const surface = standalone ? panelSurface : mainView === "pull-request" ? mainSurface : null;
   const requestedReference = surface?.kind === "pull-request" ? surface : null;
   const environmentId = requestedReference?.environmentId
     ? EnvironmentId.make(requestedReference.environmentId)

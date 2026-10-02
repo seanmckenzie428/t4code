@@ -29,6 +29,7 @@ interface MainViewStoreState {
     target: Parameters<typeof pullRequestSurface>[0],
     expectedUserActionRevision?: number,
   ) => boolean;
+  /** Clear an explicit selection and show the thread's first linked PR. */
   openPullRequests: (ref: ScopedThreadRef, expectedUserActionRevision?: number) => boolean;
   migrateThreadPullRequests: (ref: ScopedThreadRef) => void;
   removeThread: (ref: ScopedThreadRef) => void;
