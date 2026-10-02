@@ -28,6 +28,56 @@ Local server builds expose `pilot` as the canonical executable and retain `t4` a
 With the local desktop app running, use `pilot app` to open the current directory, or
 `pilot app ../my-project` for another directory. The app adds the project if needed.
 
+To launch a planning thread from a local issue launcher, use
+`pilot app start-thread --base-dir ~/.t3 --context-file -` and send this JSON on stdin:
+
+```json
+{
+  "version": 1,
+  "projectRoot": "/Users/you/projects/lotus",
+  "worktreePath": "/Users/you/projects/refundwording",
+  "branch": "LOTUS-252-refundwording",
+  "issue": {
+    "identifier": "LOTUS-252",
+    "title": "Clarify refund wording",
+    "description": "Explain when the vendor gets paid.",
+    "context": "Title: Clarify refund wording\nDescription: Explain when the vendor gets paid."
+  }
+}
+```
+
+The main checkout must already be a project in the running local desktop app.
+The checkout must exist, belong to that repository, and have the supplied branch
+checked out. Each launch creates a fresh thread under the existing project, uses
+its normal model and reasoning defaults, and starts in Plan mode with a
+`$grill-me` request. An optional `prompt` field supplies custom planning instructions. The thread starts in the background, leaving your
+current conversation and window focus unchanged. Open it from the project sidebar
+when ready. It does not create a project or worktree, or run project setup scripts.
+
+Success prints the accepted thread and message IDs as JSON. If the connection
+fails after sending, check the reported thread ID in Pilot before trying again:
+the turn may already have been accepted. The command never resends automatically.
+The complete request must fit within 64 KiB. Use `--context-file path.json` to
+read a file instead, or `--base-dir /path/to/pilot-home` to select another local data directory.
+
+For an empty thread with no model turn, send version-2 workspace context through
+the same command:
+
+```json
+{
+  "version": 2,
+  "projectRoot": "/Users/you/projects/lotus",
+  "worktreePath": "/Users/you/projects/refundwording",
+  "branch": "LOTUS-252-refundwording",
+  "title": "refundwording"
+}
+```
+
+Empty threads use normal interaction defaults and receive focus after creation
+reaches the client. Success returns a thread ID without a message ID. Both forms
+attach the existing checkout; neither starts a second stack or runs setup scripts.
+The `t4` alias remains supported for existing launcher configurations.
+
 ## Providers
 
 Open **Settings → Providers** in the web or desktop app, select the environment,

@@ -2,6 +2,8 @@ import type {
   DesktopAppActivationFailure,
   DesktopAppActivationRequest,
   DesktopAppActivationResponse,
+  DesktopAppStartThreadRequest,
+  MessageId,
   EnvironmentId,
   ExecutionEnvironmentPlatformOs,
   ProjectId,
@@ -34,6 +36,13 @@ export interface DesktopAppActivationDependencies {
   readonly openThread: (
     projectRef: ScopedProjectRef,
   ) => Promise<{ readonly threadId: ThreadId } | null>;
+  readonly startThread: (
+    projectRef: ScopedProjectRef,
+    request: DesktopAppStartThreadRequest,
+  ) => Promise<{
+    readonly threadId: ThreadId;
+    readonly messageId?: MessageId;
+  }>;
 }
 
 function failure(
@@ -77,6 +86,35 @@ export async function handleDesktopAppActivationRequest(
   }
 
   let projectId = dependencies.findProject(target.environmentId, request.workspaceRoot)?.id ?? null;
+  if (request.type === "start-thread") {
+    if (projectId === null) {
+      return failure(
+        request.requestId,
+        "project-not-found",
+        "Add the main Lotus checkout as a Pilot project before launching an issue.",
+      );
+    }
+    try {
+      const started = await dependencies.startThread(
+        { environmentId: target.environmentId, projectId },
+        request,
+      );
+      return {
+        version: 1,
+        requestId: request.requestId,
+        ok: true,
+        projectId,
+        ...started,
+        accepted: true,
+      };
+    } catch (error) {
+      return failure(
+        request.requestId,
+        "thread-start-failed",
+        errorMessage(error, "Pilot could not start the thread."),
+      );
+    }
+  }
   if (projectId === null) {
     try {
       projectId = await dependencies.createProject(target.environmentId, request.workspaceRoot);

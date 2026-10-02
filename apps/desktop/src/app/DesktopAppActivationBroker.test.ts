@@ -35,6 +35,76 @@ describe("DesktopAppActivationBroker", () => {
     broker.close();
   });
 
+  it.each([true, false])(
+    "starts a background thread without focusing (renderer ready: %s)",
+    async (ready) => {
+      const activate = vi.fn();
+      const send = vi.fn();
+      const broker = new DesktopAppActivationBroker({ requestTimeoutMs: 1_000, activate });
+      const backgroundRequest: DesktopAppActivationRequest = {
+        ...request,
+        type: "start-thread",
+        worktreePath: "/workspace/issue",
+        branch: "LOTUS-264-deliverylabel",
+        title: "Delivery label",
+        prompt: "Use $grill-me",
+      };
+      if (ready) broker.registerRenderer(send);
+      const response = broker.request(backgroundRequest);
+      if (!ready) broker.registerRenderer(send);
+      expect(send).toHaveBeenCalledExactlyOnceWith(backgroundRequest);
+      broker.complete({
+        version: 1,
+        requestId: request.requestId,
+        ok: true,
+        accepted: true,
+        projectId: ProjectId.make("project-1"),
+        threadId: ThreadId.make("thread-1"),
+      });
+      await expect(response).resolves.toMatchObject({ ok: true, accepted: true });
+      expect(activate).not.toHaveBeenCalled();
+      broker.close();
+    },
+  );
+
+  it.each([true, false])(
+    "focuses an empty thread only after successful completion (%s)",
+    async (success) => {
+      const activate = vi.fn();
+      const broker = new DesktopAppActivationBroker({ requestTimeoutMs: 1000, activate });
+      broker.registerRenderer(vi.fn());
+      const response = broker.request({
+        ...request,
+        type: "start-thread",
+        worktreePath: "/workspace/task",
+        branch: "task",
+        title: "task",
+      });
+      expect(activate).not.toHaveBeenCalled();
+      if (success) {
+        broker.complete({
+          version: 1,
+          requestId: request.requestId,
+          ok: true,
+          accepted: true,
+          projectId: ProjectId.make("project-1"),
+          threadId: ThreadId.make("thread-1"),
+        });
+      } else {
+        broker.complete({
+          version: 1,
+          requestId: request.requestId,
+          ok: false,
+          code: "thread-start-failed",
+          message: "failed",
+        });
+      }
+      await response;
+      expect(activate).toHaveBeenCalledTimes(success ? 1 : 0);
+      broker.close();
+    },
+  );
+
   it("fails an in-flight request when the renderer goes away", async () => {
     const broker = new DesktopAppActivationBroker({ requestTimeoutMs: 1_000, activate: vi.fn() });
     broker.registerRenderer(vi.fn());

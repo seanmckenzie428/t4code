@@ -5,10 +5,11 @@ import * as NodeOS from "node:os";
 
 import {
   DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
+  DESKTOP_APP_ACTIVATION_MAX_BYTES,
   DesktopAppActivationErrorCode,
   DesktopAppActivationResponse,
   type DesktopAppActivationPlatform,
-  type DesktopAppActivationRequest,
+  DesktopAppActivationRequest,
 } from "@t3tools/contracts";
 import { resolveDesktopAppControlAddress } from "@t3tools/shared/desktopAppControl";
 import {
@@ -22,12 +23,19 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import { Argument, Command } from "effect/unstable/cli";
+import { Argument, Command, Flag } from "effect/unstable/cli";
 
 import { expandHomePath, resolveBaseDir } from "../os-jank.ts";
 import { baseDirFlag } from "./config.ts";
+import { readLinearThreadContext } from "./linearThreadContext.ts";
 
 const CLI_RESPONSE_TIMEOUT_MS = 17_000;
+const encodeActivationRequest = Schema.encodeEffect(
+  Schema.fromJsonString(DesktopAppActivationRequest),
+);
+const encodeActivationResponse = Schema.encodeEffect(
+  Schema.fromJsonString(DesktopAppActivationResponse),
+);
 const MAX_RESPONSE_BYTES = 64 * 1024;
 const isDesktopAppActivationResponse = Schema.is(DesktopAppActivationResponse);
 
@@ -36,7 +44,7 @@ export class DesktopAppSshUnsupportedError extends Schema.TaggedError<DesktopApp
   {},
 ) {
   override get message(): string {
-    return "`t3 app` only controls a desktop app on the same machine. It cannot run over SSH.";
+    return "`pilot app` only controls a desktop app on the same machine. It cannot run over SSH.";
   }
 }
 
@@ -45,7 +53,7 @@ export class DesktopAppPlatformUnsupportedError extends Schema.TaggedError<Deskt
   { platform: Schema.String },
 ) {
   override get message(): string {
-    return `\`t3 app\` is not supported on ${this.platform}.`;
+    return `\`pilot app\` is not supported on ${this.platform}.`;
   }
 }
 
@@ -59,7 +67,7 @@ export class DesktopAppUnreachableError extends Schema.TaggedError<DesktopAppUnr
   },
 ) {
   override get message(): string {
-    return "Could not reach the T3 Code desktop app. Start or update the desktop app on this machine, then run `t3 app` again. A running T3 Code server is not enough.";
+    return "Could not reach the Pilot desktop app. Start or update the desktop app on this machine, then run `pilot app` again. A running Pilot server is not enough.";
   }
 }
 
@@ -73,9 +81,14 @@ export class DesktopAppRequestFailedError extends Schema.TaggedError<DesktopAppR
   },
 ) {
   override get message(): string {
-    return `T3 Code could not open ${this.workspaceRoot} (${this.code}).`;
+    return `Pilot could not open ${this.workspaceRoot} (${this.code}).`;
   }
 }
+
+export class DesktopAppStartError extends Schema.TaggedError<DesktopAppStartError>()(
+  "DesktopAppStartError",
+  { message: Schema.String },
+) {}
 
 function isDesktopPlatform(platform: NodeJS.Platform): platform is DesktopAppActivationPlatform {
   return platform === "darwin" || platform === "linux" || platform === "win32";
@@ -186,6 +199,7 @@ const appEnvironment = Config.all({
 const runAppCommand = Effect.fn("cli.app")(function* (flags: {
   readonly baseDir: Option.Option<string>;
   readonly workspaceRoot: Option.Option<string>;
+  readonly contextFile?: string;
 }) {
   const environment = yield* appEnvironment;
   const hostPlatform = yield* HostProcessPlatform;
@@ -212,13 +226,36 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
       userId,
       joinPath: path.join,
     }).address;
-  const request: DesktopAppActivationRequest = {
-    version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
-    requestId: NodeCrypto.randomUUID(),
-    type: "open-workspace",
-    workspaceRoot,
-    platform: hostPlatform,
-  };
+  const launch =
+    flags.contextFile === undefined
+      ? undefined
+      : yield* Effect.tryPromise({
+          try: () => readLinearThreadContext(flags.contextFile!),
+          catch: (cause) => new DesktopAppStartError({ message: String(cause) }),
+        });
+  const request: DesktopAppActivationRequest =
+    launch === undefined
+      ? {
+          version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
+          requestId: NodeCrypto.randomUUID(),
+          type: "open-workspace",
+          workspaceRoot,
+          platform: hostPlatform,
+        }
+      : {
+          version: DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION,
+          requestId: NodeCrypto.randomUUID(),
+          type: "start-thread",
+          platform: hostPlatform,
+          ...launch,
+        };
+  const encodedRequest = yield* encodeActivationRequest(request);
+  if (Buffer.byteLength(encodedRequest, "utf8") + 1 > DESKTOP_APP_ACTIVATION_MAX_BYTES) {
+    return yield* new DesktopAppStartError({
+      message:
+        "Thread request exceeds the 64 KiB desktop activation limit; shorten issue context without truncating it silently.",
+    });
+  }
   const address = resolveAddress("userdata");
   const fallbackAddress = allowDevFallback ? resolveAddress("dev") : undefined;
 
@@ -230,14 +267,24 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
         request,
       }),
     catch: (cause) =>
-      new DesktopAppUnreachableError({
-        candidateAddresses: fallbackAddress === undefined ? [address] : [address, fallbackAddress],
-        requestId: request.requestId,
-        workspaceRoot,
-        cause,
-      }),
+      request.type === "start-thread"
+        ? new DesktopAppStartError({
+            message: `Thread launch acknowledgement unavailable. Outcome may be uncertain; check Pilot for thread ${request.requestId} before retrying. No automatic retry. ${String(cause)}`,
+          })
+        : new DesktopAppUnreachableError({
+            candidateAddresses:
+              fallbackAddress === undefined ? [address] : [address, fallbackAddress],
+            requestId: request.requestId,
+            workspaceRoot,
+            cause,
+          }),
   });
   if (!response.ok) {
+    if (request.type === "start-thread") {
+      return yield* new DesktopAppStartError({
+        message: `${response.message} (${response.code}); thread ID ${request.requestId}. Check Pilot before retrying; an accepted send is not cancelled by a lost acknowledgement.`,
+      });
+    }
     return yield* new DesktopAppRequestFailedError({
       code: response.code,
       requestId: response.requestId,
@@ -246,8 +293,27 @@ const runAppCommand = Effect.fn("cli.app")(function* (flags: {
     });
   }
 
-  yield* Console.log(`Opened ${workspaceRoot} in T3 Code.`);
+  if (request.type === "start-thread") {
+    if (response.accepted !== true) {
+      return yield* new DesktopAppStartError({
+        message: `Desktop did not confirm turn acceptance; update Pilot. Check thread ${request.requestId} before retrying.`,
+      });
+    }
+    yield* Console.log(yield* encodeActivationResponse(response));
+  } else {
+    yield* Console.log(`Opened ${workspaceRoot} in Pilot.`);
+  }
 });
+
+const startThreadCommand = Command.make("start-thread", {
+  baseDir: baseDirFlag,
+  contextFile: Flag.String("context-file").pipe(Flag.withDefault("-")),
+}).pipe(
+  Command.withDescription(
+    "Open a fresh thread from Lotus handoff JSON; issue context starts a Plan turn, workspace context leaves it empty.",
+  ),
+  Command.withHandler((flags) => runAppCommand({ ...flags, workspaceRoot: Option.none() })),
+);
 
 export const appCommand = Command.make("app", {
   baseDir: baseDirFlag,
@@ -256,6 +322,7 @@ export const appCommand = Command.make("app", {
     Argument.optional,
   ),
 }).pipe(
-  Command.withDescription("Open a project in the running T3 Code desktop app."),
+  Command.withDescription("Open a project in the running Pilot desktop app."),
   Command.withHandler(runAppCommand),
+  Command.withSubcommands([startThreadCommand]),
 );

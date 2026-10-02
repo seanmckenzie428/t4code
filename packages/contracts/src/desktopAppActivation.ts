@@ -1,19 +1,37 @@
 import * as Schema from "effect/Schema";
 
-import { ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { MessageId, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 export const DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION = 1 as const;
+export const DESKTOP_APP_ACTIVATION_MAX_BYTES = 64 * 1024;
 
 export const DesktopAppActivationPlatform = Schema.Literals(["darwin", "linux", "win32"]);
 export type DesktopAppActivationPlatform = typeof DesktopAppActivationPlatform.Type;
 
-export const DesktopAppActivationRequest = Schema.Struct({
+export const DesktopAppOpenWorkspaceRequest = Schema.Struct({
   version: Schema.Literal(DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION),
   requestId: TrimmedNonEmptyString,
   type: Schema.Literal("open-workspace"),
   workspaceRoot: TrimmedNonEmptyString,
   platform: DesktopAppActivationPlatform,
 });
+export const DesktopAppStartThreadRequest = Schema.Struct({
+  version: Schema.Literal(DESKTOP_APP_ACTIVATION_PROTOCOL_VERSION),
+  requestId: TrimmedNonEmptyString,
+  type: Schema.Literal("start-thread"),
+  workspaceRoot: TrimmedNonEmptyString,
+  platform: DesktopAppActivationPlatform,
+  worktreePath: TrimmedNonEmptyString,
+  branch: TrimmedNonEmptyString,
+  title: TrimmedNonEmptyString,
+  prompt: Schema.optional(TrimmedNonEmptyString),
+});
+export type DesktopAppStartThreadRequest = typeof DesktopAppStartThreadRequest.Type;
+
+export const DesktopAppActivationRequest = Schema.Union([
+  DesktopAppOpenWorkspaceRequest,
+  DesktopAppStartThreadRequest,
+]);
 export type DesktopAppActivationRequest = typeof DesktopAppActivationRequest.Type;
 
 export const DesktopAppActivationErrorCode = Schema.Literals([
@@ -23,6 +41,8 @@ export const DesktopAppActivationErrorCode = Schema.Literals([
   "platform-mismatch",
   "project-create-failed",
   "thread-open-failed",
+  "thread-start-failed",
+  "project-not-found",
   "request-timeout",
   "internal-error",
 ]);
@@ -34,6 +54,8 @@ export const DesktopAppActivationSuccess = Schema.Struct({
   ok: Schema.Literal(true),
   projectId: ProjectId,
   threadId: ThreadId,
+  messageId: Schema.optional(MessageId),
+  accepted: Schema.optional(Schema.Boolean),
 });
 export type DesktopAppActivationSuccess = typeof DesktopAppActivationSuccess.Type;
 

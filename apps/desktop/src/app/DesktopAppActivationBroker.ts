@@ -72,7 +72,7 @@ export class DesktopAppActivationBroker {
       });
     });
 
-    this.#activate();
+    if (request.type === "open-workspace") this.#activate();
     this.#flush();
     return response;
   }
@@ -98,6 +98,10 @@ export class DesktopAppActivationBroker {
   }
 
   complete(response: DesktopAppActivationResponse): void {
+    const pending = this.#pending.get(response.requestId);
+    if (response.ok && pending?.request.type === "start-thread" && !pending.request.prompt) {
+      this.#activate();
+    }
     this.#settle(response);
   }
 

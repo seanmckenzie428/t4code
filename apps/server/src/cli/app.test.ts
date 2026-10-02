@@ -3,6 +3,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeNet from "node:net";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
+import * as NodeChildProcess from "node:child_process";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
@@ -17,6 +18,7 @@ import * as NetService from "@t3tools/shared/Net";
 import * as ConfigProvider from "effect/ConfigProvider";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import { Command } from "effect/unstable/cli";
 import { afterEach, describe, expect, vi } from "vite-plus/test";
 
@@ -28,6 +30,8 @@ vi.mock("node:os", async (importOriginal) => {
 });
 
 afterEach(() => vi.mocked(NodeOS.homedir).mockReset());
+
+const encodeUnknownJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 const runCli = (args: ReadonlyArray<string>, env: Record<string, string> = {}) =>
   Command.runWith(makeCli(), { version: "0.0.0" })(args).pipe(
@@ -130,7 +134,92 @@ const withTempDirectory = <A, E, R>(
     (root) => Effect.promise(() => NodeFSP.rm(root, { recursive: true, force: true })),
   );
 
-describe("t3 app", () => {
+describe("pilot app", () => {
+  it.effect("starts a fresh planning thread from an existing-worktree handoff", () =>
+    withTempDirectory("t4-app-start-test-", (root) =>
+      Effect.gen(function* () {
+        const projectRoot = NodePath.join(root, "lotus");
+        const worktreePath = NodePath.join(root, "deliverylabel");
+        const contextFile = NodePath.join(root, "handoff.json");
+        const branch = "LOTUS-264-deliverylabel";
+        yield* Effect.promise(async () => {
+          const git = (args: string[]) =>
+            NodeChildProcess.execFileSync("git", args, { stdio: "ignore" });
+          git(["init", projectRoot]);
+          git([
+            "-C",
+            projectRoot,
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.test",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "Initial",
+          ]);
+          git(["-C", projectRoot, "worktree", "add", "-b", branch, worktreePath]);
+          await NodeFSP.writeFile(
+            contextFile,
+            encodeUnknownJson({
+              version: 1,
+              projectRoot,
+              worktreePath,
+              branch,
+              issue: {
+                identifier: "LOTUS-264",
+                title: "Rename button",
+                description: "Fix wording",
+                context: "Title: Rename button\nDescription: Fix wording",
+              },
+            }),
+          );
+        });
+        const desktop = yield* fakeDesktop({
+          baseDir: root,
+          reply: (request) => ({
+            version: 1,
+            requestId: request.requestId,
+            ok: true,
+            projectId: "lotus",
+            threadId: request.requestId,
+            messageId: `${request.requestId}:message`,
+            accepted: true,
+          }),
+        });
+        yield* runCli(["app", "start-thread", "--base-dir", root, "--context-file", contextFile]);
+        yield* runCli(["app", "start-thread", "--base-dir", root, "--context-file", contextFile]);
+        expect(desktop.received).toHaveLength(2);
+        expect(desktop.received[0]).toMatchObject({
+          type: "start-thread",
+          branch,
+          title: "LOTUS-264 Rename button",
+        });
+        expect(desktop.received[0]?.requestId).not.toEqual(desktop.received[1]?.requestId);
+        const first = desktop.received[0];
+        expect(first?.type).toBe("start-thread");
+        if (first?.type === "start-thread") {
+          expect(first.prompt).toContain("$grill-me");
+          expect(first.prompt).toContain("Plan mode");
+        }
+        const uncertain = yield* fakeDesktop({
+          baseDir: NodePath.join(root, "uncertain"),
+          reply: () => ({ brokenAcknowledgement: true }),
+        });
+        const error = yield* runCli([
+          "app",
+          "start-thread",
+          "--base-dir",
+          NodePath.join(root, "uncertain"),
+          "--context-file",
+          contextFile,
+        ]).pipe(Effect.flip);
+        expect(error).toMatchObject({ _tag: "DesktopAppStartError" });
+        expect(String(error)).toContain("uncertain");
+        expect(uncertain.received).toHaveLength(1);
+      }),
+    ).pipe(Effect.scoped),
+  );
   it.effect("rejects SSH before it tries to reach a desktop app", () =>
     withTempDirectory("t3-app-ssh-test-", (root) =>
       Effect.gen(function* () {
@@ -142,7 +231,7 @@ describe("t3 app", () => {
         expect(error).toMatchObject({
           _tag: "DesktopAppSshUnsupportedError",
           message:
-            "`t3 app` only controls a desktop app on the same machine. It cannot run over SSH.",
+            "`pilot app` only controls a desktop app on the same machine. It cannot run over SSH.",
         });
         expect(yield* pathExists(baseDir)).toBe(false);
       }),
@@ -161,7 +250,7 @@ describe("t3 app", () => {
         expect(error).toMatchObject({
           _tag: "DesktopAppPlatformUnsupportedError",
           platform: "freebsd",
-          message: "`t3 app` is not supported on freebsd.",
+          message: "`pilot app` is not supported on freebsd.",
         });
         expect(yield* pathExists(baseDir)).toBe(false);
       }),
@@ -178,7 +267,7 @@ describe("t3 app", () => {
           _tag: "DesktopAppUnreachableError",
           candidateAddresses: [expect.any(String)],
           workspaceRoot: yield* HostProcessWorkingDirectory,
-          message: expect.stringContaining("Could not reach the T3 Code desktop app."),
+          message: expect.stringContaining("Could not reach the Pilot desktop app."),
           cause: { code: "ENOENT" },
         });
         expect(yield* pathExists(baseDir)).toBe(false);

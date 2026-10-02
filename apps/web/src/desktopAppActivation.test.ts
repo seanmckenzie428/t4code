@@ -1,4 +1,4 @@
-import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, MessageId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
@@ -31,11 +31,71 @@ function dependencies(
     createProject: vi.fn(async () => createdProjectId),
     waitForProject: vi.fn(async () => undefined),
     openThread: vi.fn(async () => ({ threadId })),
+    startThread: vi.fn(async () => ({ threadId, messageId: MessageId.make("message-1") })),
     ...overrides,
   };
 }
 
 describe("desktop app activation", () => {
+  it("starts a thread under the existing project without opening a draft", async () => {
+    const deps = dependencies();
+    const response = await handleDesktopAppActivationRequest(
+      {
+        ...request,
+        type: "start-thread",
+        worktreePath: "/workspace/issue",
+        branch: "LOTUS-264-deliverylabel",
+        title: "LOTUS-264 Delivery label",
+        prompt: "Use $grill-me",
+      },
+      deps,
+    );
+    expect(response).toMatchObject({
+      ok: true,
+      accepted: true,
+      projectId: existingProjectId,
+      threadId,
+      messageId: "message-1",
+    });
+    expect(deps.openThread).not.toHaveBeenCalled();
+    expect(deps.createProject).not.toHaveBeenCalled();
+    expect(deps.startThread).toHaveBeenCalledOnce();
+  });
+
+  it("returns accepted empty-thread creation without a message ID", async () => {
+    const deps = dependencies({ startThread: vi.fn(async () => ({ threadId })) });
+    const response = await handleDesktopAppActivationRequest(
+      {
+        ...request,
+        type: "start-thread",
+        worktreePath: "/workspace/task",
+        branch: "task",
+        title: "task",
+      },
+      deps,
+    );
+    expect(response).toMatchObject({ ok: true, accepted: true, threadId });
+    expect(response).not.toHaveProperty("messageId");
+    expect(deps.openThread).not.toHaveBeenCalled();
+  });
+
+  it("requires an existing project for external thread starts", async () => {
+    const deps = dependencies({ findProject: () => null });
+    const response = await handleDesktopAppActivationRequest(
+      {
+        ...request,
+        type: "start-thread",
+        worktreePath: "/workspace/issue",
+        branch: "LOTUS-264-deliverylabel",
+        title: "Title",
+        prompt: "Prompt",
+      },
+      deps,
+    );
+    expect(response).toMatchObject({ ok: false, code: "project-not-found" });
+    expect(deps.createProject).not.toHaveBeenCalled();
+    expect(deps.startThread).not.toHaveBeenCalled();
+  });
   it("reuses an existing project and opens a new thread", async () => {
     const deps = dependencies();
 
