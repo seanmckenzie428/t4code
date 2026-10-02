@@ -17,7 +17,7 @@ import {
   resolveDesktopNightlyZipArtifact,
 } from "./lib/desktop-nightly-install.ts";
 
-const APP_NAME = "Pilot (Nightly).app";
+const APP_NAME = "Pilot.app";
 const SYSTEM_APPLICATIONS_DIRECTORY = "/Applications";
 const PLIST_BUDDY = "/usr/libexec/PlistBuddy";
 const LOCAL_SIGNING_IDENTITY_ENV = "T4CODE_DESKTOP_LOCAL_SIGNING_IDENTITY";
@@ -97,7 +97,12 @@ function resolveInstallTarget(): string {
     const ownedByCurrentUser =
       getUid !== undefined && NodeFS.statSync(systemTarget).uid === getUid();
     if (ownedByCurrentUser && canWrite(systemTarget) && canWrite(SYSTEM_APPLICATIONS_DIRECTORY)) {
-      return systemTarget;
+      try {
+        validateNightlyApp(systemTarget);
+        return systemTarget;
+      } catch {
+        // A different app can already own the Pilot name in /Applications.
+      }
     }
   } else if (canWrite(SYSTEM_APPLICATIONS_DIRECTORY)) {
     return systemTarget;
@@ -105,7 +110,11 @@ function resolveInstallTarget(): string {
 
   const userApplicationsDirectory = NodePath.join(NodeOS.homedir(), "Applications");
   NodeFS.mkdirSync(userApplicationsDirectory, { recursive: true });
-  return NodePath.join(userApplicationsDirectory, APP_NAME);
+  const userTarget = NodePath.join(userApplicationsDirectory, APP_NAME);
+  if (NodeFS.existsSync(userTarget)) {
+    validateNightlyApp(userTarget);
+  }
+  return userTarget;
 }
 
 function readPlistValue(appPath: string, key: string): string {
@@ -129,12 +138,15 @@ function validateNightlyApp(appPath: string): string {
 }
 
 function installApp(stagedApp: string, targetApp: string): void {
+  const hadExistingApp = NodeFS.existsSync(targetApp);
+  if (hadExistingApp) {
+    validateNightlyApp(targetApp);
+  }
   const previousApp = `${targetApp}.previous`;
   if (NodeFS.existsSync(previousApp)) {
     NodeFS.rmSync(previousApp, { recursive: true, force: true });
   }
 
-  const hadExistingApp = NodeFS.existsSync(targetApp);
   if (hadExistingApp) {
     NodeFS.renameSync(targetApp, previousApp);
   }
@@ -158,7 +170,7 @@ function notifyInstalled(version: string, targetApp: string): void {
     "osascript",
     [
       "-e",
-      `display notification "Quit and reopen Pilot to use ${version}." with title "Pilot Nightly installed" sound name "Glass"`,
+      `display notification "Quit and reopen Pilot to use ${version}." with title "Pilot installed" sound name "Glass"`,
     ],
     "inherit",
   );

@@ -23,7 +23,8 @@ it("renders the matching header treatment for each release channel", () => {
   const nightly = renderLoopbackAuthorizationCompleteHtml("nightly");
   const latest = renderLoopbackAuthorizationCompleteHtml("latest");
 
-  expect(nightly).toContain("Pilot (Nightly)");
+  expect(nightly).toContain('<p class="brand">Pilot</p>');
+  expect(nightly).not.toContain("(Nightly)");
   expect(nightly).toContain('class="stage stage-nightly"');
   expect(latest).toContain('<p class="brand">Pilot</p>');
   expect(latest).not.toContain("(Latest)");

@@ -26,7 +26,7 @@ describe("branding", () => {
           getAppBranding: () => ({
             baseName: "Pilot",
             stageLabel: "Nightly",
-            displayName: "Pilot (Nightly)",
+            displayName: "Pilot",
           }),
         },
       },
@@ -36,7 +36,7 @@ describe("branding", () => {
 
     expect(branding.APP_BASE_NAME).toBe("Pilot");
     expect(branding.APP_STAGE_LABEL).toBe("Nightly");
-    expect(branding.APP_DISPLAY_NAME).toBe("Pilot (Nightly)");
+    expect(branding.APP_DISPLAY_NAME).toBe("Pilot");
   });
 
   it("normalizes hosted app channel metadata", async () => {
@@ -47,7 +47,7 @@ describe("branding", () => {
     expect(branding.HOSTED_APP_CHANNEL).toBe("nightly");
     expect(branding.HOSTED_APP_CHANNEL_LABEL).toBe("Nightly");
     expect(branding.APP_STAGE_LABEL).toBe("Nightly");
-    expect(branding.APP_DISPLAY_NAME).toBe("Pilot (Nightly)");
+    expect(branding.APP_DISPLAY_NAME).toBe("Pilot");
   });
 
   it("does not label the latest hosted app channel", async () => {
@@ -89,7 +89,7 @@ describe("branding logic", () => {
         fallbackStageLabel: "Alpha",
         primaryServerVersion: "0.0.28-nightly.20260616.12",
       }),
-    ).toBe("Pilot (Nightly)");
+    ).toBe("Pilot");
   });
 
   it("keeps the fallback display name for stable primary server versions", () => {

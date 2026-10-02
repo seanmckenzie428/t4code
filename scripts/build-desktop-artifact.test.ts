@@ -263,9 +263,10 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.equal(resolveDesktopUpdateChannel("0.0.17"), "latest");
   });
 
-  it("switches desktop packaging product names to nightly for nightly builds", () => {
+  it("names nightly desktop builds Pilot while retaining their update channel", () => {
     assert.equal(resolveDesktopProductName("0.0.17"), "Pilot (Alpha)");
-    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "Pilot (Nightly)");
+    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "Pilot");
+    assert.equal(resolveDesktopUpdateChannel("0.0.17-nightly.20260413.42"), "nightly");
   });
 
   it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {

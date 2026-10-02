@@ -40,6 +40,22 @@ const makeEnvironment = (
   DesktopEnvironment.DesktopEnvironment.pipe(Effect.provide(makeEnvironmentLayer(overrides, env)));
 
 describe("DesktopEnvironment", () => {
+  it.effect("names nightly builds Pilot while preserving their stage and state", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment({
+        appVersion: "0.0.44-nightly.20261002.6299",
+        isPackaged: true,
+      });
+
+      assert.equal(environment.displayName, "Pilot");
+      assert.equal(environment.branding.stageLabel, "Nightly");
+      assert.equal(environment.appVersion, "0.0.44-nightly.20261002.6299");
+      assert.equal(environment.stateDir, "/Users/alice/.t3/userdata");
+      assert.equal(environment.userDataDirName, "t3code");
+      assert.equal(environment.appUserModelId, "com.t3tools.t3code");
+    }),
+  );
+
   it.effect("derives state paths and development identity inside Effect", () =>
     Effect.gen(function* () {
       const environment = yield* makeEnvironment(

@@ -2599,7 +2599,7 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? `${PRODUCT_NAME} (Nightly)`
+    ? PRODUCT_NAME
     : (desktopPackageJson.productName ?? PRODUCT_NAME);
 }
 
