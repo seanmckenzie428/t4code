@@ -14,44 +14,32 @@ Exporting requires Icon Composer 2 or newer on macOS. The script selects the new
 
 ## macOS exports
 
-Packaged macOS apps use the Icon Composer `.icon` source directly. On Tahoe and Golden Gate, the system renders that native icon. The tracked macOS PNGs also supply the development launcher and a fallback resource.
+Packaged macOS apps compile the Icon Composer `.icon` source natively. The tracked macOS PNGs supply the development launcher's ICNS and runtime Dock image, plus a packaged fallback resource. Those raster assets need the macOS safe area even on Tahoe and Golden Gate; a full-bleed `iOS, macOS` PNG renders too large in the Dock.
 
-For modern macOS artwork, export with Platform `iOS, macOS`, Appearance `Default`, Size `1024pt`, Scale `1×`, and Design Generation `26`. Preserve the native export without resizing or compositing it. The current PNGs use these full-bleed metrics.
+The automated export script leaves the macOS PNGs unchanged. Use Xcode's native compiler to generate an ICNS with all renditions, then extract its 1024px PNG unchanged. For Nightly:
 
-The automated export script leaves the macOS PNGs unchanged. Export them in Icon Composer to the following destinations:
-
-- `dev/app-icon.icon` -> `dev/blueprint-macos-1024.png`
-- `nightly/app-icon.icon` -> `nightly/nightly-macos-1024.png`
-- `prod/app-icon.icon` -> `prod/black-macos-1024.png`
-
-### Legacy macOS artwork
-
-Icon Composer's command-line exporter does not expose the `macOS pre-Tahoe` preset. If preparing a legacy macOS PNG, use the GUI and verify its actual output geometry; some Composer versions export full-bleed artwork even with this preset selected.
-
-After changing an Icon Composer project, open it in Icon Composer and export the macOS PNG with exactly these settings:
-
-- Platform: `macOS pre-Tahoe`
-- Appearance: `Default`
-- Size: `1024pt`
-- Scale: `1×`
-
-For legacy metrics, the result must be a 1024×1024 PNG with the classic macOS safe area: the opaque icon body is 824×824, inset 100 pixels on every side, with only the native Icon Composer shadow extending into the surrounding transparent canvas. Do not treat a full-bleed export as a verified legacy icon.
-
-To have Codex prepare legacy exports, paste this prompt into a task opened at the repository root:
-
-```text
-Use [@Computer](plugin://computer-use@openai-bundled) and the Icon Composer app to export the three macOS app icons in this repository.
-
-For each project below, use Platform: macOS pre-Tahoe, Appearance: Default, Size: 1024pt, and Scale: 1×, then save the PNG to the exact destination:
-
-- assets/dev/app-icon.icon -> assets/dev/blueprint-macos-1024.png
-- assets/nightly/app-icon.icon -> assets/nightly/nightly-macos-1024.png
-- assets/prod/app-icon.icon -> assets/prod/black-macos-1024.png
-
-Do not resize, composite, or otherwise post-process the exported PNGs.
-
-Verify every result is 1024×1024 and has the classic macOS safe area: an 824×824 opaque body inset 100px on every side, with only Icon Composer's native shadow extending beyond it.
+```sh
+icon_output=$(mktemp -d /tmp/pilot-icon.XXXXXX)
+xcrun actool assets/nightly/app-icon.icon \
+  --compile "$icon_output" \
+  --output-format human-readable-text \
+  --output-partial-info-plist "$icon_output/info.plist" \
+  --app-icon app-icon --target-device mac \
+  --minimum-deployment-target 26.0 --platform macosx \
+  --standalone-icon-behavior all
+iconutil -c iconset "$icon_output/app-icon.icns" -o "$icon_output/app.iconset"
+cp "$icon_output/app.iconset/icon_512x512@2x.png" assets/nightly/nightly-macos-1024.png
 ```
+
+Repeat for these source/destination pairs:
+
+- `assets/dev/app-icon.icon` -> `assets/dev/blueprint-macos-1024.png`
+- `assets/nightly/app-icon.icon` -> `assets/nightly/nightly-macos-1024.png`
+- `assets/prod/app-icon.icon` -> `assets/prod/black-macos-1024.png`
+
+`--standalone-icon-behavior all` is required: the default compiler output can omit the 1024px rendition. No resizing or compositing is needed; the compiler supplies the native mask, glass rendering, margins, and shadow.
+
+Verify with `vp test run scripts/lib/macos-icon-assets.test.ts`. Each PNG must be 1024×1024 with an 824×824 opaque body inset 100px on every side, and native shadow outside it. Icon Composer's GUI `macOS pre-Tahoe` preset may also be used, but verify its output: some versions still export full-bleed PNGs. A preset label alone is not proof of correct Dock sizing.
 
 Do not edit the generated PNG or ICO files directly.
 

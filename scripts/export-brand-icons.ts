@@ -253,11 +253,11 @@ const ICON_VARIANTS = [
 ] as const satisfies ReadonlyArray<IconVariant>;
 
 const MACOS_EXPORT_CODEX_PROMPT = [
-  "Use [@Computer](plugin://computer-use@openai-bundled) and the Icon Composer app to export the three macOS app icons in this repository.",
-  "For each project below, use Platform: iOS, macOS, Appearance: Default, Size: 1024pt, Scale: 1×, and Design Generation: 26, then save the PNG to the exact destination:",
+  "Use Xcode's native actool compiler and iconutil to export the three macOS Dock icons, following assets/README.md.",
+  "Compile with --standalone-icon-behavior all, extract icon_512x512@2x.png unchanged, and save it to the exact destination:",
   ...ICON_VARIANTS.map((variant) => `- ${variant.source} -> ${variant.outputs.macos}`),
   "Do not resize, composite, or otherwise post-process the exported PNGs.",
-  "Verify every result is 1024×1024 with the modern full-bleed icon metrics. See assets/README.md if legacy pre-Tahoe artwork is required instead.",
+  "Verify every result is 1024×1024 with an 824×824 opaque body inset 100px on each side and native shadow outside it. Run vp test run scripts/lib/macos-icon-assets.test.ts. Full-bleed PNGs render oversized in the Dock, including on modern macOS.",
 ];
 
 const RepositoryRoot = Effect.service(Path.Path).pipe(
@@ -617,7 +617,7 @@ const logManualMacOsExportInstructions = Effect.fn("iconExport.logManualMacOsExp
     yield* Console.warn(
       [
         "macOS PNGs were not changed. Packaged macOS apps use the native .icon sources.",
-        "For modern macOS PNGs, export each source with Platform: iOS, macOS, Appearance: Default, Size: 1024pt, Scale: 1×, Design Generation: 26:",
+        "For raster Dock icons, compile each source with actool --standalone-icon-behavior all and extract its native 1024px ICNS rendition:",
         ...ICON_VARIANTS.map((variant) => `- ${variant.source} -> ${variant.outputs.macos}`),
         "See assets/README.md for the complete workflow.",
         "",
