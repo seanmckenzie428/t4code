@@ -130,7 +130,7 @@ import { useDiffPanelStore } from "../diffPanelStore";
 import {
   type MainView,
   resolveActiveMainView,
-  selectThreadMainPullRequests,
+  selectThreadMainPullRequest,
   selectThreadMainView,
   useMainViewStore,
 } from "../mainViewStore";
@@ -195,7 +195,6 @@ import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import {
-  type PullRequestSurface,
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
   selectThreadRightPanelState,
@@ -277,7 +276,6 @@ import {
   Minimize2Icon,
   PaperclipIcon,
   WifiOffIcon,
-  XIcon,
 } from "lucide-react";
 import { cn, randomHex, randomUUID } from "~/lib/utils";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -803,102 +801,67 @@ const SCRIPT_TERMINAL_ROWS = 30;
 function MainViewTabs(props: {
   activeView: MainView;
   reviewAvailable: boolean;
-  pullRequests: readonly PullRequestSurface[];
-  pullRequestsAvailable: boolean;
+  pullRequestAvailable: boolean;
   onSelect: (view: MainView) => void;
-  onClosePullRequest: (id: PullRequestSurface["id"]) => void;
 }) {
-  const activeTabRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    activeTabRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [props.activeView]);
   const tabs = [
-    { id: "chat" as const, label: "Chat", icon: MessageSquareIcon, available: true, closeId: null },
+    { id: "chat" as const, label: "Chat", icon: MessageSquareIcon, available: true },
     {
       id: "review" as const,
       label: "Review",
       icon: FileDiffIcon,
       available: props.reviewAvailable,
-      closeId: null,
     },
-    ...(props.pullRequestsAvailable
-      ? [
-          {
-            id: "pull-requests" as const,
-            label: "PRs",
-            icon: PullRequestGlyph.stack,
-            available: true,
-            closeId: null,
-          },
-        ]
-      : []),
-    ...props.pullRequests.map((pullRequest) => ({
-      id: pullRequest.id,
-      label: `PR #${pullRequest.number}`,
-      title: `${pullRequest.host ? `${pullRequest.host}/` : ""}${pullRequest.repository} #${pullRequest.number}`,
+    {
+      id: "pull-request" as const,
+      label: "PR",
       icon: PullRequestGlyph.pullRequest,
-      available: true,
-      closeId: pullRequest.id,
-    })),
+      available: props.pullRequestAvailable,
+    },
   ];
 
   return (
     <div
       role="tablist"
       aria-label="Thread view"
-      className="flex h-10 min-h-10 shrink-0 flex-row items-center gap-1 overflow-x-auto overflow-y-hidden border-b border-border/60 bg-background px-3 sm:px-5"
+      className="flex h-10 min-h-10 shrink-0 flex-row items-center gap-1 border-b border-border/60 bg-background px-3 sm:px-5"
       data-main-view-tabs
     >
       {tabs.map((tab) => {
         const active = props.activeView === tab.id;
         const Icon = tab.icon;
         return (
-          <div key={tab.id} className="flex shrink-0 items-center">
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    ref={active ? activeTabRef : undefined}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    aria-controls={`main-${tab.id}-view`}
-                    disabled={!tab.available}
-                    onClick={() => props.onSelect(tab.id)}
-                    className={cn(
-                      "flex h-7 items-center gap-1.5 rounded-md px-2 text-sm whitespace-nowrap transition-colors",
-                      active
-                        ? "bg-accent text-foreground"
-                        : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-                      !tab.available && "cursor-not-allowed opacity-40",
-                    )}
-                  >
-                    <Icon className="size-3.5 shrink-0" />
-                    <span>{tab.label}</span>
-                  </button>
-                }
-              />
-              <TooltipPopup>
-                {tab.available
-                  ? "title" in tab
-                    ? tab.title
-                    : tab.label
-                  : "Review is available for server threads in Git repositories."}
-              </TooltipPopup>
-            </Tooltip>
-            {tab.closeId !== null ? (
-              <button
-                type="button"
-                aria-label={`Close ${tab.label}`}
-                onClick={() => {
-                  if (tab.closeId !== null) props.onClosePullRequest(tab.closeId);
-                }}
-                className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-              >
-                <XIcon className="size-3" />
-              </button>
-            ) : null}
-          </div>
+          <Tooltip key={tab.id}>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-controls={`main-${tab.id}-view`}
+                  disabled={!tab.available}
+                  onClick={() => props.onSelect(tab.id)}
+                  className={cn(
+                    "flex h-7 items-center gap-1.5 rounded-md px-2 text-sm transition-colors",
+                    active
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                    !tab.available && "cursor-not-allowed opacity-40",
+                  )}
+                >
+                  <Icon className="size-3.5 shrink-0" />
+                  <span>{tab.label}</span>
+                </button>
+              }
+            />
+            <TooltipPopup>
+              {tab.available
+                ? tab.label
+                : tab.id === "review"
+                  ? "Review is available for server threads in Git repositories."
+                  : "Open a pull request to view it here."}
+            </TooltipPopup>
+          </Tooltip>
         );
       })}
     </div>
@@ -3979,26 +3942,21 @@ function ChatViewContent(props: ChatViewProps) {
   const mainViewUserActionRevision = useMainViewStore((state) =>
     activeThreadRef ? state.getUserActionRevision(activeThreadRef) : 0,
   );
-  const mainPullRequests = useMainViewStore((state) =>
-    selectThreadMainPullRequests(state.pullRequestsByThreadKey, activeThreadRef),
+  const mainPullRequest = useMainViewStore((state) =>
+    selectThreadMainPullRequest(state.pullRequestByThreadKey, activeThreadRef),
   );
   const activeMainView = resolveActiveMainView(
     selectedMainView,
     reviewAvailable,
-    mainPullRequests,
+    mainPullRequest,
     pullRequestsSurfaceAvailable,
   );
-  const activeMainPullRequest = mainPullRequests.find((surface) => surface.id === activeMainView);
   useEffect(() => {
     if (activeThreadRef) useMainViewStore.getState().migrateThreadPullRequests(activeThreadRef);
   }, [activeThreadRef]);
   useEffect(() => {
     // A PR opened from the narrow layout's launcher must be revealed behind its sheet.
-    if (
-      shouldUseRightPanelSheet &&
-      activeThreadRef &&
-      (activeMainView === "pull-requests" || activeMainView.startsWith("pull-request:"))
-    ) {
+    if (shouldUseRightPanelSheet && activeThreadRef && activeMainView === "pull-request") {
       useRightPanelStore.getState().close(activeThreadRef);
     }
   }, [activeMainView, activeThreadRef, mainViewUserActionRevision, shouldUseRightPanelSheet]);
@@ -5117,9 +5075,9 @@ function ChatViewContent(props: ChatViewProps) {
       userActionRevision,
     } = observation;
     const openSurface =
-      selectThreadMainPullRequests(mainViews.pullRequestsByThreadKey, activeThreadRef).find(
-        (surface) => surface.id === selectThreadMainView(mainViews.byThreadKey, activeThreadRef),
-      ) ?? null;
+      selectThreadMainView(mainViews.byThreadKey, activeThreadRef) === "pull-request"
+        ? selectThreadMainPullRequest(mainViews.pullRequestByThreadKey, activeThreadRef)
+        : null;
     const previousPullRequest = observedThreadPullRequestRef.current;
     observedThreadPullRequestRef.current = {
       threadKey: activeThreadKey,
@@ -10512,12 +10470,8 @@ function ChatViewContent(props: ChatViewProps) {
         <MainViewTabs
           activeView={activeMainView}
           reviewAvailable={reviewAvailable}
-          pullRequests={mainPullRequests}
-          pullRequestsAvailable={pullRequestsSurfaceAvailable}
+          pullRequestAvailable={mainPullRequest !== null || pullRequestsSurfaceAvailable}
           onSelect={selectMainView}
-          onClosePullRequest={(id) => {
-            if (activeThreadRef) useMainViewStore.getState().closePullRequest(activeThreadRef, id);
-          }}
         />
 
         {/* Main content area with optional plan sidebar */}
@@ -11016,14 +10970,16 @@ function ChatViewContent(props: ChatViewProps) {
               </Suspense>
             </div>
           ) : null}
-          {activeMainPullRequest && activeThreadRef ? (
+          {activeMainView === "pull-request" && activeThreadRef ? (
             <div
-              id={`main-${activeMainPullRequest.id}-view`}
+              id="main-pull-request-view"
               role="tabpanel"
-              aria-label={`PR #${activeMainPullRequest.number}`}
+              aria-label="PR"
               className="flex min-h-0 min-w-0 flex-1 flex-col"
             >
-              {!pullRequestsCapabilityKnown ? (
+              {mainPullRequest === null ? (
+                <ThreadPullRequestsPanel threadRef={activeThreadRef} />
+              ) : !pullRequestsCapabilityKnown ? (
                 <PullRequestDetailGhost />
               ) : !supportsPullRequests ? (
                 <PullRequestsUnavailableState
@@ -11031,10 +10987,7 @@ function ChatViewContent(props: ChatViewProps) {
                   error={`Update this environment's ${PRODUCT_NAME} server to browse pull requests.`}
                 />
               ) : (
-                // The main tab owns closing. The thread context also drops the checkout button, so it
-                // is only right for the thread's own pull request, whose branch is already under the
-                // reader's feet. A link the agent wrote can open any other one here, and that one has to be
-                // checkable out like it is anywhere else.
+                // Only the thread's own PR hides checkout; links can open other branches here.
                 <PullRequestDetailPanel
                   getShortcutContext={getShortcutContext}
                   shortcutsEnabled
@@ -11042,7 +10995,7 @@ function ChatViewContent(props: ChatViewProps) {
                     selectMainView("chat");
                     scheduleComposerFocus();
                   }}
-                  key={`${activeMainPullRequest.host ?? ""}:${activeMainPullRequest.repository}#${activeMainPullRequest.number}`}
+                  key={`${activeThreadKey}:${mainPullRequest.id}`}
                   environmentId={activeThread.environmentId}
                   onSelectPullRequest={(reference) => {
                     if (activeThreadRef)
@@ -11055,10 +11008,10 @@ function ChatViewContent(props: ChatViewProps) {
                   }}
                   threadRef={activeThreadRef}
                   reference={{
-                    projectId: activeMainPullRequest.projectId as ProjectId,
-                    ...(activeMainPullRequest.host ? { host: activeMainPullRequest.host } : {}),
-                    repository: activeMainPullRequest.repository,
-                    number: activeMainPullRequest.number,
+                    projectId: mainPullRequest.projectId as ProjectId,
+                    ...(mainPullRequest.host ? { host: mainPullRequest.host } : {}),
+                    repository: mainPullRequest.repository,
+                    number: mainPullRequest.number,
                   }}
                   context={pullRequestPanelContext(
                     {
@@ -11067,28 +11020,12 @@ function ChatViewContent(props: ChatViewProps) {
                       linkedPullRequest: activeThreadMetadata?.linkedPullRequest,
                       branchPullRequest: activeThreadMetadata?.branchPullRequest,
                     },
-                    activeMainPullRequest,
+                    mainPullRequest,
                   )}
                   composerDraftTarget={composerDraftTarget}
-                  onBack={
-                    activeThreadRef !== null &&
-                    pullRequestsSurfaceAvailable &&
-                    visiblePullRequestCount > 1
-                      ? addPullRequestsSurface
-                      : undefined
-                  }
+                  onBack={pullRequestsSurfaceAvailable ? addPullRequestsSurface : undefined}
                 />
               )}
-            </div>
-          ) : null}
-          {activeMainView === "pull-requests" && activeThreadRef ? (
-            <div
-              id="main-pull-requests-view"
-              role="tabpanel"
-              aria-label="Pull requests"
-              className="flex min-h-0 min-w-0 flex-1 flex-col"
-            >
-              <ThreadPullRequestsPanel threadRef={activeThreadRef} />
             </div>
           ) : null}
         </div>

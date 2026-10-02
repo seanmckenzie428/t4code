@@ -194,7 +194,7 @@ export function findProjectOnChangeRequestHost(
  * lookalike hostname matches no project and stays a link, and the page is handed the project
  * rather than a host to narrow its whole list by.
  *
- * Given a thread, the link opens in its own main-view tab. The standalone pull requests page
+ * Given a thread, the link opens in the thread's PR tab. The standalone pull requests page
  * keeps its shared panel. Any change request can open in a thread, not only its linked one.
  */
 export function shouldOpenPullRequestExternally(

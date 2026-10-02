@@ -9,7 +9,7 @@ import {
 } from "../components/pullRequest/pullRequestDetail.logic";
 import { gitHubPullRequestBrowserUrl } from "../lib/openPullRequestLink";
 import {
-  selectThreadMainPullRequests,
+  selectThreadMainPullRequest,
   selectThreadMainView,
   useMainViewStore,
 } from "../mainViewStore";
@@ -33,11 +33,9 @@ export function useOpenPanelPullRequestUrl(threadRef: ScopedThreadRef | null) {
   const mainSurface = useMainViewStore((state) => {
     if (standalone) return null;
     const activeView = selectThreadMainView(state.byThreadKey, threadRef);
-    return (
-      selectThreadMainPullRequests(state.pullRequestsByThreadKey, threadRef).find(
-        (surface) => surface.id === activeView,
-      ) ?? null
-    );
+    return activeView === "pull-request"
+      ? selectThreadMainPullRequest(state.pullRequestByThreadKey, threadRef)
+      : null;
   });
   const surface = standalone ? panelSurface : mainSurface;
   const requestedReference = surface?.kind === "pull-request" ? surface : null;
