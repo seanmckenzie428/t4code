@@ -1,11 +1,11 @@
 ---
 name: test-t3-mobile
-description: Launch and test T4 Code Mobile on an iOS Simulator or Android Emulator against disposable local T4 environments, including Metro and dev-client reuse, native rebuild decisions, per-client pairing, seeded projects, semantic UI control, screenshots, and iOS serve-sim streaming. Use after mobile UI or native changes, when reproducing phone or tablet behavior, pairing an emulator to isolated state, or verifying mobile behavior on macOS, Linux, or Windows.
+description: Launch and test Pilot Mobile on an iOS Simulator or Android Emulator against disposable local Pilot environments, including Metro and dev-client reuse, native rebuild decisions, per-client pairing, seeded projects, semantic UI control, screenshots, and iOS serve-sim streaming. Use after mobile UI or native changes, when reproducing phone or tablet behavior, pairing an emulator to isolated state, or verifying mobile behavior on macOS, Linux, or Windows.
 ---
 
-# Test T4 Mobile
+# Test Pilot Mobile
 
-Run one focused, end-to-end mobile verification pass against disposable T4 state. Use the sibling [`test-t3-app`](../test-t3-app/SKILL.md) skill as the detailed reference for pairing-token semantics and SQLite fixtures.
+Run one focused, end-to-end mobile verification pass against disposable Pilot state. Use the sibling [`test-t3-app`](../test-t3-app/SKILL.md) skill as the detailed reference for pairing-token semantics and SQLite fixtures.
 
 Command examples use POSIX shell syntax. On Windows, use PowerShell equivalents: set variables with `$env:NAME = "value"`, use an explicit temporary directory from `[System.IO.Path]::GetTempPath()`, and run multiline examples on one line or with PowerShell backticks. Use `$env:ANDROID_HOME\platform-tools\adb.exe` when `adb` is not already on `PATH`.
 
@@ -50,7 +50,7 @@ Authorized mobile verification includes building and installing a development cl
 
 Run this from the checkout being tested, on the machine that hosts the selected simulator or emulator. Select and boot one explicit iOS UDID or Android emulator serial first:
 
-- App: `T4 Code Dev`
+- App: `Pilot Dev`
 - Bundle/package identifier: `com.t3tools.t3code.dev`
 - URL scheme: `t3code-dev`
 
@@ -65,9 +65,9 @@ For a read-only decision, use `check` in place of `ensure`. Exit 0 means compati
 
 A JavaScript-only diff, bundle identifier, app version, or recent install date does not prove native compatibility. Always check the whole checkout. Expo fingerprints are computed locally with `APP_VARIANT=development`; no EAS credentials or cloud build are required. Generated `ios/` and `android/` directories are excluded by `.fingerprintignore`, so edit native source modules or config plugins rather than generated output.
 
-The development identity is `T4 Code Dev`, bundle/package `com.t3tools.t3code.dev`, scheme `t3code-dev`. If a build fails, investigate the build error and fix the local prerequisites. Report the concrete failure if it cannot be resolved, not “no compatible client.”
+The development identity is `Pilot Dev`, bundle/package `com.t3tools.t3code.dev`, scheme `t3code-dev`. If a build fails, investigate the build error and fix the local prerequisites. Report the concrete failure if it cannot be resolved, not “no compatible client.”
 
-## Start one disposable T4 environment
+## Start one disposable Pilot environment
 
 Run backend commands from the repository root. Use the ignored, worktree-local `.t3` directory or create a fresh directory with the host OS's temporary-directory mechanism. An explicit base directory stores state in `<base-dir>/userdata`; never point testing at shared `~/.t3` state.
 
@@ -177,7 +177,7 @@ The Add Environment route owns the behavior: `pairingUrl` prefills its normal ho
 
 Do not enter pairing hosts or tokens through simulator keyboard automation. Xcode's semantic typer sends HID-style key events through the simulator's active keyboard state, which can corrupt uppercase tokens and punctuation even when the host Mac uses a U.S. input source. The one-shot route is the deterministic pairing path. Use the visible form only as a fallback, and paste credentials rather than typing them character by character.
 
-In T4 Code Dev, verify the expected seeded projects appear before exercising the affected flow.
+In Pilot Dev, verify the expected seeded projects appear before exercising the affected flow.
 
 Pairing credentials are secret, short-lived, and single-use. Create a different credential for every simulator, emulator, physical device, or browser. If an attempt fails, issue a new credential rather than retrying the old one. Do not expose tokens in screenshots, commits, or final responses.
 
@@ -185,7 +185,7 @@ Pairing credentials are secret, short-lived, and single-use. Create a different 
 
 ### iOS
 
-Use `snapshot_ui` and current element references from XcodeBuildMCP for taps and typing. Stream the same UDID through `ios-simulator-browser` so the user can watch in T4 Code when the host supports it. Use the stream as a visual feed rather than a reason to switch to fragile browser coordinates.
+Use `snapshot_ui` and current element references from XcodeBuildMCP for taps and typing. Stream the same UDID through `ios-simulator-browser` so the user can watch in Pilot when the host supports it. Use the stream as a visual feed rather than a reason to switch to fragile browser coordinates.
 
 ### Android
 
@@ -199,7 +199,7 @@ Exercise only the affected flow on one representative device unless the change s
 
 1. Confirm the app connected to the intended disposable environment instead of merely rendering an empty disconnected state.
 2. Capture the relevant final state.
-3. Remove the disposable environment from T4 Code Dev.
+3. Remove the disposable environment from Pilot Dev.
 4. Remove any `adb reverse` rule created for this test with `adb -s <emulator-serial> reverse --remove tcp:<metro-port>`.
 5. Stop only the serve-sim, Metro, backend, emulator, and log processes started by this test.
 6. Remove only base directories and temporary Git repositories deliberately created for this test. Preserve them when they contain useful reproduction evidence.

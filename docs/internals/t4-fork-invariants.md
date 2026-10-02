@@ -1,6 +1,6 @@
 # Pilot fork invariants
 
-Pilot is a long-lived fork of T3, not a temporary patch stack. Upstream work is welcome only when it
+Pilot (formerly T4 Code) is a long-lived fork of upstream T3 Code, not a temporary patch stack. Upstream work is welcome only when it
 preserves Pilot behavior. Git conflict resolution is insufficient: independently added code paths can
 merge cleanly while omitting a required Pilot field or bypassing a Pilot policy.
 
@@ -58,17 +58,17 @@ These patches establish current behavior. Commit IDs are provenance, not a subst
 
 ## T3 integration procedure
 
-1. Start from clean T4 `main`. Verify `origin` is the personal fork and `upstream` has no usable
+1. Start from clean Pilot `main`. Verify `origin` is the personal fork and `upstream` has no usable
    push URL.
 2. Fetch T3 without pulling or merging. Select an exact upstream tag or SHA.
 3. Run `vp run sync:t3:preflight -- <exact-upstream-tag-or-sha>`. Any path overlap blocks automatic
    integration and requires review against the inventory above.
 4. Integrate the exact commit. Resolve each overlap deliberately; never use a blanket side choice.
-5. Compare the resulting tree to upstream and confirm every intentional T4 delta still exists.
+5. Compare the resulting tree to upstream and confirm every intentional Pilot delta still exists.
 6. Run `vp run test:t4-invariants`, then focused tests/typechecks for every overlapping surface. Add
-   non-default T4 fixtures for any new parallel path.
-7. Update the sync record below with upstream SHA, T4 parent, overlaps, decisions, and validation.
-8. Commit only after all choices are resolved. If an upstream behavior conflicts with a T4
+   non-default Pilot fixtures for any new parallel path.
+7. Update the sync record below with upstream SHA, Pilot parent, overlaps, decisions, and validation.
+8. Commit only after all choices are resolved. If an upstream behavior conflicts with a Pilot
    invariant, ask the user before the commit.
 
 No-overlap preflight is not proof of compatibility. Contracts can cross files, so invariant tests

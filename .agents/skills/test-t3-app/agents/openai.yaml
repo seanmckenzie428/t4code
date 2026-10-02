@@ -1,4 +1,4 @@
 interface:
-  display_name: "T4 App Testing"
-  short_description: "Test web and desktop in T4's Browser panel"
-  default_prompt: "Use $test-t3-app to verify the affected web or desktop flow through T4's Browser panel."
+  display_name: "Pilot App Testing"
+  short_description: "Test web and desktop in Pilot's Browser panel"
+  default_prompt: "Use $test-t3-app to verify the affected web or desktop flow through Pilot's Browser panel."

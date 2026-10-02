@@ -1,4 +1,4 @@
 interface:
-  display_name: "Test T4 Mobile"
-  short_description: "Test iOS and Android in T4's Device panel"
-  default_prompt: "Use $test-t3-mobile to verify the affected native mobile flow through T4's Device panel and AgentDevice."
+  display_name: "Test Pilot Mobile"
+  short_description: "Test iOS and Android in Pilot's Device panel"
+  default_prompt: "Use $test-t3-mobile to verify the affected native mobile flow through Pilot's Device panel and AgentDevice."

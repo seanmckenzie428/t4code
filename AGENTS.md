@@ -1,26 +1,34 @@
-# T3 Code
+# Pilot
 
-## T4 fork precedence
+## Pilot fork precedence
 
-This checkout is T4, a persistent fork of upstream T3. Before fetching changes for integration,
+Pilot is the current name of this checkout, formerly T4 Code, a persistent fork of upstream T3 Code.
+T3/Pilot share the same codebase lineage: T3 or T4 names in existing modules, skills, commands,
+and internal docs usually refer to this codebase, not a separate implementation. Keep those
+compatibility identifiers unchanged; see `docs/internals/t4-compatibility.md`.
+
+Before fetching changes for integration,
 rebasing onto T3, merging T3, or cherry-picking a T3 change, read
 `docs/internals/t4-fork-invariants.md` and run
 `vp run sync:t3:preflight -- <exact-upstream-sha>`.
 
-T4 behavior wins by default. Preserve compatible T3 improvements alongside it. Never resolve an
-overlap by accepting the upstream file wholesale, using a blanket `-X theirs`, deleting a T4
-feature, renumbering T4 migrations, or weakening a T4 regression test. A clean textual merge is
-not proof of semantic compatibility. If T4 and T3 behavior cannot both survive, stop before the
+Pilot behavior wins by default. Preserve compatible T3 improvements alongside it. Never resolve an
+overlap by accepting the upstream file wholesale, using a blanket `-X theirs`, deleting a Pilot
+feature, renumbering Pilot migrations, or weakening a Pilot regression test. A clean textual merge is
+not proof of semantic compatibility. If Pilot and T3 behavior cannot both survive, stop before the
 integration commit and ask the user which behavior takes precedence.
 
 After every T3 integration, update the sync record in `docs/internals/t4-fork-invariants.md`, run
 `vp run test:t4-invariants`, then run focused checks for every overlapping surface.
 
-T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs and agents (Codex, Claude Code, Cursor, Grok, OpenCode, Antigravity) and serves web, desktop, and mobile clients.
+Pilot is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs and agents (Codex, Claude Code, Cursor, Grok, OpenCode, Antigravity) and serves web, desktop, and mobile clients.
 
-You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.
+You can think of Pilot as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.
 
-## What makes T3 Code special?
+## Upstream principles inherited from T3 Code
+
+The following product context describes upstream T3; its engineering principles also apply to Pilot.
+Official hosted services and store distribution belong to upstream until Pilot provisions its own.
 
 We have over 200,000 users who love T3 Code. It's important we maintain the things they love as we continue to iterate on the product. Here's a brief list of the things we can never compromise on.
 
@@ -60,13 +68,13 @@ Of note: Most T3 Code contributions will come from T3 Code itself, often control
 
 We need to be on the same page with terminology. When communicating, use this language:
 
-- **you** means the agent reading this file and changing T3 Code.
-- **we, us, and maintainers** mean Theo, Julius and the people building T3 Code. These are who you are talking to now.
-- **user** means the person using T3 Code to direct coding agents.
-- **agent** means the coding agent a user runs inside T3 Code. Depending on context, that may also include you.
-- **provider** means the agent runtime or harness T3 Code talks to, such as Codex, Claude, Cursor, or OpenCode.
+- **you** means the agent reading this file and changing Pilot.
+- **we, us, and maintainers** mean the people maintaining Pilot and its upstream T3 codebase.
+- **user** means the person using Pilot to direct coding agents.
+- **agent** means the coding agent a user runs inside Pilot. Depending on context, that may also include you.
+- **provider** means the agent runtime or harness Pilot talks to, such as Codex, Claude, Cursor, or OpenCode.
 - **client** means the web, desktop, or mobile UI.
-- **environment** means one running T3 server and the machine, filesystem, provider credentials, and state it owns.
+- **environment** means one running Pilot server and the machine, filesystem, provider credentials, and state it owns.
 - **project** means an environment-local workspace record rooted at a directory.
 - **thread** means the durable conversation and work history for a project.
 - **turn** means one user-to-agent cycle, including follow-up work such as checkpointing.
@@ -75,7 +83,7 @@ We need to be on the same page with terminology. When communicating, use this la
 ## The three ways to hurt yourself
 
 1. **Killing by pattern.** Never `pkill -f`, `pgrep | kill`, or `kill` a PID you found by matching a name, path, or worktree string. Your own agent process has this worktree's path in its argv, and this machine runs several other dev servers at once. Kill only a PID you captured at spawn, or the owner of your port from `ss -H -ltnp` after confirming `/proc/<pid>/cwd` is your worktree.
-2. **Writing to the live install.** `~/.t3/userdata` is the developer's real T3 Code database, in use while you work. Reading it and copying from it are fine, and a good way to get real test data (see Test data). Never start a server against it, never open it read-write, never clean it up.
+2. **Writing to the live install.** `~/.t3/userdata` is the developer's real Pilot database, in use while you work. Reading it and copying from it are fine, and a good way to get real test data (see Test data). Never start a server against it, never open it read-write, never clean it up.
 3. **Baking in origins.** Never set `VITE_HTTP_URL` or `VITE_WS_URL` for dev. Dev is single-origin and Vite proxies `/api`, `/ws`, `/oauth`, and `/.well-known`. Setting them bakes localhost into the bundle and silently breaks every remote browser.
 
 ## Hit every surface
@@ -152,7 +160,7 @@ Most code changes do not need an internal documentation change. Agents can read 
 - When a documented decision or constraint changes, rewrite or remove the affected text. Do not append another account of the new behavior. A new internal page needs a distinct, durable reason to exist.
 - `docs/user/` helps users accomplish tasks. Give each major feature a concise section explaining what it does, how to start, and anything unintuitive. A settings path is useful; descriptions of visible buttons, icons, layouts, animations, or every UI state are not. Before adding text, ask what task or decision it helps the user with.
 - Keep user docs in the shipped product's voice, without implementation details or contributor tooling. Update the relevant feature section when how to use it changes. A UI tweak does not need a documentation entry, and a new control does not need its own page.
-- `docs/operations/` holds maintainer setup, release, and debugging procedures. Keep instructions for operating an installed T3 Code server in the user guides.
+- `docs/operations/` holds maintainer setup, release, and debugging procedures. Keep instructions for operating an installed Pilot server in the user guides.
 
 ## Plans and work artifacts
 

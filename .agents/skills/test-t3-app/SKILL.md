@@ -1,11 +1,11 @@
 ---
 name: test-t3-app
-description: Launch, retain, and test the T4 Code web app in isolated development environments, including first-try browser authentication with one-time pairing URLs, pairing-token recovery, worktree-safe state directories, cross-turn dev server lifecycle, and direct SQLite inspection or fixture seeding. Use when an agent needs to run T4 locally, iteratively test UI behavior with a human, recover from an expired or consumed pairing token, isolate dev state, or prepare test data in state.sqlite.
+description: Launch, retain, and test the Pilot web app in isolated development environments, including first-try browser authentication with one-time pairing URLs, pairing-token recovery, worktree-safe state directories, cross-turn dev server lifecycle, and direct SQLite inspection or fixture seeding. Use when an agent needs to run Pilot locally, iteratively test UI behavior with a human, recover from an expired or consumed pairing token, isolate dev state, or prepare test data in state.sqlite.
 ---
 
-# Test T4 App
+# Test Pilot App
 
-Use this skill for the web client. For iOS Simulator, Android Emulator, or physical-device testing against an isolated T4 backend, use the sibling [`test-t3-mobile`](../test-t3-mobile/SKILL.md) skill.
+Use this skill for the web client. For iOS Simulator, Android Emulator, or physical-device testing against an isolated Pilot backend, use the sibling [`test-t3-mobile`](../test-t3-mobile/SKILL.md) skill.
 
 ## Start the app
 
@@ -27,7 +27,7 @@ surface only when the user explicitly approves it; do not install one implicitly
 
 Call `preview_status`, then `preview_open` if the Browser panel is
 closed. Navigate to the complete startup pairing URL once with
-`preview_navigate`, then use `preview_snapshot` and T4's interaction tools.
+`preview_navigate`, then use `preview_snapshot` and Pilot's interaction tools.
 If the token was consumed or expired, run `node apps/server/src/bin.ts pair`
 for a fresh one. Keep using the same tab.
 
@@ -44,7 +44,7 @@ out of screenshots, commits, and replies.
 
 ### Verify a shared environment before human handoff
 
-When another person will use the printed pairing URL and browser verification is authorized, first open the shared origin without the pairing path or fragment in the controlled browser and confirm the T4 Code app loads. This browser navigation is required even when curl succeeds because browsers block some otherwise reachable ports before making a network request.
+When another person will use the printed pairing URL and browser verification is authorized, first open the shared origin without the pairing path or fragment in the controlled browser and confirm the Pilot app loads. This browser navigation is required even when curl succeeds because browsers block some otherwise reachable ports before making a network request.
 
 Do not open the other person's complete pairing URL during this reachability check; doing so consumes its one-time token. If the agent also needs an authenticated browser, create and consume a separate pairing token, then leave a fresh token for the other person.
 

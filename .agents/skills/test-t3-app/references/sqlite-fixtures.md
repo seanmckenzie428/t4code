@@ -1,6 +1,6 @@
 # SQLite fixtures
 
-Load this reference only when inspecting or seeding local T4 state directly.
+Load this reference only when inspecting or seeding local Pilot state directly.
 
 ## Select the correct database
 
