@@ -23,7 +23,7 @@ import * as AppControlBroker from "./AppControlBroker.ts";
 import { AppControlAudit } from "./AppControlAudit.ts";
 import * as AppControlServerExecutor from "./AppControlServerExecutor.ts";
 import type * as McpInvocationContext from "./McpInvocationContext.ts";
-import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { AppControlState } from "./AppControlState.ts";
 
 type Scope = McpInvocationContext.McpInvocationScope & {
   readonly principal: NonNullable<McpInvocationContext.McpInvocationScope["principal"]>;
@@ -203,11 +203,13 @@ export const evaluateAppControlAccess = (
     : { status: "allow" };
 };
 
+const encodeArgs = Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Unknown));
+
 export const make = Effect.gen(function* AppControlPolicyMake() {
   const broker = yield* AppControlBroker.AppControlBroker;
   const appControlAudit = yield* AppControlAudit;
   const serverExecutor = yield* AppControlServerExecutor.AppControlServerExecutor;
-  const projections = yield* ProjectionSnapshotQuery;
+  const projections = yield* AppControlState;
   const actions = yield* SynchronizedRef.make<ReadonlyMap<string, ActionState>>(new Map());
 
   const validateImportedScript = Effect.fn("AppControlPolicy.validateImportedScript")(function* (
@@ -389,9 +391,9 @@ export const make = Effect.gen(function* AppControlPolicyMake() {
         }
       }
       const actionKey = `${input.scope.providerSessionId}\u0000${invocation.actionId}`;
-      const argsKey = yield* Schema.encodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))(
-        invocation.args,
-      ).pipe(Effect.orElseSucceed(() => "<invalid-json>"));
+      const argsKey = yield* encodeArgs(invocation.args).pipe(
+        Effect.orElseSucceed(() => "<invalid-json>"),
+      );
       const deferred = yield* Deferred.make<AppCommandResult, never>();
       const claim = yield* SynchronizedRef.modify<ReadonlyMap<string, ActionState>, ActionClaim>(
         actions,

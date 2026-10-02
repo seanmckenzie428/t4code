@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 
 import { ThreadEnvMode, WorktreeSubmodules } from "./environment.ts";
-import { ProjectScriptIcon } from "./orchestration.ts";
+import { ProjectScriptIcon } from "./project.ts";
 import { T3ProjectExtensionRequest } from "./extensions.ts";
 import { ProjectAppViewManifest } from "./appViews.ts";
 import type { ProjectScopedServerSettingKey, ServerSettings } from "./settings.ts";

@@ -14,8 +14,8 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 
 import type * as McpInvocationContext from "./McpInvocationContext.ts";
-import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { OrchestratorV2 } from "../orchestration-v2/Orchestrator.ts";
+import { AppControlState } from "./AppControlState.ts";
 
 export type AppControlAuditStatus = "requested" | "completed" | "failed" | "declined";
 
@@ -78,8 +78,8 @@ const summaryFor = (input: AppControlAuditInput): string => {
 };
 
 export const make = Effect.gen(function* AppControlAuditMake() {
-  const engine = yield* OrchestrationEngineService;
-  const projections = yield* ProjectionSnapshotQuery;
+  const engine = yield* OrchestratorV2;
+  const projections = yield* AppControlState;
 
   const record: AppControlAudit["Service"]["record"] = Effect.fn("AppControlAudit.record")(
     function* (input) {
@@ -113,7 +113,6 @@ export const make = Effect.gen(function* AppControlAuditMake() {
           turnId: null,
           createdAt,
         },
-        createdAt,
       });
     },
     Effect.catchCause((cause) =>

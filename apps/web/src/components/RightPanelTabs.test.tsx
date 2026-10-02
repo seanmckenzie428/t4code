@@ -126,15 +126,12 @@ function renderTabs(
       onManageAppViews={() => undefined}
       onActivateAppViewPlacement={() => undefined}
       appViewsAvailable={false}
-      onAddAgents={() => undefined}
       onAddDevice={() => undefined}
-      liveAgentCount={0}
       browserAvailable
       terminalAvailable={false}
       filesAvailable={false}
       pullRequestAvailable={false}
       pullRequestsAvailable={false}
-      agentsAvailable={false}
       deviceAvailable={false}
     >
       <div>content</div>

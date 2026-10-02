@@ -24,6 +24,28 @@ const lockDependencies = (pid: number, token: string) => ({
 });
 
 describe("DesktopStateDirectoryLock", () => {
+  it.each([
+    ["Pilot", "Pilot (V2)"],
+    ["Pilot (V2)", "Pilot"],
+  ])("blocks old/new profile overlap in either launch order (%s first)", (firstName, secondName) =>
+    withTempDir((directory) => {
+      const first = acquireDesktopStateDirectoryLock(
+        directory,
+        firstName,
+        lockDependencies(101, "first"),
+      );
+      const second = acquireDesktopStateDirectoryLock(
+        directory,
+        secondName,
+        lockDependencies(202, "second"),
+      );
+
+      assert.equal(first.status, "acquired");
+      assert.deepEqual(second, { status: "occupied", displayName: firstName, pid: 101 });
+      if (first.status === "acquired") first.release();
+    }),
+  );
+
   it("excludes another brand using the same state directory", () =>
     withTempDir((directory) => {
       const first = acquireDesktopStateDirectoryLock(

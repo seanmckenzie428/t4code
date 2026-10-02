@@ -1,5 +1,9 @@
 // @effect-diagnostics nodeBuiltinImport:off globalFetchInEffect:off - Hosted handoff test uses a real localhost listener without an OpenAI account.
 import * as NodeHttp from "node:http";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as EffectNodePath from "@effect/platform-node/NodePath";
 import { codexAuthHandoffUrl, readCodexAuthDelivery } from "@t3tools/shared/codexAuthHandoff";
 import { EnvironmentId, ProviderInstanceId } from "@t3tools/contracts";
 import { HostProcessArguments } from "@t3tools/shared/hostProcess";
@@ -11,7 +15,10 @@ import { beforeEach, vi } from "vite-plus/test";
 
 const { acquireStateLockMock, createClerkBridgeMock, storageAdapter, storageMock } = vi.hoisted(
   () => ({
-    acquireStateLockMock: vi.fn(() => ({ status: "acquired", release: vi.fn() })),
+    acquireStateLockMock: vi.fn((_stateDir: string, _displayName: string) => ({
+      status: "acquired",
+      release: vi.fn(),
+    })),
     createClerkBridgeMock: vi.fn(),
     storageAdapter: {
       getItem: vi.fn(),
@@ -43,27 +50,41 @@ import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopClerk from "./DesktopClerk.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
+import * as DesktopPreReadyFileSystem from "./DesktopPreReadyFileSystem.ts";
 
 const makeDesktopClerkLayer = (
   isDevelopment = true,
   events: string[] = [],
+  platform: NodeJS.Platform = "darwin",
+  fileSystemLayer: Layer.Layer<FileSystem.FileSystem> = FileSystem.layerNoop({
+    exists: () => Effect.succeed(false),
+  }),
   shell: ElectronShell.ElectronShell["Service"] = {
     openExternal: () => Effect.succeed(true),
     openSystemSettings: () => Effect.succeed(false),
     copyText: () => Effect.void,
   },
+  profile: { readonly appDataDirectory?: string; readonly lockAvailable?: boolean } = {},
 ) => {
   const environment = DesktopEnvironment.DesktopEnvironment.of({
     stateDir: "/tmp/t3-state",
     isDevelopment,
     displayName: isDevelopment ? "Pilot (Dev)" : "Pilot (Alpha)",
-    appDataDirectory: "/tmp/app-data",
-    userDataDirName: isDevelopment ? "t3code-dev" : "t3code",
-    legacyUserDataDirName: isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)",
-    path: { join: (...parts: ReadonlyArray<string>) => parts.join("/") },
+    appDataDirectory: profile.appDataDirectory ?? "/tmp/app-data",
+    platform,
   } as unknown as DesktopEnvironment.DesktopEnvironment["Service"]);
 
   const electronApp = {
+    requestSingleInstanceLock: Effect.sync(() => {
+      events.push("profileLock");
+      return profile.lockAvailable ?? true;
+    }),
+    releaseSingleInstanceLock: Effect.sync(() => {
+      events.push("releaseProfileLock");
+    }),
+    quit: Effect.sync(() => {
+      events.push("quit");
+    }),
     setPath: (name: string, value: string) =>
       Effect.sync(() => {
         events.push(`setPath:${name}:${value}`);
@@ -76,24 +97,25 @@ const makeDesktopClerkLayer = (
   return DesktopClerk.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
+        EffectNodePath.layerPosix,
         Layer.succeed(DesktopEnvironment.DesktopEnvironment, environment),
         Layer.succeed(ElectronApp.ElectronApp, electronApp),
         Layer.succeed(ElectronDialog.ElectronDialog, electronDialog),
         Layer.succeed(ElectronShell.ElectronShell, shell),
-        FileSystem.layerNoop({ exists: () => Effect.succeed(false) }),
+        fileSystemLayer,
       ),
     ),
   );
 };
 
-describe("DesktopClerk", () => {
-  beforeEach(() => {
-    acquireStateLockMock.mockReset();
-    acquireStateLockMock.mockReturnValue({ status: "acquired", release: vi.fn() });
-    createClerkBridgeMock.mockReset();
-    storageMock.mockReset();
-  });
+beforeEach(() => {
+  acquireStateLockMock.mockReset();
+  acquireStateLockMock.mockReturnValue({ status: "acquired", release: vi.fn() });
+  createClerkBridgeMock.mockReset();
+  storageMock.mockReset();
+});
 
+describe("DesktopClerk", () => {
   it.effect("acquires and releases the SDK bridge with the layer", () => {
     const cleanup = vi.fn();
     const events: string[] = [];
@@ -116,6 +138,7 @@ describe("DesktopClerk", () => {
         ],
       ]);
       assert.equal(cleanup.mock.calls.length, 1);
+      assert.equal(acquireStateLockMock.mock.calls[0]?.[1], "Pilot (Dev) (V2)");
       // The bridge acquires Electron's single-instance lock at creation, and
       // the lock both lives in and creates the userData directory — so the
       // real path must be set before the bridge exists.
@@ -124,6 +147,131 @@ describe("DesktopClerk", () => {
       createClerkBridgeMock.mockClear();
     });
   });
+
+  it.each([
+    {
+      name: "packaged Windows",
+      isDevelopment: false,
+      platform: "win32" as const,
+      userData: "/tmp/app-data/t3code-v2",
+    },
+    {
+      name: "development",
+      isDevelopment: true,
+      platform: "win32" as const,
+      userData: "/tmp/app-data/t3code-dev",
+    },
+  ])(
+    "creates the bridge before startup can yield to the event loop ($name)",
+    ({ isDevelopment, platform, userData }) => {
+      const events: string[] = [];
+      storageMock.mockReturnValue(storageAdapter);
+      createClerkBridgeMock.mockImplementation(() => {
+        events.push("createClerkBridge");
+        return { cleanup: vi.fn(), isPrimaryInstance: true };
+      });
+      // runSync throws if the layer ever suspends, which would let Electron emit
+      // ready before the bridge exists. main.ts provides the same FileSystem.
+      // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- The assertion IS that the layer builds synchronously; it.effect would mask a regression to async.
+      Effect.runSync(
+        Effect.scoped(
+          Layer.build(
+            makeDesktopClerkLayer(isDevelopment, events, platform, DesktopPreReadyFileSystem.layer),
+          ),
+        ),
+      );
+
+      assert.deepEqual(events, [`setPath:userData:${userData}`, "createClerkBridge"]);
+    },
+  );
+
+  it.each([true, false])(
+    "finishes profile migration before Clerk, or stops when the source is busy (available: %s)",
+    (lockAvailable) => {
+      const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "pilot-clerk-profile-"));
+      const source = NodePath.join(root, "t3code");
+      const destination = NodePath.join(root, "t3code-v2");
+      NodeFS.mkdirSync(source);
+      NodeFS.writeFileSync(NodePath.join(source, "Preferences"), "retained preferences");
+      const events: string[] = [];
+      acquireStateLockMock.mockImplementationOnce(() => {
+        events.push("stateLock");
+        return { status: "acquired", release: vi.fn() };
+      });
+      storageMock.mockReturnValue(storageAdapter);
+      createClerkBridgeMock.mockImplementation(() => {
+        events.push("createClerkBridge");
+        return { cleanup: vi.fn(), isPrimaryInstance: true };
+      });
+      try {
+        // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- Full bootstrap must remain synchronous even when it copies a profile.
+        const exit = Effect.runSyncExit(
+          Effect.scoped(
+            Layer.build(
+              makeDesktopClerkLayer(
+                false,
+                events,
+                "darwin",
+                DesktopPreReadyFileSystem.layer,
+                undefined,
+                {
+                  appDataDirectory: root,
+                  lockAvailable,
+                },
+              ),
+            ),
+          ),
+        );
+
+        if (lockAvailable) {
+          assert.isTrue(Exit.isSuccess(exit));
+          assert.deepEqual(events, [
+            "stateLock",
+            `setPath:userData:${source}`,
+            "profileLock",
+            "releaseProfileLock",
+            `setPath:userData:${destination}`,
+            "createClerkBridge",
+          ]);
+          assert.equal(
+            NodeFS.readFileSync(NodePath.join(destination, "Preferences"), "utf8"),
+            "retained preferences",
+          );
+        } else {
+          assert.isTrue(Exit.isFailure(exit));
+          assert.deepEqual(events, [
+            "stateLock",
+            `setPath:userData:${source}`,
+            "profileLock",
+            "quit",
+          ]);
+          assert.isFalse(NodeFS.existsSync(destination));
+          assert.equal(createClerkBridgeMock.mock.calls.length, 0);
+        }
+      } finally {
+        NodeFS.rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.each([true, false])(
+    "rejects a matching state owner unless Electron identifies a secondary instance (primary: %s)",
+    (isPrimaryInstance) => {
+      const events: string[] = [];
+      acquireStateLockMock.mockReturnValueOnce({ status: "same-application", release: vi.fn() });
+      storageMock.mockReturnValue(storageAdapter);
+      createClerkBridgeMock.mockReturnValue({ cleanup: vi.fn(), isPrimaryInstance });
+
+      // oxlint-disable-next-line t3code/no-manual-effect-runtime-in-tests -- A conflicting state owner must stop before any post-Clerk layers initialize.
+      const exit = Effect.runSyncExit(
+        Effect.scoped(Layer.build(makeDesktopClerkLayer(false, events))),
+      );
+
+      assert.equal(Exit.isFailure(exit), isPrimaryInstance);
+      assert.equal(events.includes("quit"), isPrimaryInstance);
+      assert.equal(acquireStateLockMock.mock.calls[0]?.[1], "Pilot (Alpha) (V2)");
+    },
+  );
 
   it.effect("preserves bridge initialization failures", () => {
     const cause = new Error("bridge initialization failed");
@@ -347,7 +495,7 @@ for (const entry of ["startup", "open-url"] as const) {
         assert.strictEqual(delivery?.flowId, request.flowId);
         assert.strictEqual(delivery?.returnUrl, request.returnUrl);
       }).pipe(
-        Effect.provide(makeDesktopClerkLayer(true, [], shell)),
+        Effect.provide(makeDesktopClerkLayer(true, [], "darwin", undefined, shell)),
         Effect.provideService(HostProcessArguments, entry === "startup" ? ["t3", link] : ["t3"]),
         Effect.provideService(ElectronApp.ElectronApp, electronApp),
         Effect.provideService(

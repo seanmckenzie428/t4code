@@ -17,7 +17,8 @@ import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
-import * as DesktopAppIdentity from "./DesktopAppIdentity.ts";
+import * as DesktopUserData from "./DesktopUserData.ts";
+import * as DesktopUserDataMigration from "./DesktopUserDataMigration.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { acquireDesktopStateDirectoryLock } from "./DesktopStateDirectoryLock.ts";
 
@@ -98,18 +99,11 @@ export const make = Effect.gen(function* () {
   const hostProcessId = yield* HostProcessId;
   const shell = yield* ElectronShell.ElectronShell;
 
-  // Electron scopes the single-instance lock to the userData directory and
-  // creates that directory when the lock is acquired. The SDK bridge takes
-  // the lock at creation, so userData must already point at the real
-  // directory here — under the default productName-derived path, acquiring
-  // the lock would create "T3 Code (Alpha)" and make the legacy-install
-  // detection in resolveUserDataPath match on fresh installs.
-  const userDataPath = yield* DesktopAppIdentity.resolveUserDataPath;
-  yield* electronApp.setPath("userData", userDataPath);
-
   const stateDirectoryLock = yield* Effect.acquireRelease(
     Effect.sync(() =>
-      acquireDesktopStateDirectoryLock(environment.stateDir, environment.displayName, {
+      // Older binaries compare only the lock's display name. Version this label
+      // so both launch orders reject sharing server state across browser profiles.
+      acquireDesktopStateDirectoryLock(environment.stateDir, `${environment.displayName} (V2)`, {
         pid: hostProcessId,
         platform: environment.platform,
       }),
@@ -127,6 +121,20 @@ export const make = Effect.gen(function* () {
     yield* electronApp.quit;
     return yield* Effect.interrupt;
   }
+
+  // The SDK bridge acquires Electron's profile-scoped single-instance lock.
+  // Must not yield: the bridge registers a scheme Electron rejects once ready.
+  yield* DesktopUserDataMigration.migrateLegacyUserData(environment).pipe(
+    Effect.catchTag("DesktopUserDataInUseError", (error) =>
+      Effect.gen(function* () {
+        yield* electronDialog.showErrorBox("Close the older T3/Pilot app", error.message);
+        yield* electronApp.quit;
+        return yield* Effect.interrupt;
+      }),
+    ),
+  );
+  const userDataPath = yield* DesktopUserData.resolveUserDataPath(environment);
+  yield* electronApp.setPath("userData", userDataPath);
 
   const bridge = yield* Effect.acquireRelease(
     Effect.try({
@@ -149,6 +157,17 @@ export const make = Effect.gen(function* () {
           }),
       }).pipe(Effect.orDie),
   );
+
+  // An older Pilot can share our display name but hold a different Chromium
+  // profile. Only an actual secondary instance may use the forwarding path.
+  if (stateDirectoryLock.status === "same-application" && bridge.isPrimaryInstance) {
+    yield* electronDialog.showErrorBox(
+      `${environment.displayName} is already running`,
+      `Another ${environment.displayName} is already using this T3/Pilot data directory. Quit it before opening this version.`,
+    );
+    yield* electronApp.quit;
+    return yield* Effect.interrupt;
+  }
 
   return DesktopClerk.of({
     configure: Effect.gen(function* () {

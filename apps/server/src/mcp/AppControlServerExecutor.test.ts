@@ -6,20 +6,29 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
-  type OrchestrationCommand,
+  type OrchestrationV2ServerCommand,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Deferred from "effect/Deferred";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
-import * as Stream from "effect/Stream";
 
+import * as ProjectService from "../project/ProjectService.ts";
 import * as AppControlServerExecutor from "./AppControlServerExecutor.ts";
 import { AppControlTerminalCommandRunner } from "./AppControlTerminalCommandRunner.ts";
-import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { OrchestratorV2 as OrchestrationEngineService } from "../orchestration-v2/Orchestrator.ts";
+import * as Layer from "effect/Layer";
+import { AppControlState as ProjectionSnapshotQuery } from "./AppControlState.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
-import { ThreadArchiveError, ThreadArchiveService } from "../orchestration/ThreadArchiveService.ts";
+import {
+  ThreadArchiveError,
+  ThreadArchiveService,
+} from "../orchestration-v2/ThreadArchiveService.ts";
+
+type OrchestrationCommand =
+  | OrchestrationV2ServerCommand
+  | ({ type: "project.meta.update" } & ProjectService.ProjectUpdateInput)
+  | ({ type: "project.delete" } & ProjectService.ProjectDeleteInput);
 
 const scope = {
   environmentId: EnvironmentId.make("environment-1"),
@@ -42,20 +51,50 @@ const makeExecutor = (
     readonly terminalRun?: AppControlTerminalCommandRunner["Service"]["run"];
     readonly projections?: ProjectionSnapshotQuery["Service"];
   } = {},
-) =>
-  AppControlServerExecutor.make.pipe(
-    Effect.provideService(
-      OrchestrationEngineService,
-      OrchestrationEngineService.of({
-        dispatch,
-        readEvents: () => Stream.empty,
-        readThreadEvents: () => Stream.empty,
-        getThreadReplayStats: () =>
-          Effect.succeed({ eventCount: 0, payloadBytes: 0, hasCreateEvent: false }),
-        subscribeDomainEvents: Effect.succeed(Stream.empty),
-        streamDomainEvents: Stream.empty,
-        latestSequence: Effect.succeed(0),
-      }),
+) => {
+  let snapshotSequence = 0;
+  const project = {
+    id: ProjectId.make("project-1"),
+    title: "Project",
+    workspaceRoot: "/workspace/project",
+    defaultModelSelection: null,
+    defaultThreadEnvMode: null,
+    autoPull: false,
+    faviconPath: null,
+    projectIcon: null,
+    scripts: [],
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    deletedAt: null,
+  };
+  const record = (command: OrchestrationCommand) =>
+    dispatch(command).pipe(
+      Effect.tap((result) =>
+        Effect.sync(() => {
+          snapshotSequence = result.sequence;
+        }),
+      ),
+    );
+  return AppControlServerExecutor.make.pipe(
+    Effect.provide(
+      Layer.mergeAll(
+        Layer.mock(OrchestrationEngineService)({
+          dispatch: (command) =>
+            record(command).pipe(Effect.map((result) => ({ ...result, storedEvents: [] }))),
+          getShellSnapshot: () =>
+            Effect.succeed({
+              snapshotSequence,
+              schemaVersion: 1,
+              threads: [],
+              archivedThreads: [],
+            }),
+        }),
+        Layer.mock(ProjectService.ProjectService)({
+          update: (input) =>
+            record({ ...input, type: "project.meta.update" }).pipe(Effect.as(project)),
+          delete: (input) => record({ ...input, type: "project.delete" }).pipe(Effect.as(project)),
+        }),
+      ),
     ),
     Effect.provideService(
       AppControlTerminalCommandRunner,
@@ -69,6 +108,7 @@ const makeExecutor = (
       ? (effect) => effect
       : Effect.provideService(ProjectionSnapshotQuery, options.projections),
   );
+};
 
 const terminalProjections = ProjectionSnapshotQuery.of({
   getThreadShellById: () =>
@@ -97,6 +137,7 @@ const makeArchiveService = (
     dispatch,
     prepareForWork: () => Effect.void,
     runWithWork,
+    runWithArchiveLock: (_threadId, work) => work,
     sweep: Effect.void,
     reconcile: Effect.void,
     start: () => Effect.void,
@@ -193,7 +234,7 @@ it.effect("maps a rename to the canonical orchestration command and returns its 
 
     expect(commands).toEqual([
       expect.objectContaining({
-        type: "thread.meta.update",
+        type: "thread.metadata.update",
         threadId: "thread-1",
         title: "Renamed",
       }),
@@ -255,7 +296,7 @@ it.effect("lets a regular chat start work in another thread", () =>
     expect(result).toMatchObject({ status: "completed", receipt: { sequence: 46 } });
     expect(commands).toEqual([
       expect.objectContaining({
-        type: "thread.turn.start",
+        type: "message.dispatch",
         threadId: "thread-2",
         delegation: {
           assistantThreadId: "thread-1",

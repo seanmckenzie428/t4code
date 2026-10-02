@@ -1,10 +1,4 @@
-import {
-  ProjectId,
-  ProviderInstanceId,
-  ThreadId,
-  TurnId,
-  type OrchestrationThreadShell,
-} from "@t3tools/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId, TurnId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -14,6 +8,8 @@ import {
   hasQueuedTurnStart,
   threadLastActivityAt,
 } from "./threadSettled.ts";
+
+type OrchestrationThreadShell = Parameters<typeof effectiveSettled>[0] & { id: ThreadId };
 
 const NOW = "2026-04-10T00:00:00.000Z";
 const FRESH = "2026-04-09T00:00:00.000Z";
@@ -133,15 +129,15 @@ function makeShell(input: {
   readonly activityAt: string | null;
   readonly sessionStatus?: "starting" | "running";
   readonly pending?: "approval" | "user-input";
-}): OrchestrationThreadShell {
+}) {
   const threadId = ThreadId.make("thread-1");
   return {
     id: threadId,
     projectId: ProjectId.make("project-1"),
     title: "Thread",
     modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
-    runtimeMode: "full-access",
-    interactionMode: "default",
+    runtimeMode: "full-access" as const,
+    interactionMode: "default" as const,
     branch: null,
     worktreePath: null,
     latestTurn:
@@ -149,7 +145,7 @@ function makeShell(input: {
         ? null
         : {
             turnId: TurnId.make("turn-1"),
-            state: "completed",
+            state: "completed" as const,
             requestedAt: input.activityAt,
             startedAt: null,
             completedAt: null,
@@ -169,7 +165,7 @@ function makeShell(input: {
             threadId,
             status: input.sessionStatus,
             providerName: "Codex",
-            runtimeMode: "full-access",
+            runtimeMode: "full-access" as const,
             activeTurnId: null,
             lastError: null,
             updatedAt: NOW,
@@ -416,7 +412,7 @@ describe("effectiveSettled", () => {
         threadId: queued.id,
         status: "starting",
         providerName: "Codex",
-        runtimeMode: "full-access",
+        runtimeMode: "full-access" as const,
         activeTurnId: null,
         lastError: null,
         updatedAt: requestedAt,

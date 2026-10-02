@@ -19,6 +19,12 @@ export interface McpCredentialRequest {
   readonly principal?: AppControlPrincipal;
   readonly grants?: ReadonlySet<string>;
   readonly previewEnabled?: boolean;
+  /**
+   * When false, the credential is minted without the "preview" capability so
+   * the user's choice to withhold agent browser access holds everywhere the
+   * token is honored (#7083). Defaults to full access.
+   */
+  readonly browserToolsAvailable?: boolean;
   readonly capabilities?: ReadonlySet<McpInvocationContext.McpCapability>;
 }
 
@@ -132,7 +138,8 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
       const capabilities = new Set<McpInvocationContext.McpCapability>(
         request.capabilities ?? ["preview"],
       );
-      if (request.previewEnabled === false) capabilities.delete("preview");
+      if (request.previewEnabled === false || request.browserToolsAvailable === false)
+        capabilities.delete("preview");
       const previewEnabled = capabilities.has("preview");
       const scope: McpInvocationContext.McpInvocationScope = {
         environmentId,
@@ -141,6 +148,8 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
         providerInstanceId: ProviderInstanceId.make(request.providerInstanceId),
         ...(principal === undefined ? {} : { principal }),
         capabilities: new Set<McpInvocationContext.McpCapability>([
+          "orchestration",
+          "worktree",
           "pull-requests",
           ...capabilities,
           ...(principal === undefined ? [] : ["app-control" as const]),
@@ -161,7 +170,7 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
           providerInstanceId: scope.providerInstanceId,
           endpoint: `${endpointBase}${previewEnabled ? "/mcp" : "/mcp/app-control"}`,
           authorizationHeader: `Bearer ${rawToken}`,
-          browserToolsAvailable: previewEnabled,
+          browserToolsAvailable: scope.capabilities.has("preview"),
           capabilities: scope.capabilities,
         },
       };
@@ -261,10 +270,10 @@ export const issueActiveMcpCredential = (
 export const touchActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
   activeMcpSessionRegistry ? activeMcpSessionRegistry.touch(threadId) : Effect.void;
 
-export const revokeActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
+const revokeActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
   activeMcpSessionRegistry ? activeMcpSessionRegistry.revokeThread(threadId) : Effect.void;
 
-export const revokeAllActiveMcpCredentials = (): Effect.Effect<void> =>
+const revokeAllActiveMcpCredentials = (): Effect.Effect<void> =>
   activeMcpSessionRegistry ? activeMcpSessionRegistry.revokeAll : Effect.void;
 
 /** Exposed for tests. */

@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import * as Result from "effect/Result";
 import * as CodexErrors from "effect-codex-app-server/errors";
 
-import type { ProviderNativeArchiveTarget } from "../Services/ProviderAdapter.ts";
+import type { ProviderNativeArchiveTarget } from "./codexThreadArchive.ts";
 import {
   readCodexThreadArchiveStates,
   setCodexThreadArchived,

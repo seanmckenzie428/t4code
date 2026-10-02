@@ -34,9 +34,10 @@ import {
   validateDelegationPrincipal,
   validateDelegationTarget,
 } from "./AppControlDelegation.ts";
-import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
-import { ThreadArchiveService } from "../orchestration/ThreadArchiveService.ts";
-import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
+import * as ProjectService from "../project/ProjectService.ts";
+import * as AppControlState from "./AppControlState.ts";
+import { ThreadArchiveService } from "../orchestration-v2/ThreadArchiveService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 
 type Scope = McpInvocationContext.McpInvocationScope & {
@@ -157,9 +158,10 @@ const decodeArgs = <S extends Schema.Top>(
   );
 
 export const make = Effect.gen(function* AppControlServerExecutorMake() {
-  const engine = yield* OrchestrationEngineService;
+  const engine = yield* Orchestrator.OrchestratorV2;
+  const projects = yield* ProjectService.ProjectService;
   const archiveService = yield* Effect.serviceOption(ThreadArchiveService);
-  const projections = yield* Effect.serviceOption(ProjectionSnapshotQuery);
+  const projections = yield* Effect.serviceOption(AppControlState.AppControlState);
   const settings = yield* Effect.serviceOption(ServerSettingsService);
   const terminalCommands = yield* AppControlTerminalCommandRunner;
 
@@ -702,9 +704,99 @@ export const make = Effect.gen(function* AppControlServerExecutorMake() {
     }).pipe(Effect.result);
     if (command._tag === "Failure") return failed(invocation, command.failure);
 
-    const dispatched = yield* Option.isSome(archiveService)
-      ? archiveService.value.dispatch(command.success).pipe(Effect.result)
-      : engine.dispatch(command.success).pipe(Effect.result);
+    const dispatched = yield* Effect.gen(function* () {
+      const next = command.success;
+      switch (next.type) {
+        case "project.create":
+          yield* projects.create(next);
+          return { sequence: (yield* engine.getShellSnapshot()).snapshotSequence };
+        case "project.meta.update":
+          yield* projects.update(next);
+          return { sequence: (yield* engine.getShellSnapshot()).snapshotSequence };
+        case "project.delete":
+          yield* projects.delete(next);
+          return { sequence: (yield* engine.getShellSnapshot()).snapshotSequence };
+        case "thread.archive":
+        case "thread.unarchive":
+          return yield* Option.isSome(archiveService)
+            ? archiveService.value.dispatch(next)
+            : engine.dispatch(next);
+        case "thread.create":
+          return yield* engine.dispatch({ ...next, createdBy: "agent", creationSource: "mcp" });
+        case "thread.turn.start":
+          return yield* engine.dispatch({
+            type: "message.dispatch",
+            commandId: next.commandId,
+            threadId: next.threadId,
+            messageId: next.message.messageId,
+            text: next.message.text,
+            attachments: [],
+            createdBy: "agent",
+            creationSource: "mcp",
+            senderThreadId: next.delegation.assistantThreadId,
+            delegation: next.delegation,
+            dispatchMode: { type: "start_immediately" },
+          });
+        case "thread.meta.update":
+          return yield* next.modelSelection !== undefined
+            ? engine.dispatch({
+                ...next,
+                type: "thread.model-selection.set",
+                modelSelection: next.modelSelection,
+              })
+            : engine.dispatch({ ...next, type: "thread.metadata.update" });
+        case "thread.snooze":
+          return yield* engine.dispatch(next);
+        case "thread.turn.interrupt":
+        case "thread.session.stop": {
+          const projection = yield* engine.getThreadProjection(next.threadId);
+          let sequence = yield* engine.getThreadEventSequence(next.threadId);
+          const activeRun = projection.runs.findLast((run) =>
+            ["preparing", "starting", "running", "waiting"].includes(run.status),
+          );
+          if (activeRun !== undefined) {
+            sequence = (yield* engine.dispatch({
+              type: "run.interrupt",
+              commandId: next.commandId,
+              threadId: next.threadId,
+              runId: activeRun.id,
+            })).sequence;
+          }
+          if (next.type === "thread.session.stop") {
+            for (const session of projection.providerSessions.filter(
+              (session) => session.status !== "stopped" && session.status !== "error",
+            )) {
+              sequence = (yield* engine.dispatch({
+                type: "provider-session.detach",
+                commandId: CommandId.make(`${next.commandId}:${session.id}`),
+                threadId: next.threadId,
+                providerSessionId: session.id,
+              })).sequence;
+            }
+          }
+          return { sequence };
+        }
+        case "thread.checkpoint.revert": {
+          const projection = yield* engine.getThreadProjection(next.threadId);
+          const checkpoint = projection.checkpoints.find(
+            (entry) => entry.appRunOrdinal === next.turnCount,
+          );
+          if (checkpoint === undefined)
+            return yield* Effect.fail(
+              controlError("invalid-input", "Checkpoint no longer exists."),
+            );
+          return yield* engine.dispatch({
+            type: "checkpoint.rollback",
+            commandId: next.commandId,
+            threadId: next.threadId,
+            scopeId: checkpoint.scopeId,
+            checkpointId: checkpoint.id,
+          });
+        }
+        default:
+          return yield* engine.dispatch(next);
+      }
+    }).pipe(Effect.result);
     if (dispatched._tag === "Failure") {
       return failed(
         invocation,

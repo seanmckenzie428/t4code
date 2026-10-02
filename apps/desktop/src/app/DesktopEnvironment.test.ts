@@ -51,7 +51,6 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.branding.stageLabel, "Nightly");
       assert.equal(environment.appVersion, "0.0.44-nightly.20261002.6299");
       assert.equal(environment.stateDir, "/Users/alice/.t3/userdata");
-      assert.equal(environment.userDataDirName, "t3code");
       assert.equal(environment.appUserModelId, "com.t3tools.t3code");
     }),
   );
