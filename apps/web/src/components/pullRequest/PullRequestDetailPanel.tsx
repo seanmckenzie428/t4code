@@ -426,6 +426,7 @@ export function PullRequestDetailPanel({
   onClose,
   context = "page",
   composerDraftTarget,
+  onComposerHandoff,
   onBack,
   onSelectPullRequest,
 }: {
@@ -469,6 +470,8 @@ export function PullRequestDetailPanel({
   context?: "page" | "thread";
   /** The open thread's composer. */
   composerDraftTarget?: ScopedThreadRef | DraftId;
+  /** Reveal the open thread's composer after a task is added to it. */
+  onComposerHandoff?: () => void;
   /**
    * Beside a thread, the way back to that thread's list of pull requests. The tab strip can
    * close this surface, but closing is not going back: the reader came from the list and
@@ -1106,6 +1109,7 @@ export function PullRequestDetailPanel({
         insertAtCaret: false,
       });
     }
+    if (target === attachTarget) onComposerHandoff?.();
   };
 
   /**

@@ -12,6 +12,7 @@ import {
 
 import { useOpenLink } from "../browser/useOpenLink";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
+import { useMainViewStore } from "../mainViewStore";
 import { useRightPanelStore } from "../rightPanelStore";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 
@@ -193,10 +194,8 @@ export function findProjectOnChangeRequestHost(
  * lookalike hostname matches no project and stays a link, and the page is handed the project
  * rather than a host to narrow its whole list by.
  *
- * Given a thread, the link opens beside it in the right panel instead of taking the whole app to
- * the pull requests page: a reader following a link the agent wrote is reading the thread, and
- * should still be reading it afterwards. Any change request opens there, not only the thread's
- * own, since the panel is told which one to show.
+ * Given a thread, the link opens in its own main-view tab. The standalone pull requests page
+ * keeps its shared panel. Any change request can open in a thread, not only its linked one.
  */
 export function shouldOpenPullRequestExternally(
   event: Pick<MouseEvent<HTMLElement>, "metaKey" | "ctrlKey">,
@@ -269,7 +268,7 @@ export function useOpenChangeRequestLink(
       event.preventDefault();
       event.stopPropagation();
       if (resolvedPanelRef) {
-        useRightPanelStore.getState().openPullRequest(resolvedPanelRef, {
+        const target = {
           // The standalone PR panel has a synthetic ref; each tab keeps its real environment.
           ...(resolvedPanelRef.environmentId === project.environmentId
             ? {}
@@ -282,7 +281,12 @@ export function useOpenChangeRequestLink(
           repository,
           url: targetUrl,
           number: parsed.number,
-        });
+        };
+        if (resolvedThreadRef) {
+          useMainViewStore.getState().openPullRequest(resolvedThreadRef, target);
+        } else {
+          useRightPanelStore.getState().openPullRequest(resolvedPanelRef, target);
+        }
         if (!resolvedThreadRef) {
           void navigate({
             to: "/pull-requests",

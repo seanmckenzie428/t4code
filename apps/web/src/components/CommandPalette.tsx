@@ -115,6 +115,7 @@ import {
 import { onOpenCommandPalette } from "../commandPaletteBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
+import { useMainViewStore } from "../mainViewStore";
 import {
   PULL_REQUESTS_PANEL_REF,
   selectActiveRightPanel,
@@ -1974,7 +1975,7 @@ function OpenCommandPaletteDialog(props: {
         disabled: visibleThreadPullRequests(activeThread.pullRequests).length === 0,
         icon: <PullRequestGlyph.link className={ITEM_ICON_CLASS} />,
         run: async () => {
-          useRightPanelStore.getState().open(threadRef, "pull-requests");
+          useMainViewStore.getState().openPullRequests(threadRef);
         },
       });
     }

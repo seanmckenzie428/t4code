@@ -1,6 +1,6 @@
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
-import { useRightPanelStore } from "../rightPanelStore";
+import { useMainViewStore } from "../mainViewStore";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
@@ -793,7 +793,7 @@ export function BranchToolbarBranchSelector({
           number={prNumber}
           url={prUrl}
           status={displayedPrStatus}
-          onOpenStack={() => useRightPanelStore.getState().open(threadRef, "pull-requests")}
+          onOpenStack={() => useMainViewStore.getState().openPullRequests(threadRef)}
           onOpenPullRequest={(event) => {
             if (prUrl) openPrLink(event, prUrl);
           }}

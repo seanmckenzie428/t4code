@@ -81,7 +81,7 @@ import {
 } from "react";
 import { useParams, useRouter } from "@tanstack/react-router";
 
-import { useRightPanelStore } from "../rightPanelStore";
+import { useMainViewStore } from "../mainViewStore";
 import {
   isAtomCommandInterrupted,
   settlePromise,
@@ -1530,7 +1530,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     ? resolveThreadPullRequestBadge(thread.pullRequests)
     : null;
   const handlePrStackClick = useCallback(() => {
-    useRightPanelStore.getState().open(threadRef, "pull-requests");
+    useMainViewStore.getState().openPullRequests(threadRef);
     if (!props.isActive) onThreadActivate(threadRef);
   }, [onThreadActivate, props.isActive, threadRef]);
   const prBadge =
