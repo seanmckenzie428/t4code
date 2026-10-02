@@ -194,7 +194,11 @@ export function appendVersionMismatchHint(
   mismatch: VersionMismatch | null | undefined,
 ): string | null {
   const normalizedMessage = normalizeVersion(message);
-  if (!normalizedMessage) return mismatch?.hint ?? null;
-  if (!mismatch) return normalizedMessage;
+  if (!normalizedMessage) {
+    return mismatch?.hint ?? null;
+  }
+  if (!mismatch) {
+    return normalizedMessage;
+  }
   return `${normalizedMessage} Hint: ${mismatch.hint}`;
 }

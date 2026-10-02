@@ -81,7 +81,7 @@ node apps/server/src/bin.ts project add <git-workspace> \
 
 Running `project add` before the backend starts gives it exclusive offline database access. If a backend is already running, wait until it is ready so the CLI dispatches through the live server; never run offline mutations concurrently with the server.
 
-Use direct SQLite mutation only for disposable projection fixtures. Follow `test-t3-app` and stop the backend before writing.
+Use direct SQLite mutation only for disposable projection fixtures. Read the [SQLite fixture reference](../test-t3-app/references/sqlite-fixtures.md) and stop the backend before writing.
 
 Start a headless backend after seeding:
 
@@ -119,7 +119,7 @@ Run Metro from `apps/mobile`.
 
    In PowerShell, set `$env:APP_VARIANT = "development"` first and then run the `vp exec expo start ...` command without the leading assignment.
 
-4. Open the exact development-client URL for the selected device and confirm the loaded bundle belongs to this worktree and Metro port.
+4. Open the exact development-client URL for the selected device and confirm the loaded bundle belongs to this worktree and Metro port. Append `&disableAutoLaunch=1&disableFab=1` to its query when developer chrome would obscure screenshots or taps; the SDK 58 dev client applies these preferences before loading the app.
 
 ### iOS launch
 

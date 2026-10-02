@@ -3,9 +3,16 @@ import * as Schema from "effect/Schema";
 import type * as CodexErrors from "effect-codex-app-server/errors";
 import type * as CodexSchema from "effect-codex-app-server/schema";
 
-import { ProviderAdapterRequestError } from "../Errors.ts";
-import type { ProviderNativeArchiveTarget } from "../Services/ProviderAdapter.ts";
-import { CodexResumeCursorSchema } from "./CodexSessionRuntime.ts";
+export class ProviderAdapterRequestError extends Schema.TaggedError<ProviderAdapterRequestError>()(
+  "ProviderAdapterRequestError",
+  { provider: Schema.String, method: Schema.String, detail: Schema.String },
+) {}
+import type { ProviderThreadArchiveTarget } from "../../orchestration-v2/NativeThreadArchive.ts";
+export type ProviderNativeArchiveTarget = Pick<
+  ProviderThreadArchiveTarget,
+  "threadId" | "resumeCursor"
+>;
+const CodexResumeCursorSchema = Schema.Struct({ threadId: Schema.String });
 
 export interface CodexThreadArchiveClient {
   readonly listThreads: (
@@ -34,10 +41,9 @@ const sourceKinds: CodexSchema.V2ThreadListParams["sourceKinds"] = [
 ];
 const isResumeCursor = Schema.is(CodexResumeCursorSchema);
 
-export const readCodexThreadArchiveStates = Effect.fn("readCodexThreadArchiveStates")(function* (
-  client: CodexThreadArchiveClient,
-  targets: ReadonlyArray<ProviderNativeArchiveTarget>,
-) {
+export const readCodexThreadArchiveStates = Effect.fn("readCodexThreadArchiveStates")(function* <
+  Target extends ProviderNativeArchiveTarget,
+>(client: CodexThreadArchiveClient, targets: ReadonlyArray<Target>) {
   const ownedIds = new Set(
     targets.flatMap((target) =>
       isResumeCursor(target.resumeCursor) ? [target.resumeCursor.threadId] : [],

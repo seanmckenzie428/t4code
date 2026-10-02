@@ -1,10 +1,8 @@
 import { expect, it } from "@effect/vitest";
-import {
-  ProjectId,
-  ThreadId,
-  type OrchestrationReadModel,
-  type OrchestrationThread,
-} from "@t3tools/contracts";
+import { ProjectId, ThreadId } from "@t3tools/contracts";
+
+import type { AppControlThread as OrchestrationThread } from "./AppControlState.ts";
+type OrchestrationReadModel = { readonly threads: ReadonlyArray<OrchestrationThread> };
 
 import {
   MAX_CONCURRENT_ASSISTANT_DELEGATIONS,

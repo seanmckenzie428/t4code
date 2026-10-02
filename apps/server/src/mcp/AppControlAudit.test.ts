@@ -7,15 +7,15 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
-  type OrchestrationCommand,
+  type OrchestrationV2ServerCommand as OrchestrationCommand,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import * as Stream from "effect/Stream";
 
 import { make, payloadFor, type AppControlAuditStatus } from "./AppControlAudit.ts";
-import { OrchestrationEngineService } from "../orchestration/Services/OrchestrationEngine.ts";
-import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { OrchestratorV2 as OrchestrationEngineService } from "../orchestration-v2/Orchestrator.ts";
+import * as Layer from "effect/Layer";
+import { AppControlState as ProjectionSnapshotQuery } from "./AppControlState.ts";
 
 const threadScope = {
   environmentId: EnvironmentId.make("environment-1"),
@@ -48,23 +48,15 @@ const descriptor = getAppCommandCatalogEntry("thread.rename")?.descriptor;
 
 const makeAudit = (commands: OrchestrationCommand[], validThread = true, failPersistence = false) =>
   make.pipe(
-    Effect.provideService(
-      OrchestrationEngineService,
-      OrchestrationEngineService.of({
-        dispatch: (command) => {
-          if (failPersistence) return Effect.die(new Error("audit store unavailable"));
-          return Effect.sync(() => {
-            commands.push(command);
-            return { sequence: commands.length };
-          });
-        },
-        readEvents: () => Stream.empty,
-        readThreadEvents: () => Stream.empty,
-        getThreadReplayStats: () =>
-          Effect.succeed({ eventCount: 0, payloadBytes: 0, hasCreateEvent: false }),
-        subscribeDomainEvents: Effect.succeed(Stream.empty),
-        streamDomainEvents: Stream.empty,
-        latestSequence: Effect.succeed(0),
+    Effect.provide(
+      Layer.mock(OrchestrationEngineService)({
+        dispatch: (command) =>
+          failPersistence
+            ? Effect.die(new Error("audit store unavailable"))
+            : Effect.sync(() => {
+                commands.push(command);
+                return { sequence: commands.length, storedEvents: [] };
+              }),
       }),
     ),
     Effect.provideService(ProjectionSnapshotQuery, {

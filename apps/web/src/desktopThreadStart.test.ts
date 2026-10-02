@@ -157,9 +157,8 @@ describe("external planning thread", () => {
     const navigate = vi.fn(async () => {
       const state = resolveThreadRouteRenderState({
         bootstrapComplete: true,
-        serverThreadShellExists: shellExists,
-        serverThreadDetailExists: false,
-        serverThreadDetailDeleted: false,
+        serverThreadExists: shellExists,
+        serverThreadDeleted: false,
         draftThreadExists: false,
       });
       // ThreadRouteView redirects missing server threads to the new-draft route.

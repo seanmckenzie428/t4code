@@ -20,18 +20,25 @@ merge cleanly while omitting a required Pilot field or bypassing a Pilot policy.
 | Branding and distribution     | Visible product is Pilot/Pilot Connect; `pilot` is canonical local CLI; `t4` and `t3` remain compatibility aliases; upstream publishing stays disabled; personal `origin` is push target and T3 `upstream` is fetch-only.                                                     | `packages/shared/src/branding.test.ts`, `apps/web/src/branding.test.ts`, `apps/desktop/src/app/DesktopAppIdentity.test.ts`, release smoke tests |
 | Compatibility identifiers     | Persisted, protocol, package, service, scheme, bundle, state, relay, and configuration identifiers listed in `t4-compatibility.md` stay T3-compatible.                                                                                                                        | `docs/internals/t4-compatibility.md`, compatibility and auth tests                                                                              |
 | App control                   | Agents use a provider-neutral, typed, policy-checked command surface with audits, grants, client invocation, bounded destructive actions, and no raw DB/credential access.                                                                                                    | `AppControlPolicy.test.ts`, `AppControlServerExecutor.test.ts`, app-control contract tests                                                      |
-| Project delegation            | Project threads support bounded delegation and preserve delegation origin on projected messages. Retired Quick Chat entities remain decodable but cannot start sessions.                                                                                                      | `decider.systemEntities.test.ts`, `AppControlServerExecutor.test.ts`, `ProjectionSnapshotQuery.test.ts`                                         |
+| Project delegation            | Project threads support bounded delegation and preserve delegation origin on projected messages. Retired Quick Chat entities remain decodable but cannot start sessions.                                                                                                      | `decider.systemEntities.test.ts`, `AppControlServerExecutor.test.ts`, `LegacyV1ThreadImporter.test.ts`                                          |
 | Generated views               | Native/sandboxed views, bounded launcher placements, URL actions, management controls, and chat-topbar split buttons remain supported. Generated writes are machine-local/personal; project `t3.json` is hand-authored and read-only to generated UI.                         | `appViews.test.ts`, `appViewCommandHost.test.ts`, `AppViewPlacements.logic.test.ts`, `GeneratedViewLibrary.logic.test.ts`                       |
 | Active-worktree project views | Project launchers resolve the active thread worktree first, wait for that query, then fall back to project root only when worktree `t3.json` is absent. Lotus-local launcher URLs bind to the active thread's Lotus workspace instead of a stack hardcoded in project config. | `useT3ProjectFileAppViews.test.ts`                                                                                                              |
 | Main review workflow          | Horizontal Chat/Review tabs retain full diff navigation. Viewed revisions persist per environment/thread/scope: unchanged files reopen collapsed; changed files expand with Changed since viewed. Clearing Viewed expands the file.                                           | review service, main-view, diff rail, `diffPanelStore.test.ts`, and `diffCollapse.test.ts`                                                      |
 | Workspace preferences         | Pilot workspace appearance preferences and expanded chat snooze options remain available and stable.                                                                                                                                                                          | settings, UI-state, sidebar snooze, and `threadSnoozed.test.ts`                                                                                 |
-| Desktop/nightly               | Pilot icons, safe state-directory locking, release dependency handling, local nightly build/install flow, and packaged macOS Dock icon behavior remain intact.                                                                                                                | desktop identity/lock tests and desktop-nightly script tests                                                                                    |
+| Desktop/nightly               | Pilot icons, safe state-directory locking, saved desktop profile data, release dependency handling, local nightly build/install flow, and packaged macOS Dock icon behavior remain intact.                                                                                    | desktop identity/lock/profile-migration tests and desktop-nightly script tests                                                                  |
 | Lotus integration             | Optional Lotus Runtime extension and project custom actions remain additive; Lotus owns its runtime lifecycle.                                                                                                                                                                | integration provider/MCP tests and project custom-action tests                                                                                  |
-| Persistence ledger            | Pilot migration IDs 36-46 keep shipped meanings. Upstream migrations formerly numbered 36-38 run as 41-43; compatibility reruns remain 44-46; upstream 41-54 run as 47-60.                                                                                                    | `041_049_ForkCompatibility.test.ts`                                                                                                             |
+| Persistence ledger            | Pilot migrations 1–62 keep shipped IDs and meanings. Upstream V2 migrations 55–56 append as 63–64; upstream ledgers normalize without overwriting Pilot data.                                                                                                                 | `041_049_ForkCompatibility.test.ts`                                                                                                             |
 
 When a T3 change creates another read, write, transport, cache, pagination, or fallback path in one
 of these areas, extend that path with every Pilot field and policy. Add a regression using non-default
 Pilot data; null/default-only fixtures do not prove preservation.
+
+Settled-thread archival retains its seven-day eligibility clock, native Codex synchronization,
+retry intent, and session admission fence through the V2 engine. Historical Review checkpoints,
+Viewed turn identities, delegated messages, project custom actions, and workspace bindings must
+survive lazy V1 import and projection replay; default-only migration fixtures do not prove this.
+`ThreadArchiveService.test.ts`, `PilotLegacyHistory.test.ts`, and
+`LegacyV1ThreadImporter.test.ts` cover these cross-version boundaries.
 
 ## Historical T4 patch ledger
 
@@ -75,6 +82,41 @@ No-overlap preflight is not proof of compatibility. Contracts can cross files, s
 remain mandatory.
 
 ## Sync records
+
+### 2026-10-02 — T3 V2 orchestrator
+
+- Pilot parent: `853d8af8f45ce735f8fed7c62b90ff6fca6fa2ba`; T3 parent:
+  `cc1e634bfa62edd56ff792eea666e436fdef788f` (latest upstream `main` when fetched).
+- Integrated 75 upstream commits. Exact-SHA preflight identified 255 overlapping paths.
+  Reviewed semantic overlaps across the new V2 orchestrator, providers, contracts, clients,
+  desktop identity, persistence, and release tooling. Retained Pilot branding, source-only
+  distribution, guarded publishing, and the stable patched Pierre dependency.
+- Ported Pilot app control, generated views, project delegation/custom actions, workspace
+  bindings, settlement/archive lifecycle, and native Codex archive synchronization to V2.
+  Quick Chat remains removed. Historical system entities remain decodable and unavailable
+  for new provider sessions. Main-view Chat/Review, PR tabs, Viewed persistence, hover rail,
+  workspace preferences, expanded snooze, and external-thread launches remain available.
+  Preserved concurrent Pilot main change `0f286432df` to open the first linked PR by default.
+- Preserved migration ledger 1–62. V2 tables and checkpoint scopes append as 63–64;
+  compatibility normalization handles upstream ledgers. Lazy import retains native provider
+  continuation and old checkpoint refs/turn identities without resurrecting active work.
+  Failed-turn gaps retain correct Review ranges and message-to-turn associations. Historical
+  reasoning, tools, plans, and audit traces retain ordering and survive projection replay.
+  Threads without saved native sessions receive imported conversation context on their first
+  continuation, including messages associated with imported runs. Later turns do not repeat it.
+  Imported native turns verify their session identity before historical rewind. Existing Cursor
+  ACP sessions keep their native transport; new Cursor threads use the SDK because its agent
+  store cannot resume ACP session IDs.
+- Adopted the separate V2 desktop profile with a one-time copy of Pilot's existing persistent
+  profile data, as requested. The original remains a recovery copy; existing V2 profiles are
+  never overwritten. Migration requires exclusive access to the old profile and preserves
+  Viewed state, UI preferences, and browser session data while rebuilding caches.
+- Validation: fork invariants passed (30 files / 310 tests), with focused provider, archive,
+  rewind, migration, MCP, client, desktop, and packaging coverage. Scoped typechecks passed
+  for server, contracts, web, desktop, mobile, client runtime, shared, marketing, scripts, and
+  the Lotus extension. Release smoke and source whitespace checks passed; inherited patch
+  files retain unified-diff context whitespace. No live database writes, interactive UI
+  verification, app installation/restart, or push performed.
 
 ### 2026-09-29 — T3 v0.0.43
 

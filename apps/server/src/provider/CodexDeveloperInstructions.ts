@@ -3,6 +3,8 @@ import type { V2TurnStartParams__AdditionalContextEntry } from "effect-codex-app
 import { buildT3CodeMcpInstructionBlocks } from "./T3CodeMcpInstructions.ts";
 import { buildRuntimeInstructions } from "./RuntimeInstructions.ts";
 
+import { T3_CODE_ORCHESTRATION_INSTRUCTIONS } from "./T3OrchestrationInstructions.ts";
+
 export interface T3CodeToolAvailability {
   readonly browser: boolean;
   readonly device: boolean;
@@ -180,6 +182,25 @@ export function buildCodexDeveloperInstructions(interactionMode: ProviderInterac
     : CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS;
 }
 
+// Codex truncates each additional-context value independently at 1,000 tokens.
+const orchestrationContextEntries = (() => {
+  const blocks: string[] = [];
+  for (const paragraph of T3_CODE_ORCHESTRATION_INSTRUCTIONS.split("\n\n")) {
+    const previous = blocks.at(-1);
+    if (previous !== undefined && Buffer.byteLength(`${previous}\n\n${paragraph}`) < 4_000) {
+      blocks[blocks.length - 1] = `${previous}\n\n${paragraph}`;
+    } else {
+      blocks.push(paragraph);
+    }
+  }
+  return Object.fromEntries(
+    blocks.map((value, index) => [
+      index === 0 ? "t3_code_orchestration" : `t3_code_orchestration_${index + 1}`,
+      { kind: "application" as const, value },
+    ]),
+  );
+})();
+
 /**
  * Pilot context for `turn/start.additionalContext`. Codex renders each entry
  * as a `<key>value</key>` developer message and resends it only when the value
@@ -201,6 +222,7 @@ export function buildCodexAdditionalContext(
   const tools = toolInstructions(toolsAvailable);
   // Separate keys keep each value under Codex's per-entry token cap.
   return {
+    ...orchestrationContextEntries,
     t3_code_runtime: {
       kind: "application",
       value: buildRuntimeInstructions({ harness: "Codex", ...runtime }),

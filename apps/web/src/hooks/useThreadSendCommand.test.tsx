@@ -1,86 +1,24 @@
-import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
-import {
-  EnvironmentId,
-  ProviderInstanceId,
-  ThreadId,
-  type ScopedThreadRef,
-} from "@t3tools/contracts";
-import { act, StrictMode, useEffect } from "react";
+import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { ComposerDispatchMode } from "@t3tools/client-runtime/state/composer-dispatch";
+import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-
 import { invokeWebAppCommand } from "../appCommandRegistry";
-import {
-  isQueuedMessageDue,
-  useQueuedMessages,
-  useQueuedMessageStore,
-  type QueuedComposerMessage,
-} from "../queuedMessageStore";
+import type { ComposerSubmissionIntent } from "../composer-logic";
 import { useThreadSendCommand } from "./useThreadSendCommand";
 
 const thread = scopeThreadRef(EnvironmentId.make("environment-1"), ThreadId.make("thread-1"));
-const threadKey = scopedThreadKey(thread);
 const context = { ...thread, source: "button" as const };
 let root: Root;
-let sent: QueuedComposerMessage[];
-let failures: unknown[];
-
-function ChatProbe(props: {
-  thread: ScopedThreadRef;
-  phase: "running" | "ready";
-  toolActivityId: string | null;
-}) {
-  const queue = useQueuedMessages(scopedThreadKey(props.thread));
-  const next = queue[0];
-
-  // ChatView's queue effect precedes its command host. A provider update
-  // changes both the dispatch boundary and the host's render snapshot.
-  useEffect(() => {
-    if (
-      !next ||
-      !isQueuedMessageDue({
-        message: next,
-        phase: props.phase,
-        latestToolActivityId: props.toolActivityId,
-      })
-    ) {
-      return;
-    }
-    void invokeWebAppCommand(
-      "thread.send",
-      { ...props.thread, source: "button" },
-      {
-        threadId: props.thread.threadId,
-        text: next.prompt,
-        submissionIntent: "foreground",
-        queuedMessageId: next.id,
-      },
-    ).catch((error: unknown) => failures.push(error));
-  }, [next, props.phase, props.toolActivityId, props.thread]);
-
-  useThreadSendCommand({
-    thread: props.thread,
-    readPrompt: () => "unsent composer draft",
-    send: async (_intent, message) => {
-      if (!message) throw new Error("Expected the queued snapshot, not the composer draft.");
-      const taken = useQueuedMessageStore
-        .getState()
-        .beginSend(scopedThreadKey(props.thread), message.id, props.toolActivityId);
-      if (taken) {
-        sent.push(taken);
-        useQueuedMessageStore.getState().finishSend(scopedThreadKey(props.thread), message.id);
-      }
-    },
-  });
+const send =
+  vi.fn<(mode: ComposerDispatchMode, intent: ComposerSubmissionIntent) => Promise<void>>();
+function ChatProbe(props: { thread: ScopedThreadRef; prompt?: string }) {
+  useThreadSendCommand({ thread: props.thread, readPrompt: () => props.prompt ?? "draft", send });
   return null;
 }
-
 beforeEach(() => {
-  const document = {
-    nodeType: 9,
-    addEventListener() {},
-    removeEventListener() {},
-  };
+  const document = { nodeType: 9, addEventListener() {}, removeEventListener() {} };
   const container = {
     nodeType: 1,
     tagName: "DIV",
@@ -93,83 +31,69 @@ beforeEach(() => {
   vi.stubGlobal("window", { document, HTMLIFrameElement: EventTarget });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   root = createRoot(container as unknown as HTMLElement);
-  sent = [];
-  failures = [];
-  useQueuedMessageStore.setState({ queuesByThreadKey: {}, lastDispatchByThreadKey: {} });
+  send.mockReset().mockResolvedValue(undefined);
 });
-
 afterEach(async () => {
   await act(() => root.unmount());
   vi.unstubAllGlobals();
 });
 
 describe("thread send command lifecycle", () => {
-  it.each([
-    { boundary: "turn completion", phase: "ready" as const, toolActivityId: null },
-    { boundary: "tool completion", phase: "running" as const, toolActivityId: "tool-1" },
-  ])("sends a queued message once on $boundary while the host updates", async (update) => {
-    const queued = useQueuedMessageStore.getState().enqueue(threadKey, {
-      prompt: "queued follow-up",
-      images: [],
-      files: [],
-      terminalContexts: [],
-      previewAnnotations: [],
-      reviewComments: [],
-      sendSettings: {
-        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5" },
-        runtimeMode: "full-access",
-        interactionMode: "default",
-        promptEffort: null,
-      },
-      queuedAfterToolActivityId: null,
-      createdAt: "2026-09-22T00:00:00.000Z",
-    });
-    await act(() =>
-      root.render(
-        <StrictMode>
-          <ChatProbe thread={thread} phase="running" toolActivityId={null} />
-        </StrictMode>,
-      ),
-    );
-    expect(sent).toEqual([]);
-
-    await act(() =>
-      root.render(
-        <StrictMode>
-          <ChatProbe thread={{ ...thread }} {...update} />
-        </StrictMode>,
-      ),
-    );
-
-    expect(failures).toEqual([]);
-    expect(sent).toEqual([queued]);
-    expect(useQueuedMessageStore.getState().queuesByThreadKey[threadKey]).toBeUndefined();
-  });
-
-  it("removes the old thread host on navigation and the current host on unmount", async () => {
-    await act(() =>
-      root.render(<ChatProbe thread={thread} phase="running" toolActivityId={null} />),
-    );
-    const otherThread = scopeThreadRef(thread.environmentId, ThreadId.make("thread-2"));
-    await act(() =>
-      root.render(<ChatProbe thread={otherThread} phase="running" toolActivityId={null} />),
-    );
+  it.each(["auto", "queue", "steer", "restart", "start"] as const)(
+    "dispatches %s once through the active host after it updates",
+    async (dispatchMode) => {
+      await act(() =>
+        root.render(
+          <StrictMode>
+            <ChatProbe thread={thread} />
+          </StrictMode>,
+        ),
+      );
+      await act(() =>
+        root.render(
+          <StrictMode>
+            <ChatProbe thread={{ ...thread }} prompt="updated" />
+          </StrictMode>,
+        ),
+      );
+      await invokeWebAppCommand("thread.send", context, {
+        threadId: thread.threadId,
+        text: "updated",
+        dispatchMode,
+        submissionIntent: "background",
+      });
+      expect(send).toHaveBeenCalledExactlyOnceWith(dispatchMode, "background");
+    },
+  );
+  it("rejects a stale composer snapshot without enqueueing it", async () => {
+    await act(() => root.render(<ChatProbe thread={thread} prompt="new text" />));
     await expect(
       invokeWebAppCommand("thread.send", context, {
         threadId: thread.threadId,
-        text: "unsent composer draft",
+        text: "old text",
+        dispatchMode: "queue",
       }),
+    ).rejects.toThrow("composer changed");
+    expect(send).not.toHaveBeenCalled();
+  });
+  it("defaults to automatic foreground dispatch", async () => {
+    await act(() => root.render(<ChatProbe thread={thread} />));
+    await invokeWebAppCommand("thread.send", context, { threadId: thread.threadId, text: "draft" });
+    expect(send).toHaveBeenCalledExactlyOnceWith("auto", "foreground");
+  });
+  it("removes the old thread host on navigation and the current host on unmount", async () => {
+    await act(() => root.render(<ChatProbe thread={thread} />));
+    const otherThread = scopeThreadRef(thread.environmentId, ThreadId.make("thread-2"));
+    await act(() => root.render(<ChatProbe thread={otherThread} />));
+    await expect(
+      invokeWebAppCommand("thread.send", context, { threadId: thread.threadId, text: "draft" }),
     ).rejects.toThrow("not hosted");
-
     await act(() => root.render(null));
     await expect(
       invokeWebAppCommand(
         "thread.send",
         { ...otherThread, source: "button" },
-        {
-          threadId: otherThread.threadId,
-          text: "unsent composer draft",
-        },
+        { threadId: otherThread.threadId, text: "draft" },
       ),
     ).rejects.toThrow("not hosted");
   });

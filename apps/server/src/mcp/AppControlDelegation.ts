@@ -1,24 +1,20 @@
-import type {
-  AppControlPrincipal,
-  OrchestrationReadModel,
-  OrchestrationThread,
-  ThreadId,
-} from "@t3tools/contracts";
+import type { AppControlPrincipal, ThreadId } from "@t3tools/contracts";
+import type { AppControlThread } from "./AppControlState.ts";
 
 export const MAX_CONCURRENT_ASSISTANT_DELEGATIONS = 3;
 
-function latestDelegatedMessage(thread: OrchestrationThread) {
+function latestDelegatedMessage(thread: AppControlThread) {
   return thread.messages.findLast(
     (message) => message.role === "user" && message.delegation !== undefined,
   );
 }
 
-function latestUserMessage(thread: OrchestrationThread) {
+function latestUserMessage(thread: AppControlThread) {
   return thread.messages.findLast((message) => message.role === "user");
 }
 
 export function isActiveDelegatedTurn(
-  thread: OrchestrationThread,
+  thread: AppControlThread,
   assistantThreadId: ThreadId,
 ): boolean {
   const message = latestDelegatedMessage(thread);
@@ -30,7 +26,7 @@ export function isActiveDelegatedTurn(
 }
 
 export function activeDelegatedTurnCount(
-  snapshot: OrchestrationReadModel,
+  snapshot: { readonly threads: ReadonlyArray<AppControlThread> },
   assistantThreadId: ThreadId,
 ): number {
   return snapshot.threads.filter(
@@ -44,7 +40,7 @@ export function delegationOriginThreadId(principal: AppControlPrincipal): Thread
 
 export function validateDelegationPrincipal(input: {
   readonly principal: AppControlPrincipal;
-  readonly source?: OrchestrationThread | undefined;
+  readonly source?: AppControlThread | undefined;
 }): string | undefined {
   if (input.principal.kind === "global-assistant")
     return "Quick Chat and assistant sessions are no longer supported.";
@@ -58,7 +54,7 @@ export function validateDelegationPrincipal(input: {
 
 export function validateDelegationTarget(input: {
   readonly principal: AppControlPrincipal;
-  readonly target: OrchestrationThread | undefined;
+  readonly target: AppControlThread | undefined;
   readonly requireActive?: boolean;
 }): string | undefined {
   const target = input.target;

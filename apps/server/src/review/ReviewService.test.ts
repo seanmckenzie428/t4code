@@ -8,7 +8,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as Option from "effect/Option";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
-import { ServerConfig } from "../config.ts";
+import * as ServerConfig from "../config.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriver from "../vcs/VcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";

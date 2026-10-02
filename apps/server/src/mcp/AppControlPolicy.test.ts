@@ -22,7 +22,7 @@ import {
   make,
 } from "./AppControlPolicy.ts";
 import * as AppControlServerExecutor from "./AppControlServerExecutor.ts";
-import { ProjectionSnapshotQuery } from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import { AppControlState as ProjectionSnapshotQuery } from "./AppControlState.ts";
 
 const scope = (grants: ReadonlyArray<string> = []) => ({
   environmentId: EnvironmentId.make("environment-1"),
