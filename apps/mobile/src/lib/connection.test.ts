@@ -44,7 +44,7 @@ describe("mobile remote connection records", () => {
 
   it("identifies mobile token exchanges for authorized-client presentation", () => {
     expect(authClientMetadata()).toEqual({
-      label: "T4 Code Mobile",
+      label: "Pilot Mobile",
       deviceType: "mobile",
       os: "iOS",
       osMajorVersion: 18,
@@ -65,7 +65,7 @@ describe("mobile remote connection records", () => {
     });
   });
 
-  it.effect("preserves T4 mobile metadata in managed token exchanges", () =>
+  it.effect("preserves Pilot mobile metadata in managed token exchanges", () =>
     Effect.gen(function* () {
       const requestBodies: string[] = [];
       const httpLayer = remoteHttpClientLayer(async (input, init) => {
@@ -88,7 +88,7 @@ describe("mobile remote connection records", () => {
 
       expect(requestBodies).toHaveLength(1);
       const body = new URLSearchParams(requestBodies[0]);
-      expect(body.get("client_label")).toBe("T4 Code Mobile");
+      expect(body.get("client_label")).toBe("Pilot Mobile");
       expect(body.get("client_device_type")).toBe("mobile");
       expect(body.get("client_os")).toBe("iOS");
     }),

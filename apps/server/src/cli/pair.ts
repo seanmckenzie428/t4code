@@ -79,9 +79,9 @@ export class NoRunningServerError extends Schema.TaggedError<NoRunningServerErro
 ) {
   override get message(): string {
     return [
-      "No running T4 Code server found.",
+      "No running Pilot server found.",
       ...this.checkedStatePaths.map((statePath) => `  checked ${statePath}`),
-      "Start one with `t4 serve`, or connect this machine with T4 Connect: `t4 connect`.",
+      "Start one with `t4 serve`, or connect this machine with Pilot Connect: `t4 connect`.",
     ].join("\n");
   }
 }
@@ -111,7 +111,7 @@ export class ServesOtherEnvironmentError extends Schema.TaggedError<ServesOtherE
   { servePort: Schema.Number },
 ) {
   override get message(): string {
-    return `Tailscale Serve on HTTPS port ${String(this.servePort)} already fronts a different T4 Code server. Pass --tailscale-serve-port to publish this one on another port.`;
+    return `Tailscale Serve on HTTPS port ${String(this.servePort)} already fronts a different Pilot server. Pass --tailscale-serve-port to publish this one on another port.`;
   }
 }
 
@@ -129,7 +129,7 @@ export class ServePortOccupiedError extends Schema.TaggedError<ServePortOccupied
   { servePort: Schema.Number },
 ) {
   override get message(): string {
-    return `HTTPS port ${String(this.servePort)} on the tailnet already serves something that is not a T4 Code server. Pass --tailscale-serve-port to publish this one on another port.`;
+    return `HTTPS port ${String(this.servePort)} on the tailnet already serves something that is not a Pilot server. Pass --tailscale-serve-port to publish this one on another port.`;
   }
 }
 
@@ -484,7 +484,7 @@ export const pairCommand = Command.make("pair", {
   tailscaleServePort: tailscaleServePortFlag,
 }).pipe(
   Command.withDescription(
-    "Mint a pairing token for a running T4 Code server and print it as a QR code.",
+    "Mint a pairing token for a running Pilot server and print it as a QR code.",
   ),
   Command.withHandler((flags) =>
     Effect.gen(function* () {

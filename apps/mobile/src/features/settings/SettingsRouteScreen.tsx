@@ -74,7 +74,7 @@ function ConfiguredSettingsRouteScreen() {
         <SettingsSection title="Connections">
           <SettingsRow
             icon="person.crop.circle"
-            label="T4 Account"
+            label="Pilot Account"
             value={accountLabel}
             disabled={!isLoaded}
             onPress={() => navigation.navigate("SettingsSheet", { screen: "SettingsAuth" })}
@@ -196,7 +196,7 @@ function SettingsIndexSections() {
 
       <SettingsSection title="App">
         <SettingsRow icon="chart.bar.xaxis" label="Usage" target="SettingsUsage" />
-        <SettingsRow icon="info.circle" label="About T4 Code" target="SettingsAbout" />
+        <SettingsRow icon="info.circle" label="About Pilot" target="SettingsAbout" />
       </SettingsSection>
     </>
   );

@@ -1,13 +1,13 @@
-# Running T4 Code in the background
+# Running Pilot in the background
 
-On Linux and macOS, T4 Code can run as a service for your user so you do not need
+On Linux and macOS, Pilot can run as a service for your user so you do not need
 to keep a terminal open.
 
 ## Manage the service
 
-T4 is [built from source](./install.md#start-from-source). Its local CLI is `t4`;
+Pilot is [built from source](./install.md#start-from-source). Its local CLI is `t4`;
 `t3` remains the compatibility alias. Published service installation and updates
-use upstream package `t3`; they install upstream T3 Code, not a T4 release.
+use upstream package `t3`; they install upstream T3 Code, not a Pilot release.
 The commands below describe that compatible service infrastructure.
 
 | Task                            | Command                |
@@ -29,7 +29,7 @@ the old version until you run `t3 service restart`. Pass `--yes` from a
 script. A server you started by hand is left running; stop and start it again
 to pick up the new version. Wait for any remote update already in progress
 before updating; to match a remote client's version, follow
-[Updating T4 Code](./updating.md).
+[Updating Pilot](./updating.md).
 
 Pass an exact version (`t3 update 0.0.42`) to pin one, `--channel nightly` to
 switch trains, or `--allow-downgrade` to move backwards. `preview` is a
@@ -44,7 +44,7 @@ script.
 
 ## Platform support
 
-Linux needs systemd user services. Setup enables lingering so T4 Code starts at
+Linux needs systemd user services. Setup enables lingering so Pilot starts at
 boot and keeps running after logout. If this needs administrator permission,
 setup prints a recovery command before changing the service.
 
@@ -55,8 +55,8 @@ service is still installed and will start at the next login.
 
 Windows background services are not supported.
 
-T4 Connect can offer service installation during setup, but the two are managed
-separately. Signing out of T4 Connect does not stop or uninstall the service.
+Pilot Connect can offer service installation during setup, but the two are managed
+separately. Signing out of Pilot Connect does not stop or uninstall the service.
 
 ## Troubleshooting
 
@@ -78,7 +78,7 @@ ssh -t your-server 'sudo loginctl enable-linger "$(id -un)"'
 ```
 
 Then retry service setup as your normal user. Run only the `loginctl` command
-with sudo; running T4 Code as root creates a separate installation and Connect
+with sudo; running Pilot as root creates a separate installation and Connect
 identity. Without administrator access, run `t3 serve` in a terminal and keep
 that session open.
 
@@ -86,7 +86,7 @@ that session open.
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `linger-unavailable`                    | Run `loginctl show-user "$(id -un)" --property=Linger` and check that systemd-logind is available.                             |
 | `user-manager-unavailable`              | Run `systemctl --user status` in a login session for the service user; check your distribution's systemd user-session support. |
-| `service-disabled` or `service-stopped` | Read the log and `systemctl --user status t3code.service`, then use the repair command printed by T4 Code.                     |
+| `service-disabled` or `service-stopped` | Read the log and `systemctl --user status t3code.service`, then use the repair command printed by Pilot.                       |
 | `restart-pending`                       | A newer version is installed but the service still runs the previous one. Run `t3 service restart`.                            |
 
 On macOS, check **System Settings → General → Login Items** if the service no
@@ -95,5 +95,5 @@ Downloads, it may need Full Disk Access for the `t3` executable listed in
 `ProgramArguments` in
 `~/Library/LaunchAgents/com.t3tools.t3code.service.plist`.
 
-For failures after signing in to T4 Connect, see
+For failures after signing in to Pilot Connect, see
 [connection troubleshooting](./remote-access.md#t3-connect-troubleshooting).

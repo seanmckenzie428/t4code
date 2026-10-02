@@ -283,7 +283,7 @@ function UnknownWhenVariableWarning({
 
   return (
     <WarningTooltipIcon label={label} focusable={focusable} className="size-4.5">
-      T4 Code does not recognize this condition yet. It can still be saved, but it may not match
+      Pilot does not recognize this condition yet. It can still be saved, but it may not match
       unless the runtime provides it.
     </WarningTooltipIcon>
   );
@@ -1315,8 +1315,8 @@ function BrowserKeybindingNotice() {
     <div className="flex items-center gap-2 px-3 py-2.5 text-xs leading-normal text-muted-foreground sm:px-4">
       <TriangleAlertIcon className="size-3.5 shrink-0 text-warning" aria-hidden />
       <span>
-        Some shortcuts may be claimed by the browser before T4 Code sees them. Use the desktop app
-        for better keybinding support.
+        Some shortcuts may be claimed by the browser before Pilot sees them. Use the desktop app for
+        better keybinding support.
       </span>
     </div>
   );
@@ -1325,7 +1325,7 @@ function BrowserKeybindingNotice() {
 export function KeybindingsSettingsPanel() {
   // The representative environment supplies the displayed bindings; edits
   // fan out to every connected environment in the selection, so one
-  // shortcut change reaches each machine the user runs T4 Code on.
+  // shortcut change reaches each machine the user runs Pilot on.
   const { environment: primaryEnvironment, connectedEnvironments } = useSettingsScope();
   const serverKeybindings = primaryEnvironment?.serverConfig?.keybindings;
   const keybindings = useMemo(

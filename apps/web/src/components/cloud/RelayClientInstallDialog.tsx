@@ -69,8 +69,8 @@ export function RelayClientInstallDialog() {
           </DialogTitle>
           <DialogDescription>
             {isInstalling
-              ? "T4 Code is preparing this environment for secure access through T4 Connect."
-              : "T4 Code needs the relay client to make this environment available through T4 Connect."}
+              ? "Pilot is preparing this environment for secure access through Pilot Connect."
+              : "Pilot needs the relay client to make this environment available through Pilot Connect."}
           </DialogDescription>
         </DialogHeader>
         <DialogPanel scrollFade={false}>
@@ -91,14 +91,14 @@ export function RelayClientInstallDialog() {
                 value={activeStepIndex + 1}
               />
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Keep T4 Code open while the relay client is installed.
+                Keep Pilot open while the relay client is installed.
               </p>
             </div>
           ) : (
             <div className="rounded-xl border border-border/70 bg-muted/35 p-3">
               <p className="text-sm font-medium text-foreground">Managed relay client</p>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                T4 Code will download and install version{" "}
+                Pilot will download and install version{" "}
                 {view.status === "confirming" ? view.version : ""} locally.
               </p>
             </div>

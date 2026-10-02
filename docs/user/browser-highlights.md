@@ -1,6 +1,6 @@
 # Browser highlights
 
-Agents can explain a page in T4's integrated browser with numbered callouts. Each callout outlines
+Agents can explain a page in Pilot's integrated browser with numbered callouts. Each callout outlines
 one element, adds a matching number badge, and may include a short title and explanation. Callouts
 support several colors and can appear together in one viewport.
 

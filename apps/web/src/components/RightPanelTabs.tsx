@@ -163,7 +163,7 @@ export function shouldOpenDefaultBrowserProfileFromMenuClick(
 }
 
 const SURFACE_DISABLED_REASONS = {
-  browser: "Browser previews are only available in the T4 Code desktop app.",
+  browser: "Browser previews are only available in the Pilot desktop app.",
   terminal: "Terminal surfaces are only available from a project thread.",
   files: "Files are only available when a project is open.",
   pullRequest: "This thread's branch has no pull request yet.",

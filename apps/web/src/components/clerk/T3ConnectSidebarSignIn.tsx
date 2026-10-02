@@ -58,7 +58,7 @@ function ConfiguredT3ConnectSidebarSignIn() {
         <SidebarMenuItem>
           <SidebarMenuButton onClick={openAuthPrompt}>
             <LogInIcon />
-            <span>Sign in to T4 Connect</span>
+            <span>Sign in to Pilot Connect</span>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>

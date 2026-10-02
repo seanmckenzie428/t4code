@@ -86,7 +86,7 @@ export function buildInitialGrokProviderSnapshot(
           version: null,
           status: "warning",
           auth: { status: "unknown" },
-          message: "Grok is disabled in T4 Code settings.",
+          message: "Grok is disabled in Pilot settings.",
         },
       });
     }
@@ -386,7 +386,7 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
         version: null,
         status: "warning",
         auth: { status: "unknown" },
-        message: "Grok is disabled in T4 Code settings.",
+        message: "Grok is disabled in Pilot settings.",
       },
     });
   }

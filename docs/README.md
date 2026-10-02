@@ -1,10 +1,10 @@
-# T4 Code docs
+# Pilot docs
 
-T4 Code is a personal fork of T3 Code. Distribution-specific T3 instructions are retained only where they document compatibility or upstream infrastructure.
+Pilot is a personal fork of T3 Code. Distribution-specific T3 instructions are retained only where they document compatibility or upstream infrastructure.
 
-## Using T4 Code
+## Using Pilot
 
-- [Install T3 Code](./user/install.md)
+- [Install Pilot](./user/install.md)
 - [Messages and context](./user/composer.md)
 - [Working with threads](./user/thread-sidebar.md)
 - [Permission modes](./user/permission-modes.md)
@@ -20,12 +20,12 @@ T4 Code is a personal fork of T3 Code. Distribution-specific T3 instructions are
 - [Product usage data](./user/telemetry.md)
 - [Remote access](./user/remote-access.md)
 - [Running in the background](./user/background-service.md)
-- [Updating T3 Code](./user/updating.md)
+- [Updating Pilot](./user/updating.md)
 - Provider guides: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md) · [OpenCode](./user/providers-opencode.md) · [Antigravity](./user/providers-antigravity.md)
 
 ---
 
-## Working on T4 Code
+## Working on Pilot
 
 Start with the [development runbook](./operations/development.md) and
 [contribution policy](../CONTRIBUTING.md).
@@ -46,7 +46,7 @@ source alone does not explain. Most code changes do not need an internal documen
 - [Product analytics](./internals/product-analytics.md)
 - [Environment auth](./internals/environment-auth.md)
 - [T3 Connect](./internals/t3-connect.md)
-- [T4 compatibility identifiers](./internals/t4-compatibility.md)
+- [Pilot compatibility identifiers](./internals/t4-compatibility.md)
 - [CI gates](./internals/ci.md)
 - [Assistant citations](./internals/assistant-citations.md)
 - [Mobile navigation](./internals/mobile-navigation.md)

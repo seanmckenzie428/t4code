@@ -1,37 +1,37 @@
-# T4 fork invariants
+# Pilot fork invariants
 
-T4 is a long-lived fork of T3, not a temporary patch stack. Upstream work is welcome only when it
-preserves T4 behavior. Git conflict resolution is insufficient: independently added code paths can
-merge cleanly while omitting a required T4 field or bypassing a T4 policy.
+Pilot is a long-lived fork of T3, not a temporary patch stack. Upstream work is welcome only when it
+preserves Pilot behavior. Git conflict resolution is insufficient: independently added code paths can
+merge cleanly while omitting a required Pilot field or bypassing a Pilot policy.
 
 ## Precedence
 
-- T4 behavior wins by default.
-- Preserve compatible upstream improvements alongside T4 behavior.
-- Never accept an upstream file wholesale, use blanket `-X theirs`, renumber shipped T4
-  migrations, remove a T4 test to make upstream pass, or silently replace a T4 workflow.
+- Pilot behavior wins by default.
+- Preserve compatible upstream improvements alongside Pilot behavior.
+- Never accept an upstream file wholesale, use blanket `-X theirs`, renumber shipped Pilot
+  migrations, remove a Pilot test to make upstream pass, or silently replace a Pilot workflow.
 - If both behaviors cannot coexist, stop before committing and ask the user which takes precedence.
 - Treat every shared path as a semantic conflict even when Git reports no textual conflict.
 
-## Current T4 behavior inventory
+## Current Pilot behavior inventory
 
-| Area                          | T4 invariant                                                                                                                                                                                                                                                                  | Main protection                                                                                                                                 |
+| Area                          | Pilot invariant                                                                                                                                                                                                                                                               | Main protection                                                                                                                                 |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Branding and distribution     | Visible product is T4 Code/T4 Connect; `t4` is canonical local CLI and `t3` remains compatibility alias; upstream publishing stays disabled; personal `origin` is push target and T3 `upstream` is fetch-only.                                                                | `packages/shared/src/branding.test.ts`, `apps/web/src/branding.test.ts`, `apps/desktop/src/app/DesktopAppIdentity.test.ts`, release smoke tests |
+| Branding and distribution     | Visible product is Pilot/Pilot Connect; `t4` is canonical local CLI and `t3` remains compatibility alias; upstream publishing stays disabled; personal `origin` is push target and T3 `upstream` is fetch-only.                                                               | `packages/shared/src/branding.test.ts`, `apps/web/src/branding.test.ts`, `apps/desktop/src/app/DesktopAppIdentity.test.ts`, release smoke tests |
 | Compatibility identifiers     | Persisted, protocol, package, service, scheme, bundle, state, relay, and configuration identifiers listed in `t4-compatibility.md` stay T3-compatible.                                                                                                                        | `docs/internals/t4-compatibility.md`, compatibility and auth tests                                                                              |
 | App control                   | Agents use a provider-neutral, typed, policy-checked command surface with audits, grants, client invocation, bounded destructive actions, and no raw DB/credential access.                                                                                                    | `AppControlPolicy.test.ts`, `AppControlServerExecutor.test.ts`, app-control contract tests                                                      |
 | Quick Chat and delegation     | Environment Quick Chat remains outside projects, uses its system entities/control-only profile, supports bounded project delegation, and preserves delegation origin on projected messages.                                                                                   | `QuickChat.test.ts`, `decider.systemEntities.test.ts`, `ProjectionSnapshotQuery.test.ts`                                                        |
 | Generated views               | Native/sandboxed views, bounded launcher placements, URL actions, management controls, and chat-topbar split buttons remain supported. Generated writes are machine-local/personal; project `t3.json` is hand-authored and read-only to generated UI.                         | `appViews.test.ts`, `appViewCommandHost.test.ts`, `AppViewPlacements.logic.test.ts`, `GeneratedViewLibrary.logic.test.ts`                       |
 | Active-worktree project views | Project launchers resolve the active thread worktree first, wait for that query, then fall back to project root only when worktree `t3.json` is absent. Lotus-local launcher URLs bind to the active thread's Lotus workspace instead of a stack hardcoded in project config. | `useT3ProjectFileAppViews.test.ts`                                                                                                              |
 | Main review workflow          | Horizontal Chat/Review tabs retain full diff navigation. Viewed revisions persist per environment/thread/scope: unchanged files reopen collapsed; changed files expand with Changed since viewed. Clearing Viewed expands the file.                                           | review service, main-view, diff rail, `diffPanelStore.test.ts`, and `diffCollapse.test.ts`                                                      |
-| Workspace preferences         | T4 workspace appearance preferences and expanded chat snooze options remain available and stable.                                                                                                                                                                             | settings, UI-state, sidebar snooze, and `threadSnoozed.test.ts`                                                                                 |
-| Desktop/nightly               | T4 icons, safe state-directory locking, release dependency handling, local nightly build/install flow, and packaged macOS Dock icon behavior remain intact.                                                                                                                   | desktop identity/lock tests and desktop-nightly script tests                                                                                    |
+| Workspace preferences         | Pilot workspace appearance preferences and expanded chat snooze options remain available and stable.                                                                                                                                                                          | settings, UI-state, sidebar snooze, and `threadSnoozed.test.ts`                                                                                 |
+| Desktop/nightly               | Pilot icons, safe state-directory locking, release dependency handling, local nightly build/install flow, and packaged macOS Dock icon behavior remain intact.                                                                                                                | desktop identity/lock tests and desktop-nightly script tests                                                                                    |
 | Lotus integration             | Optional Lotus Runtime extension and project custom actions remain additive; Lotus owns its runtime lifecycle.                                                                                                                                                                | integration provider/MCP tests and project custom-action tests                                                                                  |
-| Persistence ledger            | T4 migration IDs 36-46 keep shipped meanings. Upstream migrations formerly numbered 36-38 run as 41-43; compatibility reruns remain 44-46; upstream 41-54 run as 47-60.                                                                                                       | `041_049_ForkCompatibility.test.ts`                                                                                                             |
+| Persistence ledger            | Pilot migration IDs 36-46 keep shipped meanings. Upstream migrations formerly numbered 36-38 run as 41-43; compatibility reruns remain 44-46; upstream 41-54 run as 47-60.                                                                                                    | `041_049_ForkCompatibility.test.ts`                                                                                                             |
 
 When a T3 change creates another read, write, transport, cache, pagination, or fallback path in one
-of these areas, extend that path with every T4 field and policy. Add a regression using non-default
-T4 data; null/default-only fixtures do not prove preservation.
+of these areas, extend that path with every Pilot field and policy. Add a regression using non-default
+Pilot data; null/default-only fixtures do not prove preservation.
 
 ## Historical T4 patch ledger
 

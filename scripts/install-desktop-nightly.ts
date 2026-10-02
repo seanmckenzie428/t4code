@@ -17,7 +17,7 @@ import {
   resolveDesktopNightlyZipArtifact,
 } from "./lib/desktop-nightly-install.ts";
 
-const APP_NAME = "T4 Code (Nightly).app";
+const APP_NAME = "Pilot (Nightly).app";
 const SYSTEM_APPLICATIONS_DIRECTORY = "/Applications";
 const PLIST_BUDDY = "/usr/libexec/PlistBuddy";
 const LOCAL_SIGNING_IDENTITY_ENV = "T4CODE_DESKTOP_LOCAL_SIGNING_IDENTITY";
@@ -158,12 +158,12 @@ function notifyInstalled(version: string, targetApp: string): void {
     "osascript",
     [
       "-e",
-      `display notification "Quit and reopen T4 Code to use ${version}." with title "T4 Code Nightly installed" sound name "Glass"`,
+      `display notification "Quit and reopen Pilot to use ${version}." with title "Pilot Nightly installed" sound name "Glass"`,
     ],
     "inherit",
   );
   Effect.runSync(Console.log(`[desktop-nightly] Installed ${version} at ${targetApp}`));
-  Effect.runSync(Console.log("[desktop-nightly] Quit and reopen T4 Code to use the new build."));
+  Effect.runSync(Console.log("[desktop-nightly] Quit and reopen Pilot to use the new build."));
 }
 
 function main(): void {

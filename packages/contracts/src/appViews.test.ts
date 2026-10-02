@@ -65,7 +65,7 @@ it.effect("decodes native action dropdowns including external and internal brows
               },
               {
                 id: "internal",
-                label: "Open in T4",
+                label: "Open in Pilot",
                 commandId: "ui.preview.open",
                 args: { url: "https://example.com" },
               },
@@ -233,7 +233,7 @@ it.effect("decodes bounded chrome launcher placements", () =>
           action: {
             menu: [
               {
-                label: "Open in T4",
+                label: "Open in Pilot",
                 action: {
                   commandId: "ui.preview.open",
                   args: { url: "https://example.com/status" },
@@ -261,7 +261,7 @@ it.effect("decodes bounded chrome launcher placements", () =>
       parsed.placements?.[0]?.action && "menu" in parsed.placements[0].action
         ? parsed.placements[0].action.menu[0]?.label
         : undefined,
-      "Open in T4",
+      "Open in Pilot",
     );
     assert.strictEqual(parsed.placements?.[1]?.targetId, "browser");
   }),

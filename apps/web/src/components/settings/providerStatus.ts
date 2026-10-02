@@ -44,7 +44,7 @@ export function getProviderSummary(provider: ServerProvider | undefined) {
     return {
       headline: "Disabled",
       detail:
-        provider.message ?? "This provider is installed but disabled for new sessions in T4 Code.",
+        provider.message ?? "This provider is installed but disabled for new sessions in Pilot.",
     };
   }
   if (!provider.installed) {

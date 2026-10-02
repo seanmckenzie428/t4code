@@ -585,7 +585,7 @@ describe("Codex MCP elicitation approvals", () => {
 });
 
 describe("buildCodexDeveloperInstructions", () => {
-  it("keeps T4 context out of the mode prompt, which the model catalog can replace", () => {
+  it("keeps Pilot context out of the mode prompt, which the model catalog can replace", () => {
     for (const mode of ["default", "plan"] as const) {
       const instructions = buildCodexDeveloperInstructions(mode);
       NodeAssert.match(instructions, /^<collaboration_mode>[\s\S]*<\/collaboration_mode>$/);
@@ -603,7 +603,7 @@ describe("buildCodexAdditionalContext", () => {
     const context = buildCodexAdditionalContext(runtime);
 
     NodeAssert.equal(context.t3_code_runtime?.kind, "application");
-    NodeAssert.match(runtimeValue(context), /T4 Code/);
+    NodeAssert.match(runtimeValue(context), /Pilot/);
     NodeAssert.match(
       runtimeValue(context),
       /<runtime_info>.*Codex harness, as gpt-5\.3-codex with high reasoning effort.*embed images and videos.*Markdown.*<\/runtime_info>/,
@@ -678,19 +678,19 @@ describe("T3 tool instructions", () => {
   });
 });
 
-describe("T4 generated-view additional context", () => {
+describe("Pilot generated-view additional context", () => {
   it("teaches generated views independently of the replaceable collaboration mode", () => {
     for (const availability of [true, false]) {
       const instructions =
         buildCodexAdditionalContext({ model: "gpt-5.6", reasoningEffort: "high" }, availability)
           .t3_code_app_views?.value ?? "";
-      NodeAssert.match(instructions, /add this to T4/);
+      NodeAssert.match(instructions, /add this to Pilot/);
       NodeAssert.match(instructions, /app_status/);
       NodeAssert.match(instructions, /app_view_present/);
       NodeAssert.match(instructions, /app_view_update/);
       NodeAssert.match(instructions, /action: \{ primary:/);
       NodeAssert.match(instructions, /separate chevron opens options/);
-      NodeAssert.match(instructions, /Do not edit the T4 Code source tree/);
+      NodeAssert.match(instructions, /Do not edit the Pilot source tree/);
     }
   });
 });

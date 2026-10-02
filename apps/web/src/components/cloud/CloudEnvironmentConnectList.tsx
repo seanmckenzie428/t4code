@@ -67,7 +67,7 @@ function RemoteEnvironmentRowsSkeleton() {
 }
 
 /**
- * The user's T4 Connect environments from relay discovery, each with a
+ * The user's Pilot Connect environments from relay discovery, each with a
  * Connect button. The primary environment is always excluded; already-saved
  * environments are hidden unless `showSavedEnvironments` renders them with
  * their live connection state (used by onboarding, where the full device mesh
@@ -154,7 +154,7 @@ export function CloudEnvironmentConnectRows({
       toastManager.add({
         type: "success",
         title: "Environment added",
-        description: `Connecting to ${environment.label} through T4 Connect.`,
+        description: `Connecting to ${environment.label} through Pilot Connect.`,
       });
       return true;
     }
@@ -163,7 +163,7 @@ export function CloudEnvironmentConnectRows({
     }
     const cause = squashAtomCommandFailure(result);
     const message =
-      cause instanceof Error ? cause.message : "Could not connect the T4 Connect environment.";
+      cause instanceof Error ? cause.message : "Could not connect the Pilot Connect environment.";
     const traceId = findErrorTraceId(cause);
     console.error("[t3-connect] Could not connect environment", { message, traceId, cause });
     toastManager.add({
@@ -281,7 +281,7 @@ export function CloudEnvironmentConnectRows({
       return (
         <div className={ITEM_ROW_CLASSNAME}>
           <p className="text-sm font-medium text-destructive">
-            Could not load T4 Connect environments
+            Could not load Pilot Connect environments
           </p>
           <p className="mt-1 text-xs text-muted-foreground">{discoveryProblem}</p>
           <Button
@@ -339,17 +339,17 @@ export function CloudEnvironmentConnectRows({
             : "bg-muted-foreground/35";
     const statusText =
       unsupported && !savedEnvironment
-        ? "T4 Connect · Not added · Client not supported"
+        ? "Pilot Connect · Not added · Client not supported"
         : savedConnection
           ? savedConnection.statusText
           : availability === "online"
-            ? "T4 Connect · Not added · Relay online"
+            ? "Pilot Connect · Not added · Relay online"
             : availability === "offline"
-              ? "T4 Connect · Not added · Relay offline"
+              ? "Pilot Connect · Not added · Relay offline"
               : availability === "checking"
-                ? "T4 Connect · Not added · Checking relay status…"
+                ? "Pilot Connect · Not added · Checking relay status…"
                 : (Option.getOrNull(error)?.message ??
-                  "T4 Connect · Not added · Relay status unavailable");
+                  "Pilot Connect · Not added · Relay status unavailable");
     if (selection) {
       return (
         <label

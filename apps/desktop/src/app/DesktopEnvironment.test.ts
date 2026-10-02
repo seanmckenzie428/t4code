@@ -14,9 +14,9 @@ const defaultInput = {
   platform: "darwin",
   processArch: "arm64",
   appVersion: "0.0.22",
-  appPath: "/Applications/T4 Code.app/Contents/Resources/app.asar",
+  appPath: "/Applications/Pilot.app/Contents/Resources/app.asar",
   isPackaged: false,
-  resourcesPath: "/Applications/T4 Code.app/Contents/Resources",
+  resourcesPath: "/Applications/Pilot.app/Contents/Resources",
   runningUnderArm64Translation: false,
 } satisfies DesktopEnvironment.MakeDesktopEnvironmentInput;
 
@@ -79,8 +79,8 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.backendCwd, "/repo");
       assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev");
       assert.equal(environment.linuxWmClass, "t3code-dev");
-      assert.equal(environment.branding.baseName, "T4 Code");
-      assert.equal(environment.branding.displayName, "T4 Code (Dev)");
+      assert.equal(environment.branding.baseName, "Pilot");
+      assert.equal(environment.branding.displayName, "Pilot (Dev)");
       assert.equal(environment.linuxDesktopEntryName, "com.t3tools.T3Code.Development.desktop");
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),

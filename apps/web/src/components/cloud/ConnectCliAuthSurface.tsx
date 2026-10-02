@@ -97,8 +97,8 @@ export function ConnectCliAuthorizeSurface() {
         title="Connecting your terminal"
         description={
           isSignedIn
-            ? "Redirecting to authorize T4 Connect for your CLI…"
-            : "Sign in to continue authorizing T4 Connect for your CLI."
+            ? "Redirecting to authorize Pilot Connect for your CLI…"
+            : "Sign in to continue authorizing Pilot Connect for your CLI."
         }
       />
       {isLoaded && !isSignedIn ? (

@@ -43,7 +43,7 @@ function versionCore(version: string): string {
 }
 
 /**
- * The skew a user can act on: the connected server runs an older T4 Code than
+ * The skew a user can act on: the connected server runs an older Pilot than
  * this client, so the server is the side that needs updating.
  *
  * Two nightly builds compare their full versions, including the date and run.
@@ -80,7 +80,7 @@ export function resolveVersionMismatch(
   return {
     clientVersion: normalizedClientVersion,
     serverVersion: normalizedServerVersion,
-    hint: "Version mismatch. Try syncing the client and server to the same T4 Code version.",
+    hint: "Version mismatch. Try syncing the client and server to the same Pilot version.",
   };
 }
 
@@ -130,7 +130,7 @@ export function serverUpdateGuidance(
     case "respawn":
       return `Update the ${serverLabel} so they stay in sync.`;
     case "desktop-managed":
-      return `Update the T4 Code desktop app that runs the ${serverLabel}.`;
+      return `Update the Pilot desktop app that runs the ${serverLabel}.`;
     default:
       return `Relaunch the ${serverLabel} with the copied command to sync them.`;
   }

@@ -14,7 +14,7 @@ const imageProps = {
 } satisfies Partial<ComponentProps<typeof Image>>;
 ---
 
-<Layout title="Distribution — T4 Code" description="T4 Code distribution status.">
+<Layout title="Distribution — Pilot" description="Pilot distribution status.">
   <div class="download-page" id="download-page" data-channel="stable">
     <!-- The sky lives behind the header and fades to the page. It only shows on the nightly channel. -->
     <header class="download-head">
@@ -23,10 +23,10 @@ const imageProps = {
         <span class="head-icon">
           <Image class="head-icon--stable" src={iconStable} width={64} height={64} loading="eager" {...imageProps} />
         </span>
-        <h1 class="heading">T4 Code releases are not published yet</h1>
+        <h1 class="heading">Pilot releases are not published yet</h1>
       </div>
       <p class="head-meta" data-rise style="--d:180ms">
-        Build the personal fork from source. Do not use official T3 downloads as T4 releases.
+        Build the personal fork from source. Do not use official T3 downloads as Pilot releases.
       </p>
     </header>
 
@@ -116,7 +116,7 @@ const imageProps = {
     </div>
 
     <p class="releases-link" data-rise style="--d:480ms">
-      Future T4 builds will appear on the{" "}
+      Future Pilot builds will appear on the{" "}
       <a id="releases-page-link" href={RELEASES_URL} target="_blank" rel="noopener noreferrer">
         personal fork releases page<span aria-hidden="true"> &#8599;</span>
       </a>

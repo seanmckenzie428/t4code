@@ -1,12 +1,13 @@
-# T4 compatibility identifiers
+# Pilot compatibility identifiers
 
-T4 Code is a personal fork of T3 Code. Its display branding and local canonical CLI changed, but persisted, protocol, operating-system, and upstream-facing identifiers did not.
+Pilot (formerly T4 Code) is a personal fork of T3 Code. Display branding changed; existing CLI aliases, persisted data, protocols, operating-system identities, and upstream-facing identifiers stay compatible.
 
 Keep these identifiers unchanged unless a separate migration is designed and shipped:
 
 - Internal packages: `@t3tools/*`
 - Production npm package: `t3`
-- Environment variables: `T3CODE_*`
+- Environment variables: `T3CODE_*` and `T4CODE_DESKTOP_LOCAL_SIGNING_IDENTITY`
+- Local signing configuration: `t4.desktopNightlySigningIdentity`
 - State paths: `~/.t3` and worktree `.t3`
 - Storage keys beginning with `t3code`
 - Desktop and mobile schemes: `t3code*`
@@ -20,9 +21,9 @@ Keep these identifiers unchanged unless a separate migration is designed and shi
 
 These names are compatibility contracts, not missed branding. Existing state must open without migration, existing `t3code://` links must continue to work, and upstream merges must not require renaming `@t3tools/*` imports.
 
-Visible product copy should use **T4 Code** and **T4 Connect**. Local builds expose `t4` as the canonical CLI while retaining `t3` as an alias. Release installation, self-update, SSH package installation, and systemd infrastructure remain on package/service name `t3` until independent T4 distribution exists.
+Visible product copy should use **Pilot** and **Pilot Connect**. Local builds expose `t4` as the canonical CLI while retaining `t3` as an alias. Release installation, self-update, SSH package installation, and systemd infrastructure remain on package/service name `t3` until independent Pilot distribution exists.
 
-The existing release workflow is guarded to run only in `pingdotgg/t3code`; it must not publish from the personal fork. Marketing legal-policy drafts remain unlinked and must not be deployed as T4 policies until operator identity, privacy contacts, and distribution URLs are ready.
+The existing release workflow is guarded to run only in `pingdotgg/t3code`; it must not publish from the personal fork. Marketing legal-policy drafts remain unlinked and must not be deployed as Pilot policies until operator identity, privacy contacts, and distribution URLs are ready.
 
 Repository attribution is also intentional:
 

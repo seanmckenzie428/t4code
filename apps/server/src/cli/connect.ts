@@ -115,7 +115,7 @@ const authorizeCli = Effect.fn("cloud.cli.authorize")(function* (options: {
   const existing = yield* tokens.getExisting.pipe(
     Effect.catchTag("CloudCliCredentialRefreshError", () =>
       Console.log(
-        "The stored T4 Connect credential could not be refreshed; signing in again.",
+        "The stored Pilot Connect credential could not be refreshed; signing in again.",
       ).pipe(Effect.as(Option.none())),
     ),
   );
@@ -189,15 +189,15 @@ function formatCloudStatus(status: CloudCliStatus, options?: { readonly json?: b
       ? "pending server startup"
       : "not provisioned";
   const nextStep = !status.authenticated
-    ? "Run `t4 connect link` to authorize and enable T4 Connect."
+    ? "Run `t4 connect link` to authorize and enable Pilot Connect."
     : !status.desired
-      ? "Run `t4 connect link` to enable T4 Connect."
+      ? "Run `t4 connect link` to enable Pilot Connect."
       : !status.linked
         ? "Start T3 to provision the environment link and launch its managed tunnel."
         : undefined;
 
   return [
-    "T4 Connect",
+    "Pilot Connect",
     `  Exposure: ${status.desired ? "enabled" : "disabled"}`,
     `  Authorization: ${status.authenticated ? "stored credential" : "missing"}`,
     `  Environment link: ${provisioned}`,
@@ -215,7 +215,7 @@ const CLOUD_CLI_LIVE_SERVER_TIMEOUT = Duration.seconds(5);
 const confirmRelayClientInstall = (version: string) =>
   Prompt.run(
     Prompt.Confirm({
-      message: `The T4 relay client is required for T4 Connect. Download and install version ${version}?`,
+      message: `The Pilot relay client is required for Pilot Connect. Download and install version ${version}?`,
       initial: false,
     }),
   );
@@ -320,7 +320,7 @@ const logCloudDisconnectFailure = (
   clearAuthorization: boolean,
   cause: Cause.Cause<unknown>,
 ) =>
-  Effect.logWarning("T4 Connect disconnect operation failed.").pipe(
+  Effect.logWarning("Pilot Connect disconnect operation failed.").pipe(
     Effect.annotateLogs({
       operation,
       clearAuthorization,
@@ -366,10 +366,10 @@ export const reportCloudDisconnectResults = Effect.fn("cloud.cli.report_disconne
         input.liveResult.cause,
       );
       yield* Console.warn(
-        "T4 Connect is disabled, but the running server could not stop its tunnel.\nRestart that server to stop the connector.",
+        "Pilot Connect is disabled, but the running server could not stop its tunnel.\nRestart that server to stop the connector.",
       );
     } else {
-      yield* Console.log("T4 Connect is disabled locally.");
+      yield* Console.log("Pilot Connect is disabled locally.");
     }
 
     if (Exit.isFailure(input.relayResult)) {
@@ -410,7 +410,7 @@ const disconnectCloud = Effect.fn("cloud.cli.disconnect")(function* (options: {
 
   if (options.clearAuthorization) {
     yield* Console.log(
-      "Signed out of T4 Connect locally.\nThe background service is managed separately with `t4 service`.",
+      "Signed out of Pilot Connect locally.\nThe background service is managed separately with `t4 service`.",
     );
   }
 });
@@ -476,7 +476,7 @@ const linkEnvironmentForConnect = Effect.fn("cloud.cli.link_environment")(functi
       reportRelayClientInstallProgress,
     );
     if (Option.isNone(installed)) {
-      yield* Console.log("T4 Connect setup cancelled. The relay client was not installed.");
+      yield* Console.log("Pilot Connect setup cancelled. The relay client was not installed.");
       return null;
     }
     yield* Console.log(formatRelayClientReady(installed.value.version));
@@ -500,7 +500,7 @@ const connectLoginCommand = Command.make("login", {
     runCloudCommand(
       flags,
       Effect.gen(function* () {
-        yield* Console.log("T4 Connect\n");
+        yield* Console.log("Pilot Connect\n");
         const identity = yield* authorizeCli(flags);
         yield* Console.log(`✓ Signed in${connectedAs(identity)}`);
       }),
@@ -696,8 +696,8 @@ export const connectCommand = Command.make("connect", {
           const platform = yield* HostProcessPlatform;
           yield* Console.log(
             platform === "darwin"
-              ? "\n✓ Background service ready\n\nT4 Code is set to run while you are logged in to this Mac. The server establishes the T4 Connect link on startup."
-              : "\n✓ Background service ready\n\nT4 Code is set to keep running after you log out. The server establishes the T4 Connect link on startup.",
+              ? "\n✓ Background service ready\n\nPilot is set to run while you are logged in to this Mac. The server establishes the Pilot Connect link on startup."
+              : "\n✓ Background service ready\n\nPilot is set to keep running after you log out. The server establishes the Pilot Connect link on startup.",
           );
           return;
         }

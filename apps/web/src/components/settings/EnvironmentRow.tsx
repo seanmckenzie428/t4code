@@ -14,12 +14,12 @@ export function formatDesktopSshTarget(target: DesktopSshEnvironmentTarget): str
 
 /**
  * How this client reaches a machine, printed first in every environment row so
- * T4 Connect, SSH, WSL, and plain remote links are told apart without a legend.
+ * Pilot Connect, SSH, WSL, and plain remote links are told apart without a legend.
  */
 export function environmentTransportLabel(environment: EnvironmentPresentation): string {
   const { entry } = environment;
   if (entry.target._tag === "PrimaryConnectionTarget") return "This machine";
-  if (environment.relayManaged) return "T4 Connect";
+  if (environment.relayManaged) return "Pilot Connect";
   if (isDesktopLocalConnectionTarget(entry.target)) return "WSL";
   if (
     entry.target._tag === "SshConnectionTarget" &&

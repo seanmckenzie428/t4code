@@ -798,12 +798,14 @@ const makeServerLayer = Layer.unwrap(
                     ),
                   }),
                   Effect.tap((recovered) =>
-                    recovered ? Effect.logInfo("T4 Connect managed tunnel recovered") : Effect.void,
+                    recovered
+                      ? Effect.logInfo("Pilot Connect managed tunnel recovered")
+                      : Effect.void,
                   ),
                   Effect.catchCause((cause) =>
                     Cause.hasInterrupts(cause)
                       ? Effect.interrupt
-                      : Effect.logWarning("Failed to recover the T4 Connect managed tunnel", {
+                      : Effect.logWarning("Failed to recover the Pilot Connect managed tunnel", {
                           cause,
                         }),
                   ),
@@ -822,9 +824,9 @@ const makeServerLayer = Layer.unwrap(
             const wantsCliLink = hasCloudPublicConfig
               ? yield* CloudCliState.readCliDesiredCloudLink.pipe(
                   Effect.catch((cause) =>
-                    Effect.logWarning("Failed to read the desired T4 Connect link", { cause }).pipe(
-                      Effect.as(false),
-                    ),
+                    Effect.logWarning("Failed to read the desired Pilot Connect link", {
+                      cause,
+                    }).pipe(Effect.as(false)),
                   ),
                 )
               : false;
@@ -834,7 +836,7 @@ const makeServerLayer = Layer.unwrap(
             const desiredCliLinkMode = wantsCliLink
               ? yield* CloudCliState.readCliDesiredLinkMode.pipe(
                   Effect.catch((cause) =>
-                    Effect.logWarning("Failed to read the desired T4 Connect link mode", {
+                    Effect.logWarning("Failed to read the desired Pilot Connect link mode", {
                       cause,
                     }).pipe(Effect.as("managed" as const)),
                   ),
@@ -847,7 +849,7 @@ const makeServerLayer = Layer.unwrap(
                 ? false
                 : yield* startManagedCloudTunnelIfOriginConfirmed(localOrigin).pipe(
                     Effect.catch((cause) =>
-                      Effect.logWarning("Failed to start the confirmed T4 Connect tunnel", {
+                      Effect.logWarning("Failed to start the confirmed Pilot Connect tunnel", {
                         cause,
                       }).pipe(Effect.as(false)),
                     ),
@@ -858,12 +860,12 @@ const makeServerLayer = Layer.unwrap(
               Effect.tap((started) =>
                 started
                   ? Effect.logWarning(
-                      "T4 Connect started the stored tunnel without relay confirmation",
+                      "Pilot Connect started the stored tunnel without relay confirmation",
                     )
                   : Effect.void,
               ),
               Effect.catch((cause) =>
-                Effect.logWarning("Failed to start the stored T4 Connect tunnel", { cause }),
+                Effect.logWarning("Failed to start the stored Pilot Connect tunnel", { cause }),
               ),
               Effect.asVoid,
             );
@@ -878,13 +880,13 @@ const makeServerLayer = Layer.unwrap(
             ).pipe(
               Effect.tap((result) =>
                 result.status === "ready"
-                  ? Effect.logInfo("T4 Connect managed tunnel recovery registered")
+                  ? Effect.logInfo("Pilot Connect managed tunnel recovery registered")
                   : Effect.void,
               ),
               Effect.catchCause((cause) =>
                 Cause.hasInterrupts(cause)
                   ? Effect.interrupt
-                  : Effect.logWarning("Failed to register T4 Connect managed tunnel recovery", {
+                  : Effect.logWarning("Failed to register Pilot Connect managed tunnel recovery", {
                       cause,
                     }).pipe(Effect.as({ status: "unavailable" as const })),
               ),
@@ -929,10 +931,10 @@ const makeServerLayer = Layer.unwrap(
                 Effect.tap((mode) =>
                   mode === null
                     ? Effect.void
-                    : Effect.logInfo("T4 Connect desired link reconciled on startup"),
+                    : Effect.logInfo("Pilot Connect desired link reconciled on startup"),
                 ),
                 Effect.catch((cause) =>
-                  Effect.logWarning("Failed to reconcile T4 Connect desired link on startup", {
+                  Effect.logWarning("Failed to reconcile Pilot Connect desired link on startup", {
                     cause,
                   }).pipe(Effect.as(null)),
                 ),

@@ -1,16 +1,16 @@
-# T4 Code
+# Pilot
 
-T4 Code is Sean McKenzie's personal fork of [T3 Code](https://github.com/pingdotgg/t3code), an open-source control surface for coding agents. It runs Claude Code, Codex, Cursor, Grok Build, OpenCode, and Antigravity through web, desktop, and mobile clients.
+Pilot is Sean McKenzie's personal fork of [T3 Code](https://github.com/pingdotgg/t3code), an open-source control surface for coding agents. It runs Claude Code, Codex, Cursor, Grok Build, OpenCode, and Antigravity through web, desktop, and mobile clients.
 
-The fork keeps T3's internal package names, state paths, protocols, and other compatibility identifiers so existing data keeps working and upstream changes remain mergeable. See [T4 compatibility identifiers](./docs/internals/t4-compatibility.md).
+The fork keeps T3's internal package names, state paths, protocols, and other compatibility identifiers so existing data keeps working and upstream changes remain mergeable. See [Pilot compatibility identifiers](./docs/internals/t4-compatibility.md).
 
-Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, OpenCode, and Google Antigravity. If they're set up on your computer, T4 Code can control them.
+Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, OpenCode, and Google Antigravity. If they're set up on your computer, Pilot can control them.
 
 ## Current distribution status
 
-T4 Code is currently source-only. There are no T4 npm packages, hosted web app, signed desktop releases, mobile-store builds, or auto-update feeds. Official T3 downloads are not T4 releases.
+Pilot is currently source-only. There are no Pilot npm packages, hosted web app, signed desktop releases, mobile-store builds, or auto-update feeds. Official T3 downloads are not Pilot releases.
 
-The local source build exposes `t4` as the canonical CLI and retains `t3` as a compatibility alias. The published npm package is still named `t3`; do not publish it as T4.
+The local source build exposes `t4` as the canonical CLI and retains `t3` as a compatibility alias. The published npm package is still named `t3`; do not publish it as Pilot.
 
 ## Build locally
 
@@ -30,7 +30,7 @@ vp run --filter t3 build
 ./apps/server/dist/bin.mjs --help
 ```
 
-The binary reports T4 branding. Package-manager installation remains deferred until independent T4 distribution infrastructure exists.
+The binary reports Pilot branding. Package-manager installation remains deferred until independent Pilot distribution infrastructure exists.
 
 ## Documentation
 
@@ -47,7 +47,7 @@ The binary reports T4 branding. Package-manager installation remains deferred un
 - Upstream: `https://github.com/pingdotgg/t3code`
 - Keep the local `upstream` Git remote pointed at `pingdotgg/t3code`.
 
-Internal workspace package names remain `@t3tools/*`. T4 branding is display-layer branding, not a wire-format or persisted-data migration.
+Internal workspace package names remain `@t3tools/*`. Pilot branding is display-layer branding, not a wire-format or persisted-data migration.
 
 ## Contributing
 

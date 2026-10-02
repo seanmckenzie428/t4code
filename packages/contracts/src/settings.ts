@@ -900,7 +900,7 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Server URL",
-        description: "Leave blank to let T4 Code spawn the server when needed.",
+        description: "Leave blank to let Pilot spawn the server when needed.",
         providerSettingsForm: {
           placeholder: "http://127.0.0.1:4096",
           clearWhenEmpty: "omit",
@@ -1173,7 +1173,7 @@ export const ServerSettings = Schema.Struct({
   /**
    * Whether agents may drive the in-app preview browser. Turning this off
    * removes the preview capability and every `preview_*` tool from provider
-   * sessions. T4 app-control and generated-view tools remain attached. The
+   * sessions. Pilot app-control and generated-view tools remain attached. The
    * user's own browser panel is unaffected — this gates agent access only.
    *
    * Server-authoritative rather than client-local: tool injection and prompt

@@ -12,6 +12,7 @@ import {
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
+import { T3Wordmark } from "../T3Wordmark";
 import { Badge } from "../ui/badge";
 import {
   SidebarFooter,
@@ -86,34 +87,17 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
     >
       {/* Center the visible capitals, without the font's ascender/descender space. */}
       <span className="inline-flex min-w-0 items-baseline gap-1 text-sm font-medium tracking-tight">
-        <T4Wordmark aria-label="T4" className="h-[1cap] w-auto shrink-0" />
+        <T3Wordmark aria-hidden="true" className="h-[1cap] w-auto shrink-0" />
         <span
           className={cn(
             "truncate [text-box:trim-both_cap_alphabetic]",
             onBackdrop ? "text-white/70" : "text-muted-foreground",
           )}
         >
-          Code
+          Pilot
         </span>
       </span>
     </Link>
-  );
-}
-
-function T4Wordmark(props: { className?: string; "aria-label"?: string }) {
-  return (
-    <svg
-      aria-label="T4"
-      className="h-2.5 w-auto shrink-0"
-      viewBox="15.5309 37 94.3941 56.96"
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M33.4509 93V47.56H15.5309V37H64.3309V47.56H46.4109V93H33.4509ZM65 72L87.5 37H101L78.5 72H65ZM65 72H109V82H65V72ZM89 37H101V93H89V37Z"
-        fill="currentColor"
-      />
-    </svg>
   );
 }
 

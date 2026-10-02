@@ -797,7 +797,7 @@ const makeMcpTransportLive = (
   requiredCapability?: McpInvocationContext.McpCapability,
 ) =>
   McpServer.layerHttp({
-    name: "T4 Code",
+    name: "Pilot",
     version: packageJson.version,
     path,
     protocols: [McpProtocol.v2025_06_18],

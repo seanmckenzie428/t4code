@@ -23,7 +23,7 @@ import {
 } from "./versionSkew";
 
 const MISMATCH_HINT =
-  "Version mismatch. Try syncing the client and server to the same T4 Code version.";
+  "Version mismatch. Try syncing the client and server to the same Pilot version.";
 
 describe("versionSkew", () => {
   beforeEach(() => {
@@ -228,7 +228,7 @@ describe("versionSkew", () => {
       "Update the Remote server so they stay in sync.",
     );
     expect(serverUpdateGuidance("desktop-managed", "Desktop server")).toBe(
-      "Update the T4 Code desktop app that runs the Desktop server.",
+      "Update the Pilot desktop app that runs the Desktop server.",
     );
     expect(serverUpdateGuidance(null, "Local server")).toBe(
       "Relaunch the Local server with the copied command to sync them.",

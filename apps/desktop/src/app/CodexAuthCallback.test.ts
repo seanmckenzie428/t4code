@@ -48,7 +48,7 @@ describe("desktop Codex callback helper", () => {
       expect(response.headers.get("cache-control")).toBe("no-store");
       const body = await response.text();
       expect(body).not.toContain("test-code");
-      expect(body).toContain("Return to T4 Code");
+      expect(body).toContain("Return to Pilot");
       return true;
     });
     expect(received).toBe(expected);

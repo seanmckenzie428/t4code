@@ -27,7 +27,7 @@ const artifactBuilder = NodeURL.fileURLToPath(
 );
 const forwardedArgs = resolveDesktopNightlyForwardedArgs(process.argv.slice(2));
 
-Effect.runSync(Console.log(`[desktop-nightly] Building T4 Code ${version}`));
+Effect.runSync(Console.log(`[desktop-nightly] Building Pilot ${version}`));
 
 const result = NodeChildProcess.spawnSync(
   process.execPath,

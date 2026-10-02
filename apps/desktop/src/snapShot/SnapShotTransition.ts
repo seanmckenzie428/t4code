@@ -114,7 +114,7 @@ function createWindow(
     resizable: false,
     show: false,
     skipTaskbar: true,
-    title: "T4 Code Snapshot Animation",
+    title: "Pilot Snapshot Animation",
     transparent: true,
     webPreferences: {
       backgroundThrottling: false,

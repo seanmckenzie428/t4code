@@ -30,7 +30,7 @@ describe("sshEnvironment", () => {
     assert.equal(cause.message, "Failed to present SSH password prompt for devbox.");
     assert.equal(
       DesktopSshEnvironment.toSshPasswordPromptError(cause).message,
-      "T4 Code window is not available for SSH authentication.",
+      "Pilot window is not available for SSH authentication.",
     );
   });
 

@@ -61,7 +61,7 @@ export function GitHubRoutingSettings() {
                     {entry.target.label}
                   </Text>
                   <Text className="text-xs text-foreground-muted" numberOfLines={1}>
-                    {connectionCatalogDisplayUrl(entry) ?? "T4 Connect"}
+                    {connectionCatalogDisplayUrl(entry) ?? "Pilot Connect"}
                   </Text>
                 </View>
                 <Text className="text-sm text-foreground-muted">

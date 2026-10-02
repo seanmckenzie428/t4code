@@ -4826,7 +4826,7 @@ function ChatViewContent(props: ChatViewProps) {
         toastManager.add({
           type: "info",
           title: "Browser is desktop-only",
-          description: "Open T4 Code in the desktop app to use the built-in browser.",
+          description: "Open Pilot in the desktop app to use the built-in browser.",
         });
         return;
       }

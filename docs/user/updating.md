@@ -1,13 +1,13 @@
-# Updating T4 Code
+# Updating Pilot
 
 The app you use and the server running your agents can be on different machines.
 When a server is behind your web or desktop app, an update notice appears in the
 conversation and **Settings → Connections**. Update the machine named in that
 notice.
 
-T4 currently ships from source. Update a local T4 build by merging its fork changes
+Pilot currently ships from source. Update a local Pilot build by merging its fork changes
 and rebuilding. Published packages and automatic release updates below use upstream
-T3 distribution; no independent T4 update feed exists yet.
+T3 distribution; no independent Pilot update feed exists yet.
 
 ## Before you update
 
@@ -19,7 +19,7 @@ Enable it to resume supported active threads after an update, crash, or machine
 restart. Changes are saved to connected environments that support this setting;
 update older servers first. If a supported environment was offline or has a
 different value, use **Apply to all** in Settings after it connects.
-T4 Code must start again on that machine;
+Pilot must start again on that machine;
 the setting does not enable automatic startup. Terminal commands may still be
 interrupted, and threads without saved provider resume state need a new message.
 If you previously enabled continuation for updates, enable this setting once

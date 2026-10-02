@@ -49,7 +49,7 @@ it("derives nightly metadata including the short commit sha in the release name"
       baseVersion: "9.9.10",
       version: "9.9.10-nightly.20260413.321",
       tag: "v9.9.10-nightly.20260413.321",
-      name: "T4 Code Nightly 9.9.10-nightly.20260413.321 (abcdef123456)",
+      name: "Pilot Nightly 9.9.10-nightly.20260413.321 (abcdef123456)",
       shortSha: "abcdef123456",
     },
   );
@@ -70,7 +70,7 @@ it("derives preview metadata under its own prerelease identifier", () => {
       baseVersion: "9.9.10",
       version: "9.9.10-preview.20260413.321",
       tag: "v9.9.10-preview.20260413.321",
-      name: "T4 Code Preview (maintainer test build, do not install) 9.9.10-preview.20260413.321 (abcdef123456)",
+      name: "Pilot Preview (maintainer test build, do not install) 9.9.10-preview.20260413.321 (abcdef123456)",
       shortSha: "abcdef123456",
     },
   );

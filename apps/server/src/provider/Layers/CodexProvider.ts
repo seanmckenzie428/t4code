@@ -511,7 +511,7 @@ const makePendingCodexProvider = (
           version: null,
           status: "warning",
           auth: { status: "unknown" },
-          message: "Codex is disabled in T4 Code settings.",
+          message: "Codex is disabled in Pilot settings.",
         },
       });
     }
@@ -599,7 +599,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
         version: null,
         status: "warning",
         auth: { status: "unknown" },
-        message: "Codex is disabled in T4 Code settings.",
+        message: "Codex is disabled in Pilot settings.",
       },
     });
   }

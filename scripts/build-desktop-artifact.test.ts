@@ -264,8 +264,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "T4 Code (Alpha)");
-    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T4 Code (Nightly)");
+    assert.equal(resolveDesktopProductName("0.0.17"), "Pilot (Alpha)");
+    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "Pilot (Nightly)");
   });
 
   it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
@@ -653,8 +653,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.notProperty(linux, "asar");
       assert.notProperty(mac, "asarUnpack");
       assert.notProperty(linux, "asarUnpack");
-      assert.equal(mac.productName, "T4 Code (Alpha)");
-      assert.equal(mac.artifactName, "T4-Code-${version}-${arch}.${ext}");
+      assert.equal(mac.productName, "Pilot (Alpha)");
+      assert.equal(mac.artifactName, "Pilot-${version}-${arch}.${ext}");
       assert.equal((mac.mac as Record<string, unknown>).icon, "icon.icon");
       assert.equal((mac.dmg as Record<string, unknown>).badgeIcon, "icon.icon");
       assert.deepStrictEqual(win.asar, { smartUnpack: false });
@@ -693,11 +693,11 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "**/node_modules/.bin/**",
         "**/*.map",
       ]);
-      assert.equal(mac.productName, "T4 Code (Alpha)");
-      assert.equal(mac.artifactName, "T4-Code-${version}-${arch}.${ext}");
+      assert.equal(mac.productName, "Pilot (Alpha)");
+      assert.equal(mac.artifactName, "Pilot-${version}-${arch}.${ext}");
       assert.equal((mac.mac as Record<string, unknown>).icon, "icon.icon");
       assert.deepStrictEqual(mac.dmg, {
-        title: "T4 Code (Alpha) 1.2.3 Installer",
+        title: "Pilot (Alpha) 1.2.3 Installer",
         badgeIcon: "icon.icon",
         background: "dmg/dmg-background-latest.png",
         window: { width: 640, height: 432 },
@@ -713,7 +713,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       // Linux must register the renderer schemes so the generated .desktop
       // entry advertises MimeType=x-scheme-handler/t3code; for OAuth deep links.
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
-        { name: "T4 Code", schemes: ["t3code", "t3code-dev"] },
+        { name: "Pilot", schemes: ["t3code", "t3code-dev"] },
       ]);
       assert.deepStrictEqual(mac.files, [...DESKTOP_FILE_EXCLUSIONS, ...MAC_FILE_EXCLUSIONS]);
       assert.deepStrictEqual(linux.files, [...DESKTOP_FILE_EXCLUSIONS, ...LINUX_FILE_EXCLUSIONS]);
@@ -1965,9 +1965,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.match(String(mac.sign), /[\\/]scripts[\\/]sign-macos\.ts$/);
-      assert.deepStrictEqual(mac.protocols, [
-        { name: "T4 Code", schemes: ["t3code", "t3code-dev"] },
-      ]);
+      assert.deepStrictEqual(mac.protocols, [{ name: "Pilot", schemes: ["t3code", "t3code-dev"] }]);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 

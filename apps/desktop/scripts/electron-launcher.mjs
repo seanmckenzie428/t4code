@@ -1,4 +1,4 @@
-// This file mostly exists because we want dev mode to say "T4 Code (Dev)" instead of "electron"
+// This file mostly exists because we want dev mode to say "Pilot (Dev)" instead of "electron"
 
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
@@ -15,7 +15,7 @@ const repoRoot = NodePath.resolve(desktopDir, "..", "..");
 const devBundleIdSuffix = NodePath.basename(repoRoot)
   .toLowerCase()
   .replaceAll(/[^a-z0-9]+/g, "");
-export const APP_DISPLAY_NAME = isDevelopment ? "T4 Code (Dev)" : "T4 Code (Alpha)";
+export const APP_DISPLAY_NAME = isDevelopment ? "Pilot (Dev)" : "Pilot (Alpha)";
 export const APP_BUNDLE_ID = isDevelopment
   ? `com.t3tools.t3code.dev.${devBundleIdSuffix || "local"}`
   : "com.t3tools.t3code";
@@ -270,8 +270,8 @@ export function resolveMacBundleInfoPlistStrings(executableName) {
     CFBundleExecutable: executableName,
     CFBundleIconFile: "icon.icns",
     NSScreenCaptureUsageDescription:
-      "T4 Code captures the active window when you use the snapshot shortcut.",
-    NSDocumentsFolderUsageDescription: "T4 Code reads project files you open in the desktop app.",
+      "Pilot captures the active window when you use the snapshot shortcut.",
+    NSDocumentsFolderUsageDescription: "Pilot reads project files you open in the desktop app.",
   };
 }
 

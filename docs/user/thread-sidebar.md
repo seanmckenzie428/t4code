@@ -10,7 +10,7 @@ and mode selections, unless the destination project has its own model default.
 Its branch and workspace mode come from your configured defaults. To continue in
 an existing worktree, use **New thread in this worktree** from the branch toolbar.
 
-When you change a new thread's project, T3 Code stays in the current environment
+When you change a new thread's project, Pilot stays in the current environment
 if that project exists there. Otherwise it selects an environment that has it.
 
 ### Start in the background
@@ -28,10 +28,10 @@ and worktree while you stay in the new thread composer. This requires a Git proj
 Dev and Nightly environments can identify themselves with artwork at the top of the sidebar and in
 the send button. Choose **Artwork**, **Version pill**, or **None** in Settings under environment
 identification. Artwork is recolored to match each built-in theme. Custom themes use the **Version
-pill** fallback because their colors are not controlled by T4 Code.
+pill** fallback because their colors are not controlled by Pilot.
 
 To generate a fresh title from the conversation, open a thread's context menu and choose
-**Regenerate title**. While T4 Code is generating it, the action reads **Regenerating…** and cannot
+**Regenerate title**. While Pilot is generating it, the action reads **Regenerating…** and cannot
 be selected again. The option is hidden when the connected environment needs a server update.
 
 ## Pin and reorder threads
@@ -89,7 +89,7 @@ position, so using **Un-settle** returns it to the top. Pinning and snoozing pre
 position until you move it again. Thread activity does not change the order. The settled shelf
 continues to use settlement time.
 
-If dragging is unavailable for one environment, update the T3 Code server running in that
+If dragging is unavailable for one environment, update the Pilot server running in that
 environment. Pinned and active reordering require server support. Threads from older servers keep
 their default order until the server is updated.
 
@@ -128,8 +128,8 @@ already settled threads.
 
 Archive a thread to move it into **Settings → Archived threads**. Restoring it returns it
 to active work. For supported providers, archiving and restoring also update the original
-provider conversation; this currently supports Codex. Other providers archive in T4 only.
-Provider changes made outside T4 sync when the owning environment starts and about every
+provider conversation; this currently supports Codex. Other providers archive in Pilot only.
+Provider changes made outside Pilot sync when the owning environment starts and about every
 five minutes while it runs. Remote clients use that environment's provider account.
 
 Enable **Auto-archive after 7 days settled** in **Settings → General** on web and desktop,
@@ -138,7 +138,7 @@ per project. The seven days must be uninterrupted. New activity or restoring a t
 clears that period; settling it again starts a fresh seven days. Automatic archiving waits
 while agent or terminal work is active.
 
-If a provider update fails, the thread stays in its current list while T4 retries. Use
+If a provider update fails, the thread stays in its current list while Pilot retries. Use
 **Retry** to try immediately or **Cancel** to stop the pending change.
 
 ## Link a pull request

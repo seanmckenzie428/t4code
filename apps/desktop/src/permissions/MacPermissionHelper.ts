@@ -60,8 +60,8 @@ button:focus-visible { outline: 2px solid #007aff; outline-offset: 3px; }
 img { width: 32px; height: 32px; pointer-events: none; }
 </style></head><body><main id="panel">
 <button id="close" aria-label="Close permission helper">×</button>
-<header>↑ Drag T4 Code into the list above</header>
-<button id="app" draggable="true" aria-label="Drag T4 Code to System Settings, or click to reveal in Finder"><img src="${escapeHtml(icon)}" alt="" draggable="false">T4 Code</button>
+<header>↑ Drag Pilot into the list above</header>
+<button id="app" draggable="true" aria-label="Drag Pilot to System Settings, or click to reveal in Finder"><img src="${escapeHtml(icon)}" alt="" draggable="false">Pilot</button>
 </main></body></html>`;
 }
 
@@ -95,7 +95,7 @@ export class MacPermissionHelper {
     const appIcon = iconPaths
       .map((iconPath) => Electron.nativeImage.createFromPath(iconPath))
       .find((image) => !image.isEmpty());
-    if (!appIcon) throw new Error("The packaged T4 Code icon is missing.");
+    if (!appIcon) throw new Error("The packaged Pilot icon is missing.");
     const icon = appIcon.resize({ width: 64, height: 64 });
     const window = new Electron.BrowserWindow({
       width: 560,

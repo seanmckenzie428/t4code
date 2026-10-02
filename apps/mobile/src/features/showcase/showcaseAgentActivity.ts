@@ -74,7 +74,7 @@ export function buildShowcaseAgentActivity(
     });
   }
   return {
-    title: "T4 Code",
+    title: "Pilot",
     subtitle: "Agent work in progress",
     activeCount: rows.filter((row) => ACTIVE_PHASES.has(row.phase)).length,
     updatedAt: new Date(now).toISOString(),

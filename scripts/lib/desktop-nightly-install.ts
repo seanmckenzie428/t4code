@@ -13,7 +13,7 @@ export class UnsupportedDesktopNightlyInstallHostError extends Error {
 
 export class DesktopNightlyArtifactResolutionError extends Error {
   constructor(arch: DesktopNightlyInstallArch, count: number) {
-    super(`Expected one T4 Code nightly ${arch} zip artifact, found ${count}.`);
+    super(`Expected one Pilot nightly ${arch} zip artifact, found ${count}.`);
     this.name = "DesktopNightlyArtifactResolutionError";
   }
 }
@@ -41,7 +41,7 @@ export function resolveDesktopNightlyZipArtifact(
 ): string {
   const matches = fileNames.filter(
     (fileName) =>
-      fileName.startsWith("T4-Code-") &&
+      fileName.startsWith("Pilot-") &&
       fileName.includes("-nightly.") &&
       fileName.endsWith(`-${arch}.zip`),
   );

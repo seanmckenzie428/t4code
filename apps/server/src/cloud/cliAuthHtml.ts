@@ -7,9 +7,9 @@ export function resolveLoopbackAuthorizationStage(): LoopbackAuthorizationStage 
 }
 
 const stageBrands = {
-  dev: "T4 Code (Dev)",
-  nightly: "T4 Code (Nightly)",
-  latest: "T4 Code",
+  dev: "Pilot (Dev)",
+  nightly: "Pilot (Nightly)",
+  latest: "Pilot",
 } as const satisfies Record<LoopbackAuthorizationStage, string>;
 
 export function renderLoopbackAuthorizationCompleteHtml(
@@ -23,7 +23,7 @@ export function renderLoopbackAuthorizationCompleteHtml(
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <title>T4 Connect authorization complete</title>
+    <title>Pilot Connect authorization complete</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -147,7 +147,7 @@ export function renderLoopbackAuthorizationCompleteHtml(
       <section class="content">
         <p class="eyebrow">Browser authorization complete</p>
         <h1>You're connected</h1>
-        <p class="description">Return to your terminal to finish setting up T4 Connect. You can close this window.</p>
+        <p class="description">Return to your terminal to finish setting up Pilot Connect. You can close this window.</p>
       </section>
     </main>
   </body>

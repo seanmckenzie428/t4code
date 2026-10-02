@@ -29,13 +29,13 @@ describe("desktop-nightly-install", () => {
     expect(
       resolveDesktopNightlyZipArtifact(
         [
-          "T4-Code-0.0.32-nightly.20260805.71636-arm64.dmg",
-          "T4-Code-0.0.32-nightly.20260805.71636-arm64.zip",
-          "T4-Code-0.0.32-nightly.20260805.71636-arm64.zip.blockmap",
+          "Pilot-0.0.32-nightly.20260805.71636-arm64.dmg",
+          "Pilot-0.0.32-nightly.20260805.71636-arm64.zip",
+          "Pilot-0.0.32-nightly.20260805.71636-arm64.zip.blockmap",
         ],
         "arm64",
       ),
-    ).toBe("T4-Code-0.0.32-nightly.20260805.71636-arm64.zip");
+    ).toBe("Pilot-0.0.32-nightly.20260805.71636-arm64.zip");
   });
 
   it("rejects missing or ambiguous artifacts", () => {
@@ -44,16 +44,13 @@ describe("desktop-nightly-install", () => {
     );
     expect(() =>
       resolveDesktopNightlyZipArtifact(
-        [
-          "T4-Code-0.0.32-nightly.20260805.1-arm64.zip",
-          "T4-Code-0.0.32-nightly.20260805.2-arm64.zip",
-        ],
+        ["Pilot-0.0.32-nightly.20260805.1-arm64.zip", "Pilot-0.0.32-nightly.20260805.2-arm64.zip"],
         "arm64",
       ),
     ).toThrow(DesktopNightlyArtifactResolutionError);
   });
 
-  it("accepts only the T4 nightly bundle identity", () => {
+  it("accepts only the Pilot nightly bundle identity", () => {
     expect(
       isExpectedDesktopNightlyBundle({
         bundleId: "com.t3tools.t3code",

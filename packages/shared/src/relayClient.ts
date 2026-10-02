@@ -366,7 +366,7 @@ export const makeCloudflaredRelayClient = Effect.fn("cloudflared.make")(function
     if (!releaseAsset) {
       return yield* new RelayClientInstallError({
         reason: "unsupported_platform",
-        message: `T4 Code does not provide a managed relay client binary for ${platform}-${arch}.`,
+        message: `Pilot does not provide a managed relay client binary for ${platform}-${arch}.`,
       });
     }
 

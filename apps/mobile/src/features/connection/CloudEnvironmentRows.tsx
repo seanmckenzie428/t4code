@@ -42,15 +42,15 @@ interface CloudEnvironmentRowsProps {
   readonly showcaseAvailableEnvironments?: ReadonlyArray<RelayEnvironmentView>;
   readonly showcaseSignedIn?: boolean;
   /**
-   * Hide the "T4 Connect" section title when the host provides its own header.
+   * Hide the "Pilot Connect" section title when the host provides its own header.
    */
   readonly showHeader?: boolean;
 }
 
 /**
- * "T4 Connect" section: every environment published to the signed-in account,
+ * "Pilot Connect" section: every environment published to the signed-in account,
  * with connect switches, availability status, and loading/error
- * states. Shared between the Settings environments screen and the T4 Connect
+ * states. Shared between the Settings environments screen and the Pilot Connect
  * onboarding sheet.
  *
  * Already-connected relay environments render even without cloud config or a
@@ -120,7 +120,9 @@ function CloudEnvironmentRowsContent(
     <View collapsable={false} className={cn("gap-3", showHeader && "mt-5")}>
       {showHeader ? (
         <View className="px-1">
-          <Text className="text-sm font-t3-bold uppercase text-foreground-muted">T4 Connect</Text>
+          <Text className="text-sm font-t3-bold uppercase text-foreground-muted">
+            Pilot Connect
+          </Text>
         </View>
       ) : null}
 
@@ -177,7 +179,7 @@ function CloudEnvironmentRowsContent(
       !controller.relayDiscovery.isRefreshing ? (
         <View collapsable={false} className="gap-3 rounded-[24px] bg-grouped-card p-5">
           <Text className="text-base font-t3-bold text-foreground">
-            Could not load T4 Connect environments
+            Could not load Pilot Connect environments
           </Text>
           <Text className="text-sm text-foreground-muted">{controller.relayDiscovery.error}</Text>
           {controller.relayDiscovery.errorTraceId ? (
@@ -199,7 +201,7 @@ function CloudEnvironmentRowsContent(
 }
 
 /**
- * A saved T4 Connect environment. The switch turns it on or off; off keeps the
+ * A saved Pilot Connect environment. The switch turns it on or off; off keeps the
  * registration and cache but drops the connection and hides its errors.
  * Long-press removes it from this device.
  */

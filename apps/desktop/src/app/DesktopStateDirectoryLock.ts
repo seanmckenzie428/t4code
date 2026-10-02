@@ -232,7 +232,7 @@ export function acquireDesktopStateDirectoryLock(
           NodeFS.rmSync(lockPath, { force: true });
           return {
             status: "occupied",
-            displayName: "another T3/T4 Code server",
+            displayName: "another T3/Pilot server",
             pid: runtimeOwner.pid,
           };
         }
@@ -260,7 +260,7 @@ export function acquireDesktopStateDirectoryLock(
             };
       }
       if (existingOwner === undefined && isRecentDirectory(lockPath, now())) {
-        return { status: "occupied", displayName: "another T3/T4 Code instance", pid: null };
+        return { status: "occupied", displayName: "another T3/Pilot instance", pid: null };
       }
 
       try {
@@ -268,7 +268,7 @@ export function acquireDesktopStateDirectoryLock(
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
         if (isRecentDirectory(reclaimPath, now())) {
-          return { status: "occupied", displayName: "another T3/T4 Code instance", pid: null };
+          return { status: "occupied", displayName: "another T3/Pilot instance", pid: null };
         }
         NodeFS.rmSync(reclaimPath, { recursive: true, force: true });
         continue;
@@ -285,7 +285,7 @@ export function acquireDesktopStateDirectoryLock(
               };
         }
         if (ownerAfterClaim === undefined && isRecentDirectory(lockPath, now())) {
-          return { status: "occupied", displayName: "another T3/T4 Code instance", pid: null };
+          return { status: "occupied", displayName: "another T3/Pilot instance", pid: null };
         }
         NodeFS.rmSync(lockPath, { force: true });
       } finally {
@@ -293,7 +293,7 @@ export function acquireDesktopStateDirectoryLock(
       }
     }
 
-    return { status: "occupied", displayName: "another T3/T4 Code instance", pid: null };
+    return { status: "occupied", displayName: "another T3/Pilot instance", pid: null };
   } finally {
     NodeFS.rmSync(candidatePath, { force: true });
   }

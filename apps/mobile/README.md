@@ -1,7 +1,7 @@
-# T4 Code Mobile
+# Pilot Mobile
 
 > [!WARNING]
-> T4 Code Mobile is source-only. This fork has no independent EAS project, signing account, App Store listing, or Google Play listing.
+> Pilot Mobile is source-only. This fork has no independent EAS project, signing account, App Store listing, or Google Play listing.
 
 ## Quickstart
 
@@ -10,13 +10,13 @@
 
 This app has three variants:
 
-- `development`: Expo dev client displayed as `T4 Code Dev`
-- `preview`: persistent internal preview build displayed as `T4 Code Preview`
-- `production`: release build displayed as `T4 Code`
+- `development`: Expo dev client displayed as `Pilot Dev`
+- `preview`: persistent internal preview build displayed as `Pilot Preview`
+- `production`: release build displayed as `Pilot`
 
 Run commands from `apps/mobile`.
 
-T4 Connect is optional and disabled in a fresh clone. Public configuration belongs in the
+Pilot Connect is optional and disabled in a fresh clone. Public configuration belongs in the
 repository-root `.env` or `.env.local`, not an `apps/mobile/.env` file. See
 [`../../.env.example`](../../.env.example).
 
@@ -123,7 +123,7 @@ The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin.
 
 > [!CAUTION]
 > The checked-in EAS UUID, store IDs, bundle IDs, app groups, update URL, and signing identifiers
-> remain upstream T3 compatibility values. Do not publish T4 with them. Create independent records
+> remain upstream T3 compatibility values. Do not publish Pilot with them. Create independent records
 > before enabling preview or production distribution.
 
 Preview and production variants use Expo fingerprinting so OTA updates only reach binaries with matching native dependencies, config plugins, and patches. CI uses the `preview:dev` profile to reuse a compatible native build when possible.

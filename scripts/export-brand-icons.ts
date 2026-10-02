@@ -12,8 +12,13 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import sharp from "sharp";
 
-import { BRAND_ASSET_PATHS, DEVELOPMENT_PUBLIC_ICON_OVERRIDES } from "./lib/brand-assets.ts";
+import {
+  BRAND_ASSET_PATHS,
+  DEVELOPMENT_PUBLIC_ICON_OVERRIDES,
+  resolveWebIconOverrides,
+} from "./lib/brand-assets.ts";
 import { encodePngIco, readPngDimensions, WINDOWS_ICON_SIZES } from "./lib/icon-export.ts";
 
 const DESIGN_GENERATION = 26;
@@ -187,7 +192,7 @@ export class IconExportEncodingError extends Schema.TaggedError<IconExportEncodi
   },
 ) {
   override get message(): string {
-    return `Failed to encode ICO renditions for the ${this.variant} icon.`;
+    return `Failed to encode renditions for the ${this.variant} icon.`;
   }
 }
 
@@ -249,10 +254,10 @@ const ICON_VARIANTS = [
 
 const MACOS_EXPORT_CODEX_PROMPT = [
   "Use [@Computer](plugin://computer-use@openai-bundled) and the Icon Composer app to export the three macOS app icons in this repository.",
-  "For each project below, use Platform: macOS pre-Tahoe, Appearance: Default, Size: 1024pt, and Scale: 1×, then save the PNG to the exact destination:",
+  "For each project below, use Platform: iOS, macOS, Appearance: Default, Size: 1024pt, Scale: 1×, and Design Generation: 26, then save the PNG to the exact destination:",
   ...ICON_VARIANTS.map((variant) => `- ${variant.source} -> ${variant.outputs.macos}`),
   "Do not resize, composite, or otherwise post-process the exported PNGs.",
-  "Verify every result is 1024×1024 and has the classic macOS safe area: an 824×824 opaque body inset 100px on every side, with only Icon Composer's native shadow extending beyond it.",
+  "Verify every result is 1024×1024 with the modern full-bleed icon metrics. See assets/README.md if legacy pre-Tahoe artwork is required instead.",
 ];
 
 const RepositoryRoot = Effect.service(Path.Path).pipe(
@@ -611,8 +616,8 @@ const logManualMacOsExportInstructions = Effect.fn("iconExport.logManualMacOsExp
   function* () {
     yield* Console.warn(
       [
-        "macOS icons require Icon Composer's GUI-only pre-Tahoe preset and were not changed.",
-        "Export each source with Platform: macOS pre-Tahoe, Appearance: Default, Size: 1024pt, Scale: 1×:",
+        "macOS PNGs were not changed. Packaged macOS apps use the native .icon sources.",
+        "For modern macOS PNGs, export each source with Platform: iOS, macOS, Appearance: Default, Size: 1024pt, Scale: 1×, Design Generation: 26:",
         ...ICON_VARIANTS.map((variant) => `- ${variant.source} -> ${variant.outputs.macos}`),
         "See assets/README.md for the complete workflow.",
         "",
@@ -749,13 +754,28 @@ export const exportBrandIcons = Effect.fn("exportBrandIcons")(function* (checkOn
     for (const [relativePath, contents] of variantAssets) {
       generated.set(relativePath, contents);
     }
+    if (variant.label !== "development") {
+      const universal = variantAssets.get(variant.outputs.universal);
+      if (universal === undefined) {
+        return yield* Effect.die(new Error(`Generated ${variant.label} icon is missing.`));
+      }
+      const webp = yield* Effect.tryPromise({
+        try: () => sharp(universal).webp({ lossless: true }).toBuffer(),
+        catch: (cause) => new IconExportEncodingError({ variant: variant.label, cause }),
+      });
+      const filename = variant.label === "production" ? "icon.webp" : "icon-nightly.webp";
+      generated.set(`apps/marketing/src/assets/${filename}`, webp);
+    }
   }
 
-  for (const override of DEVELOPMENT_PUBLIC_ICON_OVERRIDES) {
+  for (const override of [
+    ...DEVELOPMENT_PUBLIC_ICON_OVERRIDES,
+    ...resolveWebIconOverrides("production", "apps/marketing/public"),
+  ]) {
     const sourceContents = generated.get(override.sourceRelativePath);
     if (sourceContents === undefined) {
       return yield* Effect.die(
-        new Error(`Generated development web icon is missing: ${override.sourceRelativePath}`),
+        new Error(`Generated web icon is missing: ${override.sourceRelativePath}`),
       );
     }
     generated.set(override.targetRelativePath, sourceContents);

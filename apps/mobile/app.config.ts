@@ -134,7 +134,7 @@ const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
       {
         name: "SubscriptionUsage",
         displayName: "Subscription usage",
-        description: "Subscription quotas from your connected T4 Code environments.",
+        description: "Subscription quotas from your connected Pilot environments.",
         configuration: {
           title: "Subscription usage",
           description:
@@ -357,7 +357,7 @@ const config: ExpoConfig = {
     [
       "expo-audio",
       {
-        microphonePermission: "Allow T4 Code to use your microphone for voice input.",
+        microphonePermission: "Allow Pilot to use your microphone for voice input.",
         recordAudioAndroid: false,
         enableBackgroundPlayback: false,
         enableBackgroundRecording: false,
@@ -366,7 +366,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow T4 Code to access your camera so you can scan pairing QR codes.",
+        cameraPermission: "Allow Pilot to access your camera so you can scan pairing QR codes.",
         microphonePermission: false,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,

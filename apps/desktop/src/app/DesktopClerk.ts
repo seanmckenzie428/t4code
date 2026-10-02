@@ -122,7 +122,7 @@ export const make = Effect.gen(function* () {
       stateDirectoryLock.pid === null ? "" : ` (process ${String(stateDirectoryLock.pid)})`;
     yield* electronDialog.showErrorBox(
       `${environment.displayName} is already running`,
-      `${stateDirectoryLock.displayName} is already using this T3/T4 Code data directory${processDetail}. Quit it before opening ${environment.displayName}.`,
+      `${stateDirectoryLock.displayName} is already using this T3/Pilot data directory${processDetail}. Quit it before opening ${environment.displayName}.`,
     );
     yield* electronApp.quit;
     return yield* Effect.interrupt;

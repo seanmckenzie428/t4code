@@ -18,7 +18,7 @@ internal object T3ComposerClipboard {
     }
     val records = payload?.optJSONArray("records")
     if (payload == null || records == null) {
-      clipboard.setPrimaryClip(ClipData.newPlainText("T4 Code", text))
+      clipboard.setPrimaryClip(ClipData.newPlainText("Pilot", text))
       return
     }
     val all = (0 until records.length()).map { records.getJSONObject(it) }
@@ -36,12 +36,12 @@ internal object T3ComposerClipboard {
     clipboard.setPrimaryClip(
       if (selected.isEmpty()) {
         ClipData.newPlainText(
-          "T4 Code",
+          "Pilot",
           text
         )
       } else {
         ClipData.newHtmlText(
-          "T4 Code",
+          "Pilot",
           text,
           "<pre data-t3-context-fragment=\"$encoded\">$escaped</pre>"
         )

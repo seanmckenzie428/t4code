@@ -33,7 +33,7 @@ describe("DesktopStateDirectoryLock", () => {
       );
       const second = acquireDesktopStateDirectoryLock(
         directory,
-        "T4 Code (Nightly)",
+        "Pilot (Nightly)",
         lockDependencies(202, "second"),
       );
 
@@ -50,12 +50,12 @@ describe("DesktopStateDirectoryLock", () => {
     withTempDir((directory) => {
       const first = acquireDesktopStateDirectoryLock(
         directory,
-        "T4 Code (Nightly)",
+        "Pilot (Nightly)",
         lockDependencies(101, "first"),
       );
       const second = acquireDesktopStateDirectoryLock(
         directory,
-        "T4 Code (Nightly)",
+        "Pilot (Nightly)",
         lockDependencies(202, "second"),
       );
 
@@ -72,14 +72,14 @@ describe("DesktopStateDirectoryLock", () => {
         beforePublish: () => {
           nestedLock = acquireDesktopStateDirectoryLock(
             directory,
-            "T4 Code",
+            "Pilot",
             lockDependencies(202, "second"),
           );
         },
       });
 
       assert.equal(nestedLock?.status, "acquired");
-      assert.deepEqual(first, { status: "occupied", displayName: "T4 Code", pid: 202 });
+      assert.deepEqual(first, { status: "occupied", displayName: "Pilot", pid: 202 });
       if (nestedLock?.status === "acquired") nestedLock.release();
     }));
 
@@ -97,7 +97,7 @@ describe("DesktopStateDirectoryLock", () => {
         }),
       );
 
-      const lock = acquireDesktopStateDirectoryLock(directory, "T4 Code", {
+      const lock = acquireDesktopStateDirectoryLock(directory, "Pilot", {
         ...lockDependencies(202, "fresh"),
         processIdentity: (pid) => ({
           marker: pid === 101 ? "new-start" : `start-${String(pid)}`,
@@ -115,13 +115,13 @@ describe("DesktopStateDirectoryLock", () => {
 
       const lock = acquireDesktopStateDirectoryLock(
         directory,
-        "T4 Code",
+        "Pilot",
         lockDependencies(202, "fresh"),
       );
 
       assert.deepEqual(lock, {
         status: "occupied",
-        displayName: "another T3/T4 Code instance",
+        displayName: "another T3/Pilot instance",
         pid: null,
       });
     }));
@@ -141,7 +141,7 @@ describe("DesktopStateDirectoryLock", () => {
 
       const lock = acquireDesktopStateDirectoryLock(
         directory,
-        "T4 Code",
+        "Pilot",
         lockDependencies(202, "fresh"),
       );
 
@@ -152,7 +152,7 @@ describe("DesktopStateDirectoryLock", () => {
   it("rejects a non-positive current process PID", () =>
     withTempDir((directory) => {
       assert.throws(() =>
-        acquireDesktopStateDirectoryLock(directory, "T4 Code", {
+        acquireDesktopStateDirectoryLock(directory, "Pilot", {
           ...lockDependencies(0, "invalid"),
         }),
       );
@@ -165,14 +165,14 @@ describe("DesktopStateDirectoryLock", () => {
         JSON.stringify({ version: 1, pid: 303, port: 3773 }),
       );
 
-      const lock = acquireDesktopStateDirectoryLock(directory, "T4 Code", {
+      const lock = acquireDesktopStateDirectoryLock(directory, "Pilot", {
         ...lockDependencies(202, "fresh"),
         isProcessRunning: (pid) => pid === 303,
       });
 
       assert.deepEqual(lock, {
         status: "occupied",
-        displayName: "another T3/T4 Code server",
+        displayName: "another T3/Pilot server",
         pid: 303,
       });
       assert.isFalse(NodeFS.existsSync(NodePath.join(directory, "desktop-instance.lock")));
@@ -190,7 +190,7 @@ describe("DesktopStateDirectoryLock", () => {
         }),
       );
 
-      const lock = acquireDesktopStateDirectoryLock(directory, "T4 Code", {
+      const lock = acquireDesktopStateDirectoryLock(directory, "Pilot", {
         ...lockDependencies(202, "fresh"),
         isProcessRunning: (pid) => pid === 303,
         processIdentity: (pid) => ({
@@ -215,7 +215,7 @@ describe("DesktopStateDirectoryLock", () => {
         }),
       );
 
-      const lock = acquireDesktopStateDirectoryLock(directory, "T4 Code", {
+      const lock = acquireDesktopStateDirectoryLock(directory, "Pilot", {
         ...lockDependencies(202, "fresh"),
         isProcessRunning: (pid) => pid === 303,
         processIdentity: (pid) =>
@@ -224,7 +224,7 @@ describe("DesktopStateDirectoryLock", () => {
 
       assert.deepEqual(lock, {
         status: "occupied",
-        displayName: "another T3/T4 Code server",
+        displayName: "another T3/Pilot server",
         pid: 303,
       });
     }));

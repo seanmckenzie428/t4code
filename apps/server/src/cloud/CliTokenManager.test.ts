@@ -68,7 +68,7 @@ it("formats loopback authorization with a headless-host fallback", () => {
   assert.equal(
     CliTokenManager.formatLoopbackAuthorizationPrompt("https://clerk.example.test/authorize"),
     [
-      "Open this URL to authorize T4 Connect:",
+      "Open this URL to authorize Pilot Connect:",
       "  https://clerk.example.test/authorize",
       "",
       "Press \u001b[1mEnter\u001b[22m to open it in your browser.",

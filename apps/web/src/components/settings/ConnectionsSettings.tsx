@@ -1517,7 +1517,7 @@ function SavedBackendListRow({
     serverUpdateState.status === "running" && serverUpdateState.stage === "resuming";
   const status = savedBackendStatus(environment);
   const serverVersion = environment.serverConfig?.environment.serverVersion ?? null;
-  // A saved T4 Connect machine this device has never reached (unsupported,
+  // A saved Pilot Connect machine this device has never reached (unsupported,
   // or not yet connected) still has a descriptor from relay discovery, so
   // it can wear its detected glyph instead of the generic server. Discovery
   // empties its map on every refresh, so hold the last descriptor seen or
@@ -1662,7 +1662,7 @@ function CloudLinkSwitch({
   disabled,
   disabledReason,
   onCheckedChange,
-  ariaLabel = "Enable T4 Connect",
+  ariaLabel = "Enable Pilot Connect",
 }: {
   readonly checked: boolean;
   readonly disabled: boolean;
@@ -1701,9 +1701,9 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
   const [isUpdatingPreference, setIsUpdatingPreference] = useState(false);
 
   const disabledReason = !isSignedIn
-    ? "Sign in to T4 Connect to manage this environment."
+    ? "Sign in to Pilot Connect to manage this environment."
     : !canManageRelay
-      ? "Your session does not have permission to manage T4 Connect access."
+      ? "Your session does not have permission to manage Pilot Connect access."
       : null;
   const isBusy = isUpdating || isUpdatingPreference;
 
@@ -1716,15 +1716,15 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
       toastManager.add({
         type: "success",
         title: enabled
-          ? "T4 Connect linked"
+          ? "Pilot Connect linked"
           : publishAgentActivity
-            ? "T4 Connect tunnel disabled"
-            : "T4 Connect unlinked",
+            ? "Pilot Connect tunnel disabled"
+            : "Pilot Connect unlinked",
         description: enabled
-          ? "This environment is available through T4 Connect."
+          ? "This environment is available through Pilot Connect."
           : publishAgentActivity
             ? "The managed tunnel was removed. Agent activity publishing stays on."
-            : "This environment is no longer available through T4 Connect.",
+            : "This environment is no longer available through Pilot Connect.",
       });
     }
     setIsUpdating(false);
@@ -1752,8 +1752,8 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
           title={searchableSetting("t3-connect").title}
           description={
             managedTunnelActive
-              ? "This environment is available to your other devices through T4 Connect."
-              : "Make this environment available to your other devices through T4 Connect."
+              ? "This environment is available to your other devices through Pilot Connect."
+              : "Make this environment available to your other devices through Pilot Connect."
           }
           status={operationError ?? primaryCloudLinkState.error}
           control={
@@ -1768,7 +1768,7 @@ function ConfiguredCloudLinkRow({ canManageRelay }: { readonly canManageRelay: b
       ) : null}
       <SettingsRow
         title={searchableSetting("publish-agent-activity").title}
-        description="Send activity to mobile notifications and Live Activities without T4 Connect."
+        description="Send activity to mobile notifications and Live Activities without Pilot Connect."
         control={
           <CloudLinkSwitch
             ariaLabel="Publish agent activity to mobile clients"
@@ -1797,7 +1797,7 @@ function EmptyRemoteEnvironments({ cloudEnabled = true }: { readonly cloudEnable
         <EmptyTitle>No saved remote environments</EmptyTitle>
         <EmptyDescription>
           {cloudEnabled
-            ? "Click “Add environment” to pair another environment, or connect one from T4 Connect."
+            ? "Click “Add environment” to pair another environment, or connect one from Pilot Connect."
             : "Click “Add environment” to pair another environment."}
         </EmptyDescription>
       </EmptyHeader>
@@ -3151,7 +3151,7 @@ export function ConnectionsSettings() {
         {desktopWslState.enabled ? (
           <SettingsRow
             title="WSL only"
-            description="Run only the WSL backend. T4 Code restarts when this changes."
+            description="Run only the WSL backend. Pilot restarts when this changes."
             className="bg-muted/20 pl-7 sm:pl-8"
             control={
               <Switch
@@ -3431,8 +3431,8 @@ export function ConnectionsSettings() {
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   {pendingDesktopServerExposureMode === "network-accessible"
-                    ? "Let your other devices connect to T4 Code over the network. Pair devices to give them access. T4 Code will restart."
-                    : "Devices connected over your local network will disconnect. Existing tunnels, such as T4 Connect or Tailscale HTTPS, keep working. T4 Code will restart."}
+                    ? "Let your other devices connect to Pilot over the network. Pair devices to give them access. Pilot will restart."
+                    : "Devices connected over your local network will disconnect. Existing tunnels, such as Pilot Connect or Tailscale HTTPS, keep working. Pilot will restart."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -3486,15 +3486,15 @@ export function ConnectionsSettings() {
                 <AlertDialogDescription>
                   {pendingWslChange?.kind === "disable"
                     ? pendingWslChange.wasWslOnly
-                      ? "T4 Code will restart on the Windows backend. Threads and projects opened against WSL stay safe inside the distro and become available again when you re-enable WSL."
-                      : "The WSL backend will stop. Threads and projects opened against WSL stay safe inside the distro, but they'll be unavailable in T4 Code until you re-enable WSL."
+                      ? "Pilot will restart on the Windows backend. Threads and projects opened against WSL stay safe inside the distro and become available again when you re-enable WSL."
+                      : "The WSL backend will stop. Threads and projects opened against WSL stay safe inside the distro, but they'll be unavailable in Pilot until you re-enable WSL."
                     : pendingWslChange?.kind === "distro"
-                      ? "T4 Code will restart the WSL backend on the new distro. Sessions still running on the current distro will be interrupted."
+                      ? "Pilot will restart the WSL backend on the new distro. Sessions still running on the current distro will be interrupted."
                       : pendingWslChange?.kind === "enable"
                         ? "Run the WSL backend alongside the Windows one, or stop the Windows backend and use only WSL? You can change this later from Settings."
                         : pendingWslChange?.nextValue
-                          ? "T4 Code will restart and start only the WSL backend. Your Windows-side projects won't be accessible until you turn this off again."
-                          : "T4 Code will restart and bring the Windows backend back up alongside WSL."}
+                          ? "Pilot will restart and start only the WSL backend. Your Windows-side projects won't be accessible until you turn this off again."
+                          : "Pilot will restart and bring the Windows backend back up alongside WSL."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -3580,7 +3580,7 @@ export function ConnectionsSettings() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Disable Tailscale HTTPS?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  T4 Code will restart the local backend without Tailscale Serve.
+                  Pilot will restart the local backend without Tailscale Serve.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -3618,7 +3618,7 @@ export function ConnectionsSettings() {
               <DialogHeader>
                 <DialogTitle>Set up Tailscale HTTPS?</DialogTitle>
                 <DialogDescription>
-                  T4 Code will restart the local backend with Tailscale Serve enabled and ask
+                  Pilot will restart the local backend with Tailscale Serve enabled and ask
                   Tailscale to proxy HTTPS traffic to this backend.
                 </DialogDescription>
               </DialogHeader>

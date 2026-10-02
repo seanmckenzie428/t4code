@@ -99,7 +99,7 @@ deterministic: personal, then project, then thread, with narrower scope winning
 for a stable view ID or conflicting replacement target. Durable project manifests omit the environment-local
 project ID, which the client binds to the active project while loading `t3.json`.
 
-Provider-neutral MCP tool descriptions define the phrases “add this to T4,”
+Provider-neutral MCP tool descriptions define the phrases “add this to Pilot,”
 “put this in T3,” and equivalent “the app” requests as generated UI intent.
 Provider-specific system prompt support may reinforce that behavior, but is not
 the authority or compatibility seam.

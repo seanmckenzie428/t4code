@@ -50,5 +50,5 @@ it("exposes exact native view nodes and actions to MCP clients", () => {
   expect(jsonSchema).toContain('"placements"');
   expect(AppStatusTool.description).toContain("generated-view IDs");
   expect(AppStatusTool.description).toContain("environment-wide");
-  expect(AppStatusTool.description).toContain("add this to T4");
+  expect(AppStatusTool.description).toContain("add this to Pilot");
 });

@@ -4,7 +4,7 @@ import { useScopedSettings, useUpdateScopedSettings } from "./useScopedSettings"
 import { ScopedSwitch } from "./ScopedSwitch";
 import { DeviceHostsSettings } from "./DeviceHostsSettings";
 /**
- * Integrations settings - preferences for surfaces T4 Code embeds rather than
+ * Integrations settings - preferences for surfaces Pilot embeds rather than
  * owns. Browser is the first section: the defaults a preview tab opens at,
  * applied to both hand-opened tabs and agent `preview_open` calls that don't
  * state their own size.
@@ -561,7 +561,7 @@ function BrowserRecordingFrameRateSetting({ disabled }: { readonly disabled: boo
 
 const LINK_TARGET_LABELS: Readonly<Record<BrowserLinkTarget, string>> = {
   system: "Your default browser",
-  app: "T4 Code",
+  app: "Pilot",
 };
 
 function BrowserLinkTargetSetting({ disabled }: { readonly disabled: boolean }) {

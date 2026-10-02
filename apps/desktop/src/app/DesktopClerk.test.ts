@@ -56,7 +56,7 @@ const makeDesktopClerkLayer = (
   const environment = DesktopEnvironment.DesktopEnvironment.of({
     stateDir: "/tmp/t3-state",
     isDevelopment,
-    displayName: isDevelopment ? "T4 Code (Dev)" : "T4 Code (Alpha)",
+    displayName: isDevelopment ? "Pilot (Dev)" : "Pilot (Alpha)",
     appDataDirectory: "/tmp/app-data",
     userDataDirName: isDevelopment ? "t3code-dev" : "t3code",
     legacyUserDataDirName: isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)",

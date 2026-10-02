@@ -84,7 +84,7 @@ export const AppViewPlacementAction = Schema.Union([
   }),
 ]).annotate({
   description:
-    "Optional launcher action, dropdown, or top-bar split button. Add primary beside menu for a split button. Items open an HTTP(S) URL externally or in T4's dedicated browser; omit action to open generated view.",
+    "Optional launcher action, dropdown, or top-bar split button. Add primary beside menu for a split button. Items open an HTTP(S) URL externally or in Pilot's dedicated browser; omit action to open generated view.",
 });
 export type AppViewPlacementAction = typeof AppViewPlacementAction.Type;
 
