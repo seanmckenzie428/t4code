@@ -1,6 +1,6 @@
 # Remote access
 
-Pilot local builds expose `t4`; `t3` is a compatibility alias. Hosted Pilot Connect,
+Pilot local builds expose `pilot`; `t4` and `t3` are compatibility aliases. Hosted Pilot Connect,
 SSH installation, and store apps use upstream T3 infrastructure until independent
 Pilot distribution exists.
 

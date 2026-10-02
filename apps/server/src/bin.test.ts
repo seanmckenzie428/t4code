@@ -75,7 +75,6 @@ class ProjectCliHttpApi extends HttpApi.make("environment").add(EnvironmentOrche
 
 const connectCli = makeCli({ cloudEnabled: true });
 const noConnectCli = makeCli({ cloudEnabled: false });
-const legacyCli = makeCli({ cloudEnabled: false, commandName: "t3" });
 const runCli = (args: ReadonlyArray<string>, command = cli) =>
   Command.runWith(command, { version: "0.0.0" })(args);
 const runConnectCli = (args: ReadonlyArray<string>) => runCli(args, connectCli);
@@ -422,19 +421,42 @@ const withLiveProjectCliServer = <A, E, R>(baseDir: string, run: () => Effect.Ef
   });
 
 it.layer(NodeServices.layer)("bin cli parsing", (it) => {
-  it("resolves t4 as canonical and t3 as the legacy alias", () => {
+  it("resolves pilot as canonical and preserves t4 and t3 aliases", () => {
+    assert.equal(resolveCliName("/usr/local/bin/pilot"), "pilot");
     assert.equal(resolveCliName("/usr/local/bin/t4"), "t4");
     assert.equal(resolveCliName("/usr/local/bin/t3"), "t3");
+    assert.equal(resolveCliName("C:\\tools\\pilot.exe"), "pilot");
+    assert.equal(resolveCliName("C:\\tools\\t4.exe"), "t4");
     assert.equal(resolveCliName("C:\\tools\\t3.exe"), "t3");
-    assert.equal(resolveCliName(undefined), "t4");
+    assert.equal(
+      resolveCliName(
+        "/Applications/Pilot.app/Contents/Resources/app.asar/apps/server/dist/bin.mjs",
+      ),
+      "pilot",
+    );
+    assert.equal(resolveCliName(undefined), "pilot");
   });
 
-  it.effect("keeps legacy t3 help usable", () =>
-    Effect.gen(function* () {
-      const { output } = yield* captureStdout(runCli(["--help"], legacyCli));
-      assert.include(output, "t3");
-      assert.include(output, "Run the Pilot server.");
-    }),
+  it.effect.each(["pilot", "t4", "t3"] as const)(
+    "keeps %s help and command parsing usable",
+    (commandName) =>
+      Effect.gen(function* () {
+        const command = makeCli({ cloudEnabled: false, commandName });
+        const { output } = yield* captureStdout(runCli(["--help"], command));
+        assert.include(output, commandName);
+        assert.include(output, "Run the Pilot server.");
+        const error = yield* runCli(["connect", "status"], command).pipe(
+          Effect.provide(CliRuntimeLayer),
+          Effect.flip,
+        );
+        if (!CliError.isCliError(error)) {
+          assert.fail(`Expected CliError, got ${String(error)}`);
+        }
+        if (error._tag !== "ShowHelp") {
+          assert.fail(`Expected ShowHelp, got ${error._tag}`);
+        }
+        assert.deepEqual(error.commandPath, [commandName, "connect"]);
+      }),
   );
 
   it.effect("accepts the built-in lowercase log-level flag values", () =>
@@ -478,7 +500,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (error._tag !== "ShowHelp") {
         assert.fail(`Expected ShowHelp, got ${error._tag}`);
       }
-      assert.deepEqual(error.commandPath, ["t4", "connect"]);
+      assert.deepEqual(error.commandPath, ["pilot", "connect"]);
       assert.include(error.errors[0]?.message ?? "", "missing Pilot Connect public configuration");
 
       const output = (yield* TestConsole.errorLines).join("\n");
@@ -707,7 +729,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (error._tag !== "ShowHelp") {
         assert.fail(`Expected ShowHelp, got ${error._tag}`);
       }
-      assert.deepEqual(error.commandPath, ["t4", "auth", "pairing", "create"]);
+      assert.deepEqual(error.commandPath, ["pilot", "auth", "pairing", "create"]);
       const ttlError = error.errors[0] as CliError.CliError | undefined;
       if (!ttlError || ttlError._tag !== "InvalidValue") {
         assert.fail(`Expected InvalidValue, got ${String(ttlError?._tag)}`);
@@ -875,7 +897,7 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       if (error._tag !== "ShowHelp") {
         assert.fail(`Expected ShowHelp, got ${error._tag}`);
       }
-      assert.deepEqual(error.commandPath, ["t4", "project", "add"]);
+      assert.deepEqual(error.commandPath, ["pilot", "project", "add"]);
       const optionError = error.errors[0] as CliError.CliError | undefined;
       if (!optionError || optionError._tag !== "UnrecognizedOption") {
         assert.fail(`Expected UnrecognizedOption, got ${String(optionError?._tag)}`);

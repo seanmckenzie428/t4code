@@ -10,7 +10,7 @@ Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, OpenCod
 
 Pilot is currently source-only. There are no Pilot npm packages, hosted web app, signed desktop releases, mobile-store builds, or auto-update feeds. Official T3 downloads are not Pilot releases.
 
-The local source build exposes `t4` as the canonical CLI and retains `t3` as a compatibility alias. The published npm package is still named `t3`; do not publish it as Pilot.
+The local source build exposes `pilot` as the canonical CLI and retains `t4` and `t3` as compatibility aliases. The published npm package is still named `t3`; do not publish it as Pilot.
 
 ## Build locally
 

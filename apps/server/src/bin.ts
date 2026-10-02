@@ -29,15 +29,15 @@ import { traceCommand } from "./cli/trace.ts";
 
 const CliRuntimeLayer = Layer.mergeAll(NodeServices.layer, NetService.layer);
 
-export type CliName = "t3" | "t4";
+export type CliName = "pilot" | "t3" | "t4";
 
 export function resolveCliName(entryPath: string | undefined): CliName {
-  if (entryPath === undefined) return "t4";
+  if (entryPath === undefined) return "pilot";
   const executableName = entryPath
     .split(/[\\/]/u)
     .at(-1)
     ?.replace(/\.(?:c?m?js|exe)$/u, "");
-  return executableName === "t3" ? "t3" : "t4";
+  return executableName === "t3" || executableName === "t4" ? executableName : "pilot";
 }
 
 const connectPublicConfigMissingMessage = `${CONNECT_PRODUCT_NAME} commands are unavailable: this build is missing ${CONNECT_PRODUCT_NAME} public configuration.`;
@@ -70,7 +70,7 @@ const makeConnectUnavailableCommand = (commandName: CliName) =>
 
 export const makeCli = ({
   cloudEnabled = hasCloudPublicConfig,
-  commandName = "t4",
+  commandName = "pilot",
 }: { readonly cloudEnabled?: boolean; readonly commandName?: CliName } = {}) =>
   Command.make(commandName, { ...sharedServerCommandFlags }).pipe(
     Command.withDescription(`Run the ${PRODUCT_NAME} server.`),

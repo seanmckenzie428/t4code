@@ -5,8 +5,8 @@ to keep a terminal open.
 
 ## Manage the service
 
-Pilot is [built from source](./install.md#start-from-source). Its local CLI is `t4`;
-`t3` remains the compatibility alias. Published service installation and updates
+Pilot is [built from source](./install.md#start-from-source). Its local CLI is `pilot`;
+`t4` and `t3` remain compatibility aliases. Published service installation and updates
 use upstream package `t3`; they install upstream T3 Code, not a Pilot release.
 The commands below describe that compatible service infrastructure.
 

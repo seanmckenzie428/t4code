@@ -21,7 +21,7 @@ Keep these identifiers unchanged unless a separate migration is designed and shi
 
 These names are compatibility contracts, not missed branding. Existing state must open without migration, existing `t3code://` links must continue to work, and upstream merges must not require renaming `@t3tools/*` imports.
 
-Visible product copy should use **Pilot** and **Pilot Connect**. Local builds expose `t4` as the canonical CLI while retaining `t3` as an alias. Release installation, self-update, SSH package installation, and systemd infrastructure remain on package/service name `t3` until independent Pilot distribution exists.
+Visible product copy should use **Pilot** and **Pilot Connect**. Local builds expose `pilot` as the canonical CLI while retaining `t4` and `t3` as aliases. Release installation, self-update, SSH package installation, and systemd infrastructure remain on package/service name `t3` until independent Pilot distribution exists.
 
 The existing release workflow is guarded to run only in `pingdotgg/t3code`; it must not publish from the personal fork. Marketing legal-policy drafts remain unlinked and must not be deployed as Pilot policies until operator identity, privacy contacts, and distribution URLs are ready.
 

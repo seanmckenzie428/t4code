@@ -21,12 +21,12 @@ The dev runner prints a local pairing URL. Open that URL rather than the bare or
 
 There is no Pilot npm package, signed desktop release, hosted web app, mobile-store build, or package-manager formula yet. `npx t3`, official T3 desktop releases, `winget`, Homebrew, and AUR entries install upstream T3 Code, not Pilot.
 
-Local server builds expose `t4` as the canonical executable and retain `t3` as a compatibility alias. Published-package installation, SSH bootstrap, self-update, and the Linux service continue to use package/service name `t3` until independent Pilot distribution exists.
+Local server builds expose `pilot` as the canonical executable and retain `t4` and `t3` as compatibility aliases. Published-package installation, SSH bootstrap, self-update, and the Linux service continue to use package/service name `t3` until independent Pilot distribution exists.
 
 ## Open a project from a terminal
 
-With the local desktop app running, use `t4 app` to open the current directory, or
-`t4 app ../my-project` for another directory. The app adds the project if needed.
+With the local desktop app running, use `pilot app` to open the current directory, or
+`pilot app ../my-project` for another directory. The app adds the project if needed.
 
 ## Providers
 
