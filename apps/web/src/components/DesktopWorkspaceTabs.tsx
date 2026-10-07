@@ -7,7 +7,7 @@ import {
   FolderIcon,
   MessageSquareIcon,
   FileDiffIcon,
-  UsersIcon,
+  BotMessageSquareIcon,
   XIcon,
   PlusIcon,
   FileIcon,
@@ -39,7 +39,7 @@ const icons = {
   "pull-request": PullRequestGlyph.pullRequest,
   browser: GlobeIcon,
   files: FolderIcon,
-  agents: UsersIcon,
+  agents: BotMessageSquareIcon,
 };
 
 export function desktopTabIds(
