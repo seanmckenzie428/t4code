@@ -113,7 +113,7 @@ describe("APP_COMMAND_CATALOG", () => {
       threadId: "thread-1",
       text: "Follow up",
       submissionIntent: "background",
-      queuedMessageId: "queued-1",
+      dispatchMode: "queue",
     };
     const request = AppCommandInvocation.make({
       actionId: AppActionId.make("send-1"),
