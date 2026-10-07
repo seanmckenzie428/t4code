@@ -1756,6 +1756,18 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
         const deferredRootTerminals = yield* Ref.make(new Map<string, DeferredCodexRootTerminal>());
         const offeredContinuationItemsByTurn = yield* Ref.make(new Map<string, Set<string>>());
         const finalAnswerItemIdsByTurn = yield* Ref.make(new Map<string, Set<string>>());
+        const agentMessagePhases = new Map<string, Map<string, "commentary" | "final_answer">>();
+        const rememberAgentPhase = (
+          turnId: string,
+          itemId: string,
+          phase: string | null | undefined,
+        ) => {
+          if (phase !== "commentary" && phase !== "final_answer") return;
+          const phases =
+            agentMessagePhases.get(turnId) ?? new Map<string, "commentary" | "final_answer">();
+          phases.set(itemId, phase);
+          agentMessagePhases.set(turnId, phases);
+        };
         const completedFinalAnswerTextsByTurn = yield* Ref.make(new Map<string, Set<string>>());
         // Native completion and the interrupt timeout share one finalization
         // path. Serialize the race so only one can publish terminal events.
@@ -1985,6 +1997,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             if (yield* turnHasRetainedBackgroundWork(nativeTurnId)) {
               return;
             }
+            agentMessagePhases.delete(nativeTurnId);
             yield* Ref.update(settledTurns, (current) => {
               if (!current.has(nativeTurnId)) {
                 return current;
@@ -2902,7 +2915,11 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
 
         const buildAgentMessageArtifacts = (
           context: ActiveCodexTurnContext,
-          item: { readonly id: string; readonly text: string },
+          item: {
+            readonly id: string;
+            readonly text: string;
+            readonly assistantPhase?: "commentary" | "final_answer" | undefined;
+          },
           completed: boolean,
         ) =>
           Effect.gen(function* () {
@@ -2946,6 +2963,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               runId: context.projectionRunId,
               nodeId,
               role: "assistant",
+              ...(item.assistantPhase ? { assistantPhase: item.assistantPhase } : {}),
               text: item.text,
               attachments: [],
               streaming: !completed,
@@ -3098,7 +3116,11 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               }
               const artifacts = yield* buildAgentMessageArtifacts(
                 context,
-                { id: update.itemId, text: update.text },
+                {
+                  id: update.itemId,
+                  text: update.text,
+                  assistantPhase: agentMessagePhases.get(update.turnId)?.get(update.itemId),
+                },
                 update.completed,
               );
               yield* emitProviderEvent({
@@ -4135,6 +4157,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
             }
 
             if (payload.item.type === "agentMessage") {
+              rememberAgentPhase(payload.turnId, payload.item.id, payload.item.phase);
               if (payload.item.phase !== "commentary") {
                 yield* Ref.update(finalAnswerItemIdsByTurn, (current) => {
                   const updated = new Map(current);
@@ -4480,6 +4503,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
               return;
             }
 
+            rememberAgentPhase(payload.turnId, payload.item.id, payload.item.phase);
             const finalAnswer = payload.item.phase !== "commentary";
             if (finalAnswer) {
               yield* Ref.update(finalAnswerItemIdsByTurn, (current) => {
@@ -5350,6 +5374,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
                 });
               }
               if (!retainSettledContext) {
+                agentMessagePhases.delete(input.nativeTurnId);
                 yield* Ref.update(completedFinalAnswerTextsByTurn, (current) => {
                   if (!current.has(input.nativeTurnId)) {
                     return current;

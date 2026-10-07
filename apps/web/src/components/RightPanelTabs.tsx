@@ -721,7 +721,7 @@ function RightPanelEmptyState(props: {
   );
 }
 
-function surfaceTitle(
+export function rightPanelSurfaceTitle(
   surface: RightPanelSurface,
   sessions: Readonly<Record<string, PreviewSessionSnapshot>>,
   terminalLabelsById: ReadonlyMap<string, string>,
@@ -1238,7 +1238,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             {props.surfaces.map((surface) => {
               const active = surface.id === props.activeSurfaceId;
               const pending = props.pendingSurfaceIds.has(surface.id);
-              const title = surfaceTitle(
+              const title = rightPanelSurfaceTitle(
                 surface,
                 props.previewSessions,
                 props.terminalLabelsById,

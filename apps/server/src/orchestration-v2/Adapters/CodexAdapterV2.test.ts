@@ -3195,6 +3195,44 @@ describe("CodexAdapterV2 post-settle continuation", () => {
     });
   };
 
+  it.effect("preserves authoritative answer phase through streamed and completed messages", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const transcript = finalAnswerTranscript("codex-answer-classification", [
+          { id: "progress", text: "Working", phase: "commentary", streamed: true },
+          { id: "legacy", text: "Unknown", omitPhase: true },
+          { id: "null-phase", text: "Unclassified", phase: null },
+          { id: "final", text: "Done", phase: "final_answer", streamed: true },
+          { id: "duplicate", text: "Done", phase: "final_answer" },
+        ]);
+        const harness = yield* makeCodexReplayHarness(transcript);
+        const now = yield* DateTime.now;
+        yield* harness.runtime.startTurn(
+          makeCodexTestTurnInput({
+            threadId: harness.threadId,
+            providerThread: harness.providerThread,
+            now,
+            attemptId: RunAttemptId.make("attempt-classification"),
+            text: "Reply with the requested recovery marker.",
+          }),
+        );
+        yield* harness.firstTerminal;
+        assert.deepEqual(
+          assistantMessages(harness.events).map(({ message }) => ({
+            text: message.text,
+            phase: message.assistantPhase,
+          })),
+          [
+            { text: "Working", phase: "commentary" },
+            { text: "Unknown", phase: undefined },
+            { text: "Unclassified", phase: undefined },
+            { text: "Done", phase: "final_answer" },
+          ],
+        );
+      }).pipe(Effect.provide(Layer.merge(IdAllocator.layer, NodeServices.layer))),
+    ),
+  );
+
   it.effect("suppresses a trailing empty final answer after a non-empty final answer", () =>
     Effect.scoped(
       Effect.gen(function* () {

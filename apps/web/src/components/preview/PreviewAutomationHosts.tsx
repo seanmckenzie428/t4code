@@ -63,6 +63,7 @@ import {
 import { runBrowserViewportMutation } from "~/browser/browserViewportActions";
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { isElectron } from "~/env";
+import { useRightPanelStore } from "~/rightPanelStore";
 import { useEnvironments } from "~/state/environments";
 import { previewEnvironment } from "~/state/preview";
 import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
@@ -414,9 +415,13 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
                     ?.has(runtimeTabId) ?? false,
               })
             ) {
-              usePreviewMiniPlayerStore
-                .getState()
-                .open(threadRef, browserMiniPlayerSource(readyTabId));
+              if (isElectron) {
+                useRightPanelStore.getState().openBrowser(threadRef, readyTabId);
+              } else {
+                usePreviewMiniPlayerStore
+                  .getState()
+                  .open(threadRef, browserMiniPlayerSource(readyTabId));
+              }
             }
           }
           browserActivity.release ??= acquireBrowserSurfaceActivity(runtimeTabId);
@@ -545,9 +550,13 @@ function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId })
               }
             }
             if (shouldPresentPreview) {
-              usePreviewMiniPlayerStore
-                .getState()
-                .open(threadRef, browserMiniPlayerSource(activeTabId));
+              if (isElectron) {
+                useRightPanelStore.getState().openBrowser(threadRef, activeTabId);
+              } else {
+                usePreviewMiniPlayerStore
+                  .getState()
+                  .open(threadRef, browserMiniPlayerSource(activeTabId));
+              }
             }
             if (activeSnapshot && previewAutomationOpenNeedsOverlay(input, activeSnapshot)) {
               await requireReadyTab();

@@ -1,5 +1,12 @@
+import { isElectron } from "../env";
 import { isPreviewFocused } from "./previewFocus";
 
-// PreviewPanelShell owns every thread-scoped right-panel surface. Keep the
-// broader keybinding name without duplicating its focus and webview handling.
-export const isRightPanelFocused = isPreviewFocused;
+export function isRightPanelFocused(): boolean {
+  return (
+    isPreviewFocused() ||
+    (isElectron &&
+      typeof document !== "undefined" &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest("[data-right-panel-root]") !== null)
+  );
+}

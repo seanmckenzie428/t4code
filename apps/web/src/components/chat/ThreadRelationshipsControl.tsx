@@ -163,6 +163,7 @@ function relationshipThreadTitle(input: {
 }
 
 export function ThreadRelationshipsPanel(props: {
+  readonly emptyState?: boolean;
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
 }) {
@@ -244,7 +245,11 @@ export function ThreadRelationshipsPanel(props: {
     active.filter(({ edge }) => edge.status === "running").length;
 
   if (relationshipRows.length === 0 && runningCount === 0) {
-    return null;
+    return props.emptyState ? (
+      <p className="p-8 text-center text-sm text-muted-foreground">
+        Agents delegated from this thread will appear here.
+      </p>
+    ) : null;
   }
 
   const openThread = (threadId: ThreadId) => {

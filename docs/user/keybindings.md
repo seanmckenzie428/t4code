@@ -17,8 +17,9 @@ background and opens a fresh composer. Change either shortcut in
 **Composer: Start in Background**. These bindings take priority over the send
 shortcut. Click the send button to use the configured follow-up behavior.
 
-When an active turn has queued messages, `mod+Shift+Enter` sends the first as a
-steer. Change it under **Queue: Send First Queued Message as Steer** in Keybindings.
+In standalone web, `mod+Shift+Enter` sends the first queued message as a steer
+during an active turn. Desktop uses that shortcut for Chat split. Assign another
+binding under **Queue: Send First Queued Message as Steer** if needed.
 
 Use `mod+shift+m` to choose a model and `mod+shift+h` to choose a host.
 Use `mod+shift+e` for effort, `mod+shift+a` for access mode, `mod+shift+x` for the
@@ -35,6 +36,23 @@ These shortcuts run inside the focused web or desktop client. `mod` uses Command
 on macOS and Ctrl on Windows and Linux, including GNOME, KDE Plasma, Niri, and
 Hyprland. If a custom desktop shortcut takes the same keys, choose another binding
 in Settings.
+
+## Desktop main tabs
+
+| Shortcut                      | Action                                                      |
+| ----------------------------- | ----------------------------------------------------------- |
+| `mod+Shift+[` / `mod+Shift+]` | Previous / next main tab                                    |
+| `mod+Shift+J`                 | Reveal and focus the composer                               |
+| `mod+Shift+Enter`             | Show or hide Chat beside content                            |
+| `Escape` in floating composer | Dismiss its open menu first, then collapse to the Chat pill |
+| `mod+J`                       | Toggle the bottom terminal drawer                           |
+| `mod+L` in Browser            | Focus the browser address                                   |
+
+The same actions are available in the command palette and **Settings → Keybindings**.
+They also work while the embedded website has focus. From the full Chat tab,
+the split shortcut restores the last content tab alongside Chat when available.
+`mod+1` through `mod+9` still switch threads. Standalone web keeps previous/next
+thread navigation on `mod+Shift+[` / `mod+Shift+]`.
 
 ## Copy pull request references
 
@@ -135,7 +153,7 @@ through the pages you have visited, like a browser's back and forward buttons.
 ## Reserved shortcuts
 
 In the desktop app, `mod+w` closes the focused terminal or, when focus is in the
-right panel, its active tab. It never closes the window; use `mod+shift+w` for
+content area, its active resource. Fixed launcher tabs remain available. It never closes the window; use `mod+shift+w` for
 **Close Window**. In a browser, `mod+w`
 closes the browser tab; rebind `rightPanel.close` and `terminal.close` to an available
 shortcut such as `alt+w`.

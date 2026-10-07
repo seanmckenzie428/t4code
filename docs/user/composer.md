@@ -12,6 +12,34 @@ becomes an attachment when inserting it would exceed the message limit. On a
 hardware keyboard, use `Cmd+Shift+V` on Apple devices or `Ctrl+Shift+V` elsewhere
 to keep a large paste editable in the composer instead.
 
+## Chat while viewing content on desktop
+
+Open Review, PR, Browser, Files, or Agents from the main tabs. Files, extra browser
+pages, and generated views open there too. Close a resource to return its fixed
+tab to a launcher; drag additional tabs to reorder them. Terminal sessions stay
+in the bottom drawer.
+
+The floating composer lets you send messages over any content tab without
+changing its width. Drafts, attachments, uploads, and voice input stay with the
+same composer when you switch layouts. Use **Hide** to collapse it to a Chat pill,
+or `Cmd+Shift+J` (`Ctrl+Shift+J` on Windows/Linux) to reveal and focus it.
+
+Choose **Expand Chat**, or press `Cmd+Shift+Enter` (`Ctrl+Shift+Enter`), to show
+conversation on the left and content on the right. Drag the divider to adjust
+width. Repeat the shortcut to return to full-width content. The Chat tab shows
+the full conversation; each content tab remembers whether Chat was beside it.
+Narrow windows show Chat alone when the split would be too small.
+
+After a successful turn, a confirmed final reply can appear above the floating
+composer. Progress updates and tool activity stay in Chat. Long replies have a
+bounded preview; **Open Chat** shows the conversation alongside your content.
+The card stays until dismissed, a new message is sent, or you view Chat. Older
+history and providers without explicit final-reply classification show replies
+only in the conversation.
+
+Layout choices are remembered on this device for each environment and thread.
+Standalone web and mobile keep their existing layouts.
+
 ## Attach files
 
 Attach up to 100 files per message. Each image can be up to 10 MiB, with at most
@@ -41,10 +69,11 @@ are saved on the server and can be edited, reordered, or removed above the compo
 `Cmd+Enter` on macOS or `Ctrl+Enter` on Windows and Linux uses the opposite action:
 it steers when your default is Queue and queues when your default is Steer.
 
-Use `Cmd+Shift+Enter` on macOS or `Ctrl+Shift+Enter` on Windows and Linux to send
-the oldest queued message as a steer. This leaves the current draft intact and
-requires an active turn that supports steering. Change
-`thread.steerQueuedMessage` in **Settings → Keybindings** to use another shortcut.
+In standalone web, use `Cmd+Shift+Enter` on macOS or `Ctrl+Shift+Enter` on Windows
+and Linux to send the oldest queued message as a steer. This leaves the draft
+intact and requires an active turn that supports steering. On desktop, this
+shortcut toggles Chat beside content. Assign `thread.steerQueuedMessage` in
+**Settings → Keybindings** to steer queued messages with another shortcut.
 
 Press `Option+Up` on macOS or `Alt+Up` on Windows and Linux with the cursor at the
 start of the composer to edit the most recently queued message. Change
@@ -242,8 +271,8 @@ Select a file chip in your draft or a sent message to preview it. Code and JSON 
 highlighting; Markdown, HTML, CSV, and TSV offer rendered and raw views. Audio files have
 playback controls. Large text files show a limited preview; save the file to read it in full.
 
-On web and desktop, files open beside the conversation with the same controls as a workspace
-file: a header row with the view toggle, **Copy contents** and **Save file**. On mobile, documents
+On desktop, files open in main tabs; on web, they open beside the conversation. Both use the same
+controls as a workspace file: a header row with the view toggle, **Copy contents** and **Save file**. On mobile, documents
 open in the same file screen as workspace files; its menu holds **Copy contents**, **Save or
 share** and **Open in file viewer**. Pictures, videos and PDFs keep their native viewers, and
 other document formats such as Word or Pages open in the device's own viewer when it has one.

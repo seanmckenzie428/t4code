@@ -1,3 +1,4 @@
+import { usePreviewOpen } from "../hooks/usePreviewOpen";
 import { Outlet, createFileRoute, redirect, useParams } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
 import { useEffect, useMemo } from "react";
@@ -22,7 +23,6 @@ import { undoLatestThreadAction } from "../hooks/showThreadUndoNotice";
 import { resolveShortcutCommand } from "../keybindings";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
-import { selectActiveRightPanel, useRightPanelStore } from "../rightPanelStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { stackedThreadToast, toastManager } from "~/components/ui/toast";
 import { primaryServerKeybindingsAtom } from "~/state/server";
@@ -58,14 +58,7 @@ function ChatRouteGlobalShortcuts() {
       ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
       : false,
   );
-  // The `previewOpen` shortcut-context flag here uses the store-only value;
-  // the URL-aware arbitration lives inside ChatView's `onTogglePreview`,
-  // which we invoke via the action bus to avoid duplicating the rule.
-  const previewOpen = useRightPanelStore((state) =>
-    routeThreadRef
-      ? selectActiveRightPanel(state.byThreadKey, routeThreadRef) === "preview"
-      : false,
-  );
+  const previewOpen = usePreviewOpen(routeThreadRef);
   useEffect(() => {
     const matchesRoute = (context: { environmentId: string; threadId?: string }) => ({
       available:

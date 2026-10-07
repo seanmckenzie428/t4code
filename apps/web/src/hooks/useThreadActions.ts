@@ -1,3 +1,4 @@
+import { useDesktopWorkspaceStore } from "../desktopWorkspaceStore";
 import {
   parseScopedThreadKey,
   scopeProjectRef,
@@ -422,6 +423,7 @@ export function useThreadActions() {
         if (result._tag === "Success") {
           refreshArchivedThreadsForEnvironment(target.environmentId);
           useAppViewStore.getState().removeThread(target);
+          useDesktopWorkspaceStore.getState().removeThread(target);
         }
         return result;
       }
@@ -526,6 +528,7 @@ export function useThreadActions() {
       );
       clearTerminalUiState(threadRef);
       useAppViewStore.getState().removeThread(threadRef);
+      useDesktopWorkspaceStore.getState().removeThread(threadRef);
 
       if (shouldNavigateToFallback) {
         const fallbackThread = fallbackThreadId

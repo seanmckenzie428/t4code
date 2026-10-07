@@ -1,6 +1,8 @@
 "use client";
 
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { useDesktopWorkspaceStore } from "../desktopWorkspaceStore";
 import { APP_COMMAND_CATALOG } from "@t3tools/client-runtime/app-control";
 import {
   AppControlClientId,
@@ -154,7 +156,10 @@ function AppControlHost({
             surface: window.desktopBridge ? "desktop" : "web",
             projectId: focusedThread?.projectId ?? null,
             threadId: statusThreadId,
-            activePanel: null,
+            activePanel: window.desktopBridge
+              ? (useDesktopWorkspaceStore.getState().byThreadKey[scopedThreadKey(ref)]?.selected ??
+                "chat")
+              : null,
             revision: 0,
           },
           projects: projects.map((project) => ({

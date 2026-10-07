@@ -1,3 +1,20 @@
+import { reconcileDesktopBrowsers } from "../desktopBrowserRestore";
+import { focusDesktopContent } from "../lib/desktopContentFocus";
+import { browserAppShortcuts } from "../keybindings";
+import { latestDesktopReply } from "../desktopReply";
+import { DesktopReplyCard } from "./DesktopReplyCard";
+import { useDesktopWorkspace } from "../hooks/useDesktopWorkspace";
+import {
+  EMPTY_DESKTOP_WORKSPACE,
+  desktopSurfaceId,
+  desktopWorkspaceLayout,
+  useDesktopWorkspaceStore,
+  type DesktopTabId,
+} from "../desktopWorkspaceStore";
+import { DesktopWorkspaceTabs, desktopTabIds } from "./DesktopWorkspaceTabs";
+import { rightPanelSurfaceTitle } from "./RightPanelTabs";
+import { ThreadRelationshipsPanel } from "./chat/ThreadRelationshipsControl";
+import { DesktopChatDivider } from "./DesktopChatDivider";
 import { buildRevertTurnCountByUserMessageId } from "./chat/MessagesTimeline.logic";
 import { randomHex } from "~/lib/utils";
 import { useThreadSendCommand } from "../hooks/useThreadSendCommand";
@@ -2349,9 +2366,15 @@ function ChatViewContent(props: ChatViewProps) {
   const rightPanelState = useRightPanelStore((state) =>
     selectThreadRightPanelState(state.byThreadKey, activeThreadRef),
   );
-  const activeRightPanelSurface = useRightPanelStore((state) =>
+  const desktopWorkspace = useDesktopWorkspace(activeThreadRef);
+  const storedRightPanelSurface = useRightPanelStore((state) =>
     selectActiveRightPanelSurface(state.byThreadKey, activeThreadRef),
   );
+  const desktopActiveSurfaceId = desktopSurfaceId(desktopWorkspace);
+  const activeRightPanelSurface = isElectron
+    ? (rightPanelState.surfaces.find((surface) => surface.id === desktopActiveSurfaceId) ??
+      (desktopWorkspace.selected === "files" ? ({ id: "files", kind: "files" } as const) : null))
+    : storedRightPanelSurface;
   const activeThreadAppViews = useAppViewStore((state) =>
     selectThreadAppViews(state.byThreadKey, activeThreadRef),
   );
@@ -2391,8 +2414,11 @@ function ChatViewContent(props: ChatViewProps) {
     () => [...new Set([...activeKnownTerminalIds, ...panelTerminalIds])],
     [activeKnownTerminalIds, panelTerminalIds],
   );
-  const previewPanelOpen = activeRightPanelKind === "preview" && isPreviewSupportedInRuntime();
-  const rightPanelOpen = rightPanelState.isOpen;
+  const previewPanelOpen =
+    (isElectron
+      ? activeRightPanelSurface?.kind === "preview"
+      : activeRightPanelKind === "preview") && isPreviewSupportedInRuntime();
+  const rightPanelOpen = !isElectron && rightPanelState.isOpen;
   const { active: panelAnimationsActive, durationMs: panelAnimationDurationMs } =
     usePanelAnimationSettings();
   const activeTerminalDrawerPresence = usePanelPresence(
@@ -2420,7 +2446,9 @@ function ChatViewContent(props: ChatViewProps) {
   const rightPanelControlsInPanel =
     shouldUsePlanSidebarSheet && rightPanelPresent && rightPanelOpen;
   const rightPanelControlsAtRoot = rightPanelPresent && !shouldUsePlanSidebarSheet;
-  const renderedRightPanelSurface = rightPanelPresence.value?.activeSurface ?? null;
+  const renderedRightPanelSurface = isElectron
+    ? activeRightPanelSurface
+    : (rightPanelPresence.value?.activeSurface ?? null);
   const renderedRightPanelSurfaces = rightPanelPresence.value?.surfaces ?? [];
   const previewMiniPlayerVisible = shouldRenderPreviewMiniPlayer(
     activePreviewMiniPlayer?.source ?? null,
@@ -2443,10 +2471,52 @@ function ChatViewContent(props: ChatViewProps) {
 
   useEffect(() => {
     if (!activeThreadRef) return;
+    if (isElectron) {
+      void reconcileDesktopBrowsers(
+        activeThreadRef,
+        {
+          sessions: activePreviewState.sessions,
+          serverEpoch: activePreviewState.serverEpoch,
+          listServerEpoch: activePreviewState.listServerEpoch ?? null,
+        },
+        async (snapshot) => {
+          const result = await openPreview({
+            environmentId: activeThreadRef.environmentId,
+            input: {
+              threadId: activeThreadRef.threadId,
+              ...(snapshot.navStatus._tag === "Idle" ? {} : { url: snapshot.navStatus.url }),
+              viewport: snapshot.viewport,
+              profileId: snapshot.profileId,
+            },
+          });
+          if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+          return result.value;
+        },
+        async (tabId) => {
+          await closePreview({
+            environmentId: activeThreadRef.environmentId,
+            input: { threadId: activeThreadRef.threadId, tabId },
+          });
+        },
+        () =>
+          toastManager.add({
+            type: "error",
+            title: "Could not restore a browser tab. Open Browser to try again.",
+          }),
+      );
+      return;
+    }
     useRightPanelStore
       .getState()
       .reconcileBrowserSurfaces(activeThreadRef, Object.keys(activePreviewState.sessions));
-  }, [activePreviewState.sessions, activeThreadRef]);
+  }, [
+    activePreviewState.sessions,
+    activePreviewState.serverEpoch,
+    activePreviewState.listServerEpoch,
+    activeThreadRef,
+    openPreview,
+    closePreview,
+  ]);
 
   useEffect(() => {
     if (!activeThreadRef || activePreviewMiniPlayer?.source.kind !== "browser") return;
@@ -4271,18 +4341,111 @@ function ChatViewContent(props: ChatViewProps) {
     activeThreadRef ? state.getUserActionRevision(activeThreadRef) : 0,
   );
   const mainPullRequest = useThreadMainPullRequest(activeThreadRef);
-  const activeMainView = resolveActiveMainView(
+  const webMainView = resolveActiveMainView(
     selectedMainView,
     reviewAvailable,
     mainPullRequest,
     pullRequestsSurfaceAvailable,
+  );
+  const desktopResolvedView =
+    desktopWorkspace.selected === "review" || desktopWorkspace.selected === "pull-request"
+      ? resolveActiveMainView(
+          desktopWorkspace.selected,
+          reviewAvailable,
+          mainPullRequest,
+          pullRequestsSurfaceAvailable,
+        )
+      : desktopWorkspace.selected;
+  const desktopLayout = desktopWorkspaceLayout(
+    desktopWorkspace,
+    workspaceLayoutWidth ?? 1000,
+    desktopResolvedView,
+  );
+  const desktopWantsSplit = isElectron && desktopLayout.requestedSplit;
+  const desktopSplit = isElectron && desktopLayout.split;
+  const activeMainView = isElectron ? desktopLayout.activeTab : webMainView;
+  const desktopFloating = isElectron && desktopLayout.floating;
+  const desktopSurfaceVisible = isElectron && activeMainView !== "chat";
+  const selectDesktopView = useCallback(
+    (tab: DesktopTabId) => {
+      if (!activeThreadRef) return;
+      const mainViews = useMainViewStore.getState();
+      mainViews.select(
+        activeThreadRef,
+        tab === "chat" || tab === "review" || tab === "pull-request"
+          ? tab
+          : selectThreadMainView(mainViews.byThreadKey, activeThreadRef),
+      );
+      const workspace =
+        useDesktopWorkspaceStore.getState().byThreadKey[scopedThreadKey(activeThreadRef)] ??
+        EMPTY_DESKTOP_WORKSPACE;
+      const surfaceId = desktopSurfaceId(workspace, tab);
+      const panel = useRightPanelStore.getState();
+      if (
+        surfaceId &&
+        panel.byThreadKey[scopedThreadKey(activeThreadRef)]?.surfaces.some(
+          (surface) => surface.id === surfaceId,
+        )
+      )
+        panel.activateSurface(activeThreadRef, surfaceId);
+      useDesktopWorkspaceStore.getState().select(activeThreadRef, tab);
+    },
+    [activeThreadRef],
+  );
+  const revealDesktopComposer = useCallback(() => {
+    if (activeThreadRef) useDesktopWorkspaceStore.getState().setCollapsed(activeThreadRef, false);
+  }, [activeThreadRef]);
+  const toggleDesktopSplit = useCallback(() => {
+    if (!activeThreadRef) return;
+    const current =
+      useDesktopWorkspaceStore.getState().byThreadKey[scopedThreadKey(activeThreadRef)];
+    if (!current) return;
+    const target = current.selected === "chat" ? current.lastContent : current.selected;
+    if (
+      !target ||
+      !desktopTabIds(
+        current,
+        reviewAvailable,
+        mainPullRequest !== null || pullRequestsSurfaceAvailable,
+      ).includes(target)
+    )
+      return;
+    useDesktopWorkspaceStore.getState().toggleSplit(activeThreadRef);
+  }, [activeThreadRef, reviewAvailable, mainPullRequest, pullRequestsSurfaceAvailable]);
+  const cycleDesktopTab = useCallback(
+    (direction: number) => {
+      if (!activeThreadRef) return;
+      const current =
+        useDesktopWorkspaceStore.getState().byThreadKey[scopedThreadKey(activeThreadRef)];
+      if (!current) return;
+      const tabs = desktopTabIds(
+        current,
+        reviewAvailable,
+        mainPullRequest !== null || pullRequestsSurfaceAvailable,
+      );
+      const index = tabs.indexOf(current.selected);
+      const next = tabs[(index + direction + tabs.length) % tabs.length];
+      if (next) selectDesktopView(next);
+    },
+    [
+      activeThreadRef,
+      reviewAvailable,
+      mainPullRequest,
+      pullRequestsSurfaceAvailable,
+      selectDesktopView,
+    ],
   );
   useEffect(() => {
     if (activeThreadRef) useMainViewStore.getState().migrateThreadPullRequests(activeThreadRef);
   }, [activeThreadRef]);
   useEffect(() => {
     // A PR opened from the narrow layout's launcher must be revealed behind its sheet.
-    if (shouldUsePlanSidebarSheet && activeThreadRef && activeMainView === "pull-request") {
+    if (
+      !isElectron &&
+      shouldUsePlanSidebarSheet &&
+      activeThreadRef &&
+      activeMainView === "pull-request"
+    ) {
       useRightPanelStore.getState().close(activeThreadRef);
     }
   }, [activeMainView, activeThreadRef, mainViewUserActionRevision, shouldUsePlanSidebarSheet]);
@@ -4333,8 +4496,10 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const onToggleDiff = useCallback(() => {
     if (!reviewAvailable) return;
-    selectMainView(activeMainView === "review" ? "chat" : "review");
-  }, [activeMainView, reviewAvailable, selectMainView]);
+    selectMainView(
+      (isElectron ? desktopWorkspace.selected : activeMainView) === "review" ? "chat" : "review",
+    );
+  }, [activeMainView, desktopWorkspace.selected, reviewAvailable, selectMainView]);
 
   const needsLoadBalancing = automaticEnvironment && !draftThread?.loadBalancedEnvironmentId;
   const loadBalancingCandidates = useMemo(
@@ -4498,7 +4663,8 @@ function ChatViewContent(props: ChatViewProps) {
   );
 
   const focusComposer = useCallback(() => {
-    composerRef.current?.focusAtEnd();
+    if (isElectron) composerRef.current?.focusPreservingSelection();
+    else composerRef.current?.focusAtEnd();
   }, [composerRef]);
   const canInterruptRunningThread = deriveCanInterruptRunningThread(
     activeThread !== undefined,
@@ -5386,7 +5552,7 @@ function ChatViewContent(props: ChatViewProps) {
         platform: device.platform,
         name: device.name,
       };
-      if (autoShowFloatingPreview) {
+      if (!isElectron && autoShowFloatingPreview) {
         usePreviewMiniPlayerStore.getState().open(activeThreadRef, { kind: "device", ...target });
         continue;
       }
@@ -5720,6 +5886,10 @@ function ChatViewContent(props: ChatViewProps) {
     threadDetailLoading,
   ]);
   const closePreviewPanel = useCallback(() => {
+    if (isElectron) {
+      selectDesktopView("chat");
+      return;
+    }
     if (activeThreadRef) {
       // Closing the panel on a live browser or device floats it instead of dropping it.
       if (activeRightPanelSurface?.kind === "preview" && activeRightPanelSurface.resourceId) {
@@ -5734,7 +5904,7 @@ function ChatViewContent(props: ChatViewProps) {
       setMaximizedRightPanelThreadKey(null);
       useRightPanelStore.getState().close(activeThreadRef);
     }
-  }, [activeRightPanelSurface, activeThreadRef]);
+  }, [activeRightPanelSurface, activeThreadRef, selectDesktopView]);
   const togglePreviewPanel = useCallback(() => {
     if (!activeThreadRef || !isPreviewSupportedInRuntime()) return;
     if (previewPanelOpen) {
@@ -5885,12 +6055,25 @@ function ChatViewContent(props: ChatViewProps) {
   );
   const toggleRightPanel = useCallback(() => {
     if (!activeThreadRef) return;
+    if (isElectron) {
+      selectDesktopView(
+        desktopWorkspace.selected === "chat" ? (desktopWorkspace.lastContent ?? "browser") : "chat",
+      );
+      return;
+    }
     if (rightPanelOpen) {
       closePreviewPanel();
       return;
     }
     useRightPanelStore.getState().toggleVisibility(activeThreadRef);
-  }, [activeThreadRef, closePreviewPanel, rightPanelOpen]);
+  }, [
+    activeThreadRef,
+    closePreviewPanel,
+    rightPanelOpen,
+    desktopWorkspace.selected,
+    desktopWorkspace.lastContent,
+    selectDesktopView,
+  ]);
   useEffect(() => {
     if (!activeThreadRef) return;
     const matchesActiveThread = (context: { environmentId: string; threadId?: string }) => ({
@@ -5927,10 +6110,38 @@ function ChatViewContent(props: ChatViewProps) {
       registerWebAppCommandHandler(
         "ui.composer.focus",
         () => {
-          selectMainView("chat");
+          if (isElectron) revealDesktopComposer();
+          else selectMainView("chat");
           scheduleComposerFocus();
         },
         matchesActiveThread,
+      ),
+      registerWebAppCommandHandler(
+        "ui.chat.toggle-split",
+        () => {
+          toggleDesktopSplit();
+          scheduleComposerFocus();
+        },
+        (context) => ({
+          ...matchesActiveThread(context),
+          available: isElectron && matchesActiveThread(context).available,
+        }),
+      ),
+      registerWebAppCommandHandler(
+        "ui.main-tab.previous",
+        () => cycleDesktopTab(-1),
+        (context) => ({
+          ...matchesActiveThread(context),
+          available: isElectron && matchesActiveThread(context).available,
+        }),
+      ),
+      registerWebAppCommandHandler(
+        "ui.main-tab.next",
+        () => cycleDesktopTab(1),
+        (context) => ({
+          ...matchesActiveThread(context),
+          available: isElectron && matchesActiveThread(context).available,
+        }),
       ),
       registerWebAppCommandHandler(
         "ui.diff.open",
@@ -5964,14 +6175,20 @@ function ChatViewContent(props: ChatViewProps) {
       registerWebAppCommandHandler("ui.right-panel.close", closePreviewPanel, matchesActiveThread),
       registerWebAppCommandHandler(
         "ui.right-panel.focus",
-        () => setTerminalFocusRequestId((value) => value + 1),
+        () => {
+          if (isElectron) focusDesktopContent();
+          else setTerminalFocusRequestId((value) => value + 1);
+        },
         matchesActiveThread,
       ),
       registerWebAppCommandHandler("ui.right-panel.toggle", toggleRightPanel, matchesActiveThread),
       registerWebAppCommandHandler(
         "ui.model-picker.toggle",
         () => {
-          flushSync(() => selectMainView("chat"));
+          flushSync(() => {
+            if (isElectron) revealDesktopComposer();
+            else selectMainView("chat");
+          });
           composerRef.current?.toggleModelPicker();
         },
         matchesActiveThread,
@@ -6027,6 +6244,9 @@ function ChatViewContent(props: ChatViewProps) {
     composerRef,
     createBrowserSurface,
     createNewTerminal,
+    revealDesktopComposer,
+    toggleDesktopSplit,
+    cycleDesktopTab,
     scheduleComposerFocus,
     onToggleDiff,
     requestClosePanelTerminal,
@@ -6047,11 +6267,15 @@ function ChatViewContent(props: ChatViewProps) {
     useRightPanelStore.getState().toggleThreadPanel(activeThreadRef, threadPanelPresentation);
   }, [activeThreadRef, threadPanelPresentation]);
   const toggleRightPanelMaximized = useCallback(() => {
+    if (isElectron) {
+      toggleDesktopSplit();
+      return;
+    }
     if (!canMaximizeRightPanel) return;
     setMaximizedRightPanelThreadKey((threadKey) =>
       threadKey === routeThreadKey ? null : routeThreadKey,
     );
-  }, [canMaximizeRightPanel, routeThreadKey]);
+  }, [canMaximizeRightPanel, routeThreadKey, toggleDesktopSplit]);
   useEffect(
     () =>
       registerWebAppCommandHandler(
@@ -6061,11 +6285,19 @@ function ChatViewContent(props: ChatViewProps) {
           available:
             context.environmentId === activeThreadRef?.environmentId &&
             (context.threadId === undefined || context.threadId === activeThreadRef.threadId) &&
-            canMaximizeRightPanel,
-          reason: "The active right panel cannot be maximized.",
+            (isElectron
+              ? desktopWorkspace.selected !== "chat" || desktopWorkspace.lastContent !== null
+              : canMaximizeRightPanel),
+          reason: "No content is available to show alongside Chat.",
         }),
       ),
-    [activeThreadRef, canMaximizeRightPanel, toggleRightPanelMaximized],
+    [
+      activeThreadRef,
+      canMaximizeRightPanel,
+      toggleRightPanelMaximized,
+      desktopWorkspace.selected,
+      desktopWorkspace.lastContent,
+    ],
   );
   const cleanupRightPanelSurfaces = useCallback(
     (surfaces: readonly RightPanelSurface[]) => {
@@ -6173,7 +6405,7 @@ function ChatViewContent(props: ChatViewProps) {
     ],
   );
   useEffect(() => {
-    if (!activeThreadRef || !rightPanelOpen || !activeRightPanelSurface) return;
+    if (!activeThreadRef || (!rightPanelOpen && !isElectron) || !activeRightPanelSurface) return;
     return registerWebAppCommandHandler(
       "ui.right-panel.close-surface",
       () => closeRightPanelSurface(activeRightPanelSurface),
@@ -6834,14 +7066,19 @@ function ChatViewContent(props: ChatViewProps) {
   }, [activeThreadKey]);
 
   useEffect(() => {
-    if (!activeThread?.id || terminalUiState.terminalOpen) return;
+    if (
+      !activeThread?.id ||
+      terminalUiState.terminalOpen ||
+      (isElectron && activeMainView !== "chat")
+    )
+      return;
     const frame = window.requestAnimationFrame(() => {
       focusComposer();
     });
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [activeThread?.id, focusComposer, terminalUiState.terminalOpen]);
+  }, [activeThread?.id, focusComposer, terminalUiState.terminalOpen, activeMainView]);
 
   // Tabbing back into the app lands focus wherever it last was, often the right panel or the
   // body. Put it in the composer unless something that takes typing already holds it. The
@@ -6849,7 +7086,13 @@ function ChatViewContent(props: ChatViewProps) {
   // terminal is a surface and is recognized by the predicate instead. Mobile is left alone so
   // returning to the app does not raise the keyboard.
   useEffect(() => {
-    if (!activeThread?.id || terminalUiState.terminalOpen || isMobileViewport) return;
+    if (
+      !activeThread?.id ||
+      terminalUiState.terminalOpen ||
+      isMobileViewport ||
+      (isElectron && activeMainView !== "chat")
+    )
+      return;
     let frame: number | null = null;
     const onWindowFocus = () => {
       if (frame !== null) window.cancelAnimationFrame(frame);
@@ -6868,7 +7111,13 @@ function ChatViewContent(props: ChatViewProps) {
       window.removeEventListener("focus", onWindowFocus);
       if (frame !== null) window.cancelAnimationFrame(frame);
     };
-  }, [activeThread?.id, focusComposer, isMobileViewport, terminalUiState.terminalOpen]);
+  }, [
+    activeThread?.id,
+    focusComposer,
+    isMobileViewport,
+    terminalUiState.terminalOpen,
+    activeMainView,
+  ]);
 
   useEffect(() => {
     if (!activeThread?.id) return;
@@ -7812,7 +8061,8 @@ function ChatViewContent(props: ChatViewProps) {
     } else if (previous && !current) {
       terminalUiOpenByThreadRef.current[activeThreadKey] = current;
       const frame = window.requestAnimationFrame(() => {
-        focusComposer();
+        if (isElectron && activeMainView !== "chat") focusDesktopContent();
+        else focusComposer();
       });
       return () => {
         window.cancelAnimationFrame(frame);
@@ -7820,7 +8070,14 @@ function ChatViewContent(props: ChatViewProps) {
     }
 
     terminalUiOpenByThreadRef.current[activeThreadKey] = current;
-  }, [activeThreadKey, focusComposer, terminalUiState.terminalOpen]);
+  }, [activeThreadKey, focusComposer, terminalUiState.terminalOpen, activeMainView]);
+
+  const chatOwnsInputTarget = useCallback(
+    (target: EventTarget | null) =>
+      activeMainView === "chat" ||
+      (desktopSplit && target instanceof Element && target.closest("#main-chat-view") !== null),
+    [activeMainView, desktopSplit],
+  );
 
   const getShortcutContext = useCallback(
     (eventTarget: EventTarget | null = document.activeElement) => ({
@@ -7839,6 +8096,18 @@ function ChatViewContent(props: ChatViewProps) {
     }),
     [composerRef, previewPanelOpen, terminalUiState.terminalOpen, routeKind, phase],
   );
+
+  useEffect(() => {
+    const preview = window.desktopBridge?.preview;
+    if (!preview?.setAppShortcuts) return;
+    void preview
+      .setAppShortcuts(
+        browserAppShortcuts(keybindings, navigator.platform, getShortcutContext(null)),
+      )
+      .catch((error: unknown) => {
+        console.warn("Could not update embedded-browser shortcuts", error);
+      });
+  }, [keybindings, getShortcutContext]);
 
   useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
@@ -7860,7 +8129,7 @@ function ChatViewContent(props: ChatViewProps) {
       const shortcutContext = getShortcutContext(event.target);
 
       if (
-        activeMainView === "chat" &&
+        chatOwnsInputTarget(event.target) &&
         !shortcutContext.terminalFocus &&
         !shortcutContext.modelPickerOpen &&
         shouldTypeToFocusComposer(event)
@@ -7928,6 +8197,10 @@ function ChatViewContent(props: ChatViewProps) {
       }
 
       const isHostedCommand =
+        command === "composer.focus" ||
+        command === "chat.toggleSplit" ||
+        command === "mainTab.previous" ||
+        command === "mainTab.next" ||
         command === "terminal.toggle" ||
         command === "rightPanel.toggle" ||
         command === "rightPanel.toggleMaximized" ||
@@ -7970,7 +8243,10 @@ function ChatViewContent(props: ChatViewProps) {
         event.preventDefault();
         event.stopPropagation();
         if (!event.repeat) {
-          flushSync(() => selectMainView("chat"));
+          flushSync(() => {
+            if (isElectron) revealDesktopComposer();
+            else selectMainView("chat");
+          });
           composerRef.current?.openControl(command);
         }
         return;
@@ -7980,7 +8256,10 @@ function ChatViewContent(props: ChatViewProps) {
         event.preventDefault();
         event.stopPropagation();
         if (!event.repeat) {
-          flushSync(() => selectMainView("chat"));
+          flushSync(() => {
+            if (isElectron) revealDesktopComposer();
+            else selectMainView("chat");
+          });
           branchToolbarRef.current?.openBranchPicker();
         }
         return;
@@ -8062,6 +8341,8 @@ function ChatViewContent(props: ChatViewProps) {
     toggleTerminalVisibility,
     composerRef,
     selectMainView,
+    chatOwnsInputTarget,
+    revealDesktopComposer,
   ]);
 
   // Paste-to-focus: the resting composer blurs on a click into the timeline,
@@ -8070,7 +8351,7 @@ function ChatViewContent(props: ChatViewProps) {
   useEffect(() => {
     const keyHandler = (event: KeyboardEvent) => {
       if (
-        activeMainView === "chat" &&
+        chatOwnsInputTarget(event.target) &&
         shouldRedirectInputToComposer(event) &&
         isPasteAsTextShortcut(event, isMacPlatform(navigator.platform))
       ) {
@@ -8078,7 +8359,7 @@ function ChatViewContent(props: ChatViewProps) {
       }
     };
     const handler = (event: ClipboardEvent) => {
-      if (activeMainView !== "chat") return;
+      if (!chatOwnsInputTarget(event.target)) return;
       if (!activeThreadId || isCommandPaletteOpen()) return;
       if (getTerminalFocusOwner() !== null) return;
       if (composerRef.current?.isModelPickerOpen()) return;
@@ -8102,7 +8383,7 @@ function ChatViewContent(props: ChatViewProps) {
       window.removeEventListener("keydown", keyHandler, true);
       window.removeEventListener("paste", handler, true);
     };
-  }, [activeMainView, activeThreadId, composerRef]);
+  }, [chatOwnsInputTarget, activeThreadId, composerRef]);
 
   const [pendingRevert, setPendingRevert] = useState<{
     turnCount: number;
@@ -10876,6 +11157,37 @@ function ChatViewContent(props: ChatViewProps) {
     pendingSidebarFileDrops,
   ]);
 
+  const desktopReply = useMemo(
+    () =>
+      isElectron && serverProjection && activeThreadRef
+        ? latestDesktopReply({
+            threadId: activeThreadRef.threadId,
+            messages: serverProjection.messages,
+            runs: serverProjection.runs,
+            nodes: serverProjection.nodes,
+            attempts: serverProjection.attempts,
+            working: isWorking,
+            dismissedMessageId: desktopWorkspace.dismissedReplyId,
+          })
+        : null,
+    [serverProjection, activeThreadRef, isWorking, desktopWorkspace.dismissedReplyId],
+  );
+  useEffect(() => {
+    if (!isElectron || !activeThreadRef) return;
+    if (
+      desktopReply &&
+      (activeMainView === "chat" || desktopSplit || optimisticUserMessages.length > 0)
+    )
+      useDesktopWorkspaceStore.getState().dismissReply(activeThreadRef, desktopReply.message.id);
+  }, [
+    activeThreadRef?.environmentId,
+    activeThreadRef?.threadId,
+    desktopReply?.message.id,
+    activeMainView,
+    desktopSplit,
+    optimisticUserMessages.length,
+  ]);
+
   // Empty state: no active thread
   if (!activeThread) {
     return <NoActiveThreadState />;
@@ -10941,7 +11253,7 @@ function ChatViewContent(props: ChatViewProps) {
           threadRef={activeThreadRef}
           tabId={renderedRightPanelSurface.resourceId}
           configuredUrls={configuredPreviewUrls}
-          visible={rightPanelOpen}
+          visible={isElectron ? desktopSurfaceVisible : rightPanelOpen}
           onSendAnnotation={(annotation, image) => {
             void onSend(undefined, "auto", "foreground", { annotation, image });
           }}
@@ -10949,7 +11261,7 @@ function ChatViewContent(props: ChatViewProps) {
       </Suspense>
     ) : renderedRightPanelSurface?.kind === "terminal" ? (
       <PersistentThreadTerminalPanel
-        visible={rightPanelOpen}
+        visible={isElectron ? desktopSurfaceVisible : rightPanelOpen}
         threadRef={activeThreadRef}
         surface={renderedRightPanelSurface}
         launchContext={activeTerminalLaunchContext ?? null}
@@ -10982,7 +11294,7 @@ function ChatViewContent(props: ChatViewProps) {
           threadRef={activeThreadRef}
           key={renderedRightPanelSurface.id}
           surface={renderedRightPanelSurface}
-          visible={rightPanelOpen}
+          visible={isElectron ? desktopSurfaceVisible : rightPanelOpen}
           onDismissSetup={() => {
             closeRightPanelSurface(renderedRightPanelSurface);
             useRightPanelStore.getState().show(activeThreadRef);
@@ -11112,6 +11424,7 @@ function ChatViewContent(props: ChatViewProps) {
     <PanelLayoutControls
       {...panelToggleControlProps}
       showThreadPanelControl={!inlineRightPanelOwnsTitleBar}
+      showRightPanelControl={!isElectron}
     />
   );
   const threadPanelHeaderControl = (
@@ -11135,7 +11448,7 @@ function ChatViewContent(props: ChatViewProps) {
       )}
       data-workspace-titlebar-controls
     >
-      {!shouldUsePlanSidebarSheet ? (
+      {!isElectron && !shouldUsePlanSidebarSheet ? (
         <span
           aria-hidden={!rightPanelOpen}
           className={cn(
@@ -11259,22 +11572,91 @@ function ChatViewContent(props: ChatViewProps) {
           />
         </header>
 
-        <MainViewTabs
-          activeView={activeMainView}
-          reviewAvailable={reviewAvailable}
-          pullRequestAvailable={mainPullRequest !== null || pullRequestsSurfaceAvailable}
-          onSelect={selectMainView}
-        />
+        {isElectron ? (
+          <DesktopWorkspaceTabs
+            workspace={
+              desktopWorkspace.selected === activeMainView
+                ? desktopWorkspace
+                : { ...desktopWorkspace, selected: activeMainView }
+            }
+            surfaces={rightPanelState.surfaces}
+            reviewAvailable={reviewAvailable}
+            prAvailable={mainPullRequest !== null || pullRequestsSurfaceAvailable}
+            surfaceTitle={(surface) =>
+              rightPanelSurfaceTitle(
+                surface,
+                activePreviewState.sessions,
+                activeTerminalLabelsById,
+                appViewTitles,
+              )
+            }
+            split={desktopWantsSplit}
+            splitShortcut={shortcutLabelForCommand(keybindings, "chat.toggleSplit")}
+            onSelect={(tab) => {
+              selectDesktopView(tab);
+              if (tab === "browser" && !desktopWorkspace.browserId) addBlankBrowserSurface();
+            }}
+            onClose={closeRightPanelSurface}
+            onReorder={(from, to) => {
+              if (activeThreadRef)
+                useDesktopWorkspaceStore.getState().reorder(activeThreadRef, from, to);
+            }}
+            onSplit={() => {
+              toggleDesktopSplit();
+              scheduleComposerFocus();
+            }}
+            onNewBrowser={addBlankBrowserSurface}
+            onFiles={addFilesSurface}
+            onViews={() => setGeneratedViewLibraryOpen(true)}
+            onDevice={addDeviceSurface}
+          />
+        ) : (
+          <MainViewTabs
+            activeView={webMainView}
+            reviewAvailable={reviewAvailable}
+            pullRequestAvailable={mainPullRequest !== null || pullRequestsSurfaceAvailable}
+            onSelect={selectMainView}
+          />
+        )}
 
         {/* Main content area with optional plan sidebar */}
-        <div className="relative flex min-h-0 min-w-0 flex-1">
+        <div
+          className="relative flex min-h-0 min-w-0 flex-1"
+          data-desktop-content={isElectron || undefined}
+          style={
+            isElectron
+              ? ({
+                  "--desktop-chat-width": `${desktopWorkspace.chatWidth}px`,
+                } as React.CSSProperties)
+              : undefined
+          }
+        >
           {/* Chat column */}
           <ChatCanvas
             composerOverlayElement={isDraftHeroState ? null : composerOverlayElement}
             id="main-chat-view"
             role="tabpanel"
             aria-label="Chat"
-            hidden={activeMainView !== "chat"}
+            hidden={!isElectron && activeMainView !== "chat"}
+            className={
+              isElectron
+                ? desktopFloating
+                  ? "pointer-events-none absolute inset-0 z-40 flex min-h-0 min-w-0 flex-col"
+                  : "relative flex min-h-0 min-w-0 flex-col"
+                : undefined
+            }
+            style={
+              isElectron
+                ? desktopSplit
+                  ? { flex: "0 0 clamp(280px, var(--desktop-chat-width), calc(100% - 360px))" }
+                  : desktopFloating
+                    ? { containerType: "size" }
+                    : { flex: 1 }
+                : undefined
+            }
+            data-desktop-chat-mode={
+              desktopFloating ? "floating" : desktopSplit ? "split" : undefined
+            }
             data-chat-workspace-drop-target="true"
             onDragEnter={workspaceFileDropHandlers.onDragEnter}
             onDragOver={workspaceFileDropHandlers.onDragOver}
@@ -11296,7 +11678,10 @@ function ChatViewContent(props: ChatViewProps) {
               </div>
             ) : null}
             {/* Banners overlay the timeline without changing its content height. */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col">
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col"
+              hidden={desktopFloating}
+            >
               <ProviderStatusBanner
                 status={visibleProviderStatus}
                 onDismiss={() => setDismissedProviderStatusBannerKey(providerStatusBannerKey)}
@@ -11317,7 +11702,11 @@ function ChatViewContent(props: ChatViewProps) {
               />
             </div>
             {/* Messages Wrapper */}
-            <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+            <div
+              className="relative flex min-h-0 flex-1 flex-col bg-background"
+              style={desktopFloating ? { visibility: "hidden" } : undefined}
+              inert={desktopFloating}
+            >
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
                 citationRequest={paintOnlyDisplayedTimeline ? null : citationRequest}
@@ -11460,10 +11849,13 @@ function ChatViewContent(props: ChatViewProps) {
             {/* Input bar — centered for an empty draft, docked after sending. */}
             <div
               ref={setComposerOverlayElement}
-              inert={isRevertingCheckpoint}
+              inert={
+                isRevertingCheckpoint || (desktopFloating && desktopWorkspace.composerCollapsed)
+              }
+              hidden={desktopFloating && desktopWorkspace.composerCollapsed}
               data-chat-composer-overlay="true"
               className={
-                isDraftHeroState
+                isDraftHeroState && !desktopFloating
                   ? "pointer-events-none absolute inset-0 z-20 flex items-center"
                   : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
               }
@@ -11474,9 +11866,14 @@ function ChatViewContent(props: ChatViewProps) {
               >
                 <div
                   data-chat-composer-stack="true"
+                  style={
+                    desktopFloating
+                      ? { maxHeight: "calc(100cqh - 1rem)", overflowY: "auto" }
+                      : undefined
+                  }
                   className="group/composer-stack pointer-events-auto relative z-10 mx-auto w-full max-w-(--chat-content-max-width)"
                 >
-                  {isDraftHeroState ? (
+                  {isDraftHeroState && !desktopFloating ? (
                     <div className="absolute inset-x-0 bottom-full">
                       <div
                         className="pb-8 group-has-data-[composer-shoulder-tab]/composer-stack:pb-4"
@@ -11492,6 +11889,66 @@ function ChatViewContent(props: ChatViewProps) {
                           activeProjectTitle={activeProject?.title ?? null}
                         />
                       </div>
+                    </div>
+                  ) : null}
+                  {desktopFloating && desktopReply && activeThreadRef ? (
+                    <DesktopReplyCard
+                      text={desktopReply.message.text}
+                      cwd={gitCwd ?? undefined}
+                      threadRef={activeThreadRef}
+                      onOpen={() => {
+                        toggleDesktopSplit();
+                        scheduleComposerFocus();
+                      }}
+                      onDismiss={() =>
+                        useDesktopWorkspaceStore
+                          .getState()
+                          .dismissReply(activeThreadRef, desktopReply.message.id)
+                      }
+                    />
+                  ) : null}
+                  {desktopFloating ? (
+                    <div className="flex justify-end gap-1 pb-1">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              size="xs"
+                              variant="glass"
+                              onClick={() => {
+                                toggleDesktopSplit();
+                                scheduleComposerFocus();
+                              }}
+                            />
+                          }
+                        >
+                          Expand Chat
+                        </TooltipTrigger>
+                        <TooltipPopup>
+                          Show Chat alongside (
+                          {shortcutLabelForCommand(keybindings, "chat.toggleSplit")})
+                        </TooltipPopup>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              size="xs"
+                              variant="glass"
+                              onClick={() => {
+                                if (activeThreadRef)
+                                  useDesktopWorkspaceStore
+                                    .getState()
+                                    .setCollapsed(activeThreadRef, true);
+                                focusDesktopContent();
+                              }}
+                            />
+                          }
+                        >
+                          Hide
+                        </TooltipTrigger>
+                        <TooltipPopup>Collapse composer (Esc)</TooltipPopup>
+                      </Tooltip>
                     </div>
                   ) : null}
                   <div
@@ -11532,6 +11989,14 @@ function ChatViewContent(props: ChatViewProps) {
                                 true
                               }
                               onMultipleModelSelectionsChange={setMultipleModelSelections}
+                              onEscape={() => {
+                                if (!desktopFloating || !activeThreadRef) return false;
+                                useDesktopWorkspaceStore
+                                  .getState()
+                                  .setCollapsed(activeThreadRef, true);
+                                focusDesktopContent();
+                                return true;
+                              }}
                               composerRef={composerRef}
                               composerDraftTarget={composerDraftTarget}
                               environmentId={environmentId}
@@ -11774,7 +12239,41 @@ function ChatViewContent(props: ChatViewProps) {
               </div>
             </div>
 
-            {activeThreadRef && activePreviewMiniPlayer && previewMiniPlayerVisible ? (
+            {desktopFloating && desktopWorkspace.composerCollapsed ? (
+              <div className="pointer-events-auto absolute bottom-4 left-1/2 -translate-x-1/2">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="glass"
+                        size="sm"
+                        onClick={() => {
+                          revealDesktopComposer();
+                          scheduleComposerFocus();
+                        }}
+                      />
+                    }
+                  >
+                    <MessageSquareIcon className="size-4" />
+                    {activePendingApproval
+                      ? "Approval needed"
+                      : activePendingUserInput
+                        ? "Question waiting"
+                        : desktopReply
+                          ? "New reply"
+                          : "Chat"}
+                  </TooltipTrigger>
+                  <TooltipPopup>
+                    Focus composer ({shortcutLabelForCommand(keybindings, "composer.focus")})
+                  </TooltipPopup>
+                </Tooltip>
+              </div>
+            ) : null}
+            {!isElectron &&
+            !desktopFloating &&
+            activeThreadRef &&
+            activePreviewMiniPlayer &&
+            previewMiniPlayerVisible ? (
               <ThreadPreviewMiniPlayer
                 key={`${activeThreadKey}:${previewMiniPlayerSourceKey(activePreviewMiniPlayer.source)}`}
                 threadRef={activeThreadRef}
@@ -11832,11 +12331,62 @@ function ChatViewContent(props: ChatViewProps) {
             ) : null}
           </ChatCanvas>
           {/* end chat column */}
+          {desktopSplit && activeThreadRef ? (
+            <DesktopChatDivider
+              width={desktopWorkspace.chatWidth}
+              onResize={(width) =>
+                useDesktopWorkspaceStore.getState().setChatWidth(activeThreadRef, width)
+              }
+            />
+          ) : null}
+          {isElectron && activeMainView === "agents" && activeThreadRef ? (
+            <div
+              role="tabpanel"
+              aria-label="Agents"
+              tabIndex={-1}
+              data-desktop-main-content
+              className="min-h-0 min-w-0 flex-1 overflow-auto"
+            >
+              <ThreadRelationshipsPanel
+                environmentId={activeThreadRef.environmentId}
+                threadId={activeThreadRef.threadId}
+                emptyState
+              />
+            </div>
+          ) : null}
+          {isElectron &&
+          (activeMainView === "browser" ||
+            activeMainView === "files" ||
+            activeMainView.startsWith("surface:")) ? (
+            <div
+              role="tabpanel"
+              aria-label="Content"
+              tabIndex={-1}
+              data-right-panel-root
+              data-preview-panel-mode={
+                renderedRightPanelSurface?.kind === "preview" ? "main" : undefined
+              }
+              data-desktop-main-content
+              className="flex min-h-0 min-w-0 flex-1 flex-col"
+            >
+              {activeMainView === "browser" &&
+              (!renderedRightPanelSurface || renderedRightPanelSurface.id === "browser:new") ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground">
+                  <p>Open a browser tab to explore your site.</p>
+                  <Button onClick={addBlankBrowserSurface}>Open browser</Button>
+                </div>
+              ) : (
+                rightPanelContent
+              )}
+            </div>
+          ) : null}
           {activeMainView === "review" ? (
             <div
               id="main-review-view"
               role="tabpanel"
               aria-label="Review"
+              tabIndex={-1}
+              data-desktop-main-content={isElectron || undefined}
               className="flex min-h-0 min-w-0 flex-1 flex-col"
             >
               <Suspense fallback={null}>
@@ -11854,6 +12404,8 @@ function ChatViewContent(props: ChatViewProps) {
               id="main-pull-request-view"
               role="tabpanel"
               aria-label="PR"
+              tabIndex={-1}
+              data-desktop-main-content={isElectron || undefined}
               className="flex min-h-0 min-w-0 flex-1 flex-col"
             >
               {!pullRequestsCapabilityKnown ? (
@@ -11874,7 +12426,8 @@ function ChatViewContent(props: ChatViewProps) {
                   getShortcutContext={getShortcutContext}
                   shortcutsEnabled
                   onComposerHandoff={() => {
-                    selectMainView("chat");
+                    if (isElectron) revealDesktopComposer();
+                    else selectMainView("chat");
                     scheduleComposerFocus();
                   }}
                   key={`${activeThreadKey}:${mainPullRequest.id}`}

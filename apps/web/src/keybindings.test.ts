@@ -12,6 +12,8 @@ import {
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
 import {
+  browserAppShortcuts,
+  mergeDesktopKeybindings,
   formatShortcutLabel,
   isDiffToggleShortcut,
   isRichTextBoldShortcut,
@@ -1545,5 +1547,79 @@ describe("Usage shortcuts", () => {
         platform: "Linux",
       }),
     );
+  });
+});
+
+describe("desktop workspace shortcuts", () => {
+  it("routes main tab traversal, focus and split only on desktop", () => {
+    for (const [key, desktop, web] of [
+      ["[", "mainTab.previous", "thread.previous"],
+      ["]", "mainTab.next", "thread.next"],
+      ["j", "composer.focus", "preview.toggle"],
+      ["Enter", "chat.toggleSplit", "thread.steerQueuedMessage"],
+    ] as const) {
+      const input = event({ key, metaKey: true, shiftKey: true });
+      assert.equal(
+        resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, {
+          platform: "MacIntel",
+          context: { isDesktop: true, isWeb: false },
+        }),
+        desktop,
+      );
+      assert.equal(
+        resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, {
+          platform: "MacIntel",
+          context: { isDesktop: false, isWeb: true },
+        }),
+        web,
+      );
+    }
+    assert.equal(
+      resolveShortcutCommand(event({ key: "1", metaKey: true }), DEFAULT_RESOLVED_KEYBINDINGS, {
+        platform: "MacIntel",
+        context: { isDesktop: true },
+      }),
+      "thread.jump.1",
+    );
+  });
+  it("adapts old remote defaults while preserving custom thread shortcuts", () => {
+    const bindings = mergeDesktopKeybindings(
+      compileResolvedKeybindingsConfig([
+        { key: "mod+shift+[", command: "thread.previous" },
+        { key: "mod+shift+j", command: "preview.toggle" },
+        { key: "mod+alt+p", command: "thread.previous" },
+      ]),
+    );
+    const resolve = (key: string, desktop: boolean, altKey = false) =>
+      resolveShortcutCommand(event({ key, metaKey: true, shiftKey: !altKey, altKey }), bindings, {
+        platform: "MacIntel",
+        context: { isDesktop: desktop, isWeb: !desktop },
+      });
+    assert.equal(resolve("[", true), "mainTab.previous");
+    assert.equal(resolve("[", false), "thread.previous");
+    assert.equal(resolve("j", true), "composer.focus");
+    assert.equal(resolve("j", false), "preview.toggle");
+    assert.equal(resolve("p", true, true), "thread.previous");
+  });
+  it("forwards customized chords with the actual terminal and guest focus context", () => {
+    const bindings = compileResolvedKeybindingsConfig([
+      { key: "mod+alt+j", command: "chat.toggleSplit", when: "terminalOpen && !editableFocus" },
+    ]);
+    assert.lengthOf(browserAppShortcuts(bindings, "MacIntel", { terminalOpen: true }), 1);
+    assert.lengthOf(browserAppShortcuts(bindings, "MacIntel", { terminalOpen: false }), 0);
+  });
+  it("forwards effective custom bindings while respecting overrides", () => {
+    const original = browserAppShortcuts(DEFAULT_RESOLVED_KEYBINDINGS, "MacIntel");
+    assert.isTrue(original.some((shortcut) => shortcut.key === "j" && shortcut.shiftKey));
+    const bindings = [
+      ...DEFAULT_RESOLVED_KEYBINDINGS,
+      ...compile([
+        { shortcut: modShortcut("j", { shiftKey: true }), command: "chat.new" },
+        { shortcut: modShortcut("f", { altKey: true }), command: "composer.focus" },
+      ]),
+    ];
+    const custom = browserAppShortcuts(bindings, "MacIntel");
+    assert.isFalse(custom.some((shortcut) => shortcut.key === "j" && shortcut.shiftKey));
+    assert.isTrue(custom.some((shortcut) => shortcut.key === "f" && shortcut.altKey));
   });
 });

@@ -45,6 +45,8 @@ export interface ThreadPreviewState {
   recentlySeenUrls: string[];
   /** Server process currently authoritative for revision ordering. */
   serverEpoch: string | null;
+  /** Epoch whose complete session list has been loaded. */
+  listServerEpoch?: string | null;
   /** Latest ordered server revision applied from a list response or event. */
   serverRevision: number;
 }
@@ -58,6 +60,7 @@ const EMPTY_THREAD_PREVIEW_STATE: ThreadPreviewState = Object.freeze({
   desktopByTabId: {},
   recentlySeenUrls: [] as string[],
   serverEpoch: null,
+  listServerEpoch: null,
   serverRevision: 0,
 });
 
@@ -350,6 +353,7 @@ export function reconcilePreviewServerSessions(
       desktopOverlay: activeTabId ? (desktopByTabId[activeTabId] ?? null) : null,
       recentlySeenUrls,
       serverEpoch: result.serverEpoch,
+      listServerEpoch: result.serverEpoch,
       serverRevision: result.revision,
     };
   });

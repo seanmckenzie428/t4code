@@ -1,3 +1,5 @@
+import { usePreviewOpen } from "../hooks/usePreviewOpen";
+import { isElectron } from "../env";
 import { resolveDefaultProviderModelSelection } from "../providerInstances";
 ("use client");
 
@@ -129,11 +131,7 @@ import { onOpenCommandPalette } from "../commandPaletteBus";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { useMainViewStore } from "../mainViewStore";
-import {
-  PULL_REQUESTS_PANEL_REF,
-  selectActiveRightPanel,
-  useRightPanelStore,
-} from "../rightPanelStore";
+import { PULL_REQUESTS_PANEL_REF } from "../rightPanelStore";
 import { isPreviewSupportedInRuntime } from "../previewStateStore";
 import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
 import {
@@ -496,11 +494,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
       ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
       : false,
   );
-  const previewOpen = useRightPanelStore((state) =>
-    routeThreadRef
-      ? selectActiveRightPanel(state.byThreadKey, routeThreadRef) === "preview"
-      : false,
-  );
+  const previewOpen = usePreviewOpen(routeThreadRef);
 
   useEffect(() => {
     const disposers = [
@@ -2208,6 +2202,32 @@ function OpenCommandPaletteDialog(props: {
       });
     },
   });
+
+  if (isElectron && activeThread) {
+    for (const [shortcutCommand, commandId, title] of [
+      ["composer.focus", "ui.composer.focus", "Focus composer"],
+      ["chat.toggleSplit", "ui.chat.toggle-split", "Expand or collapse Chat"],
+      ["mainTab.previous", "ui.main-tab.previous", "Previous main tab"],
+      ["mainTab.next", "ui.main-tab.next", "Next main tab"],
+    ] as const) {
+      actionItems.push({
+        kind: "action",
+        value: `action:${commandId}`,
+        searchTerms: [title, "chat", "tab"],
+        title,
+        icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
+        shortcutCommand,
+        run: async () => {
+          await invokeWebAppCommand(commandId, {
+            environmentId: activeThread.environmentId,
+            projectId: activeThread.projectId,
+            threadId: activeThread.id,
+            source: "palette",
+          });
+        },
+      });
+    }
+  }
 
   if (newProjectEnvironmentOptions.length > 0) {
     actionItems.push({

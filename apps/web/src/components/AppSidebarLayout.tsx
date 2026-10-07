@@ -1,3 +1,4 @@
+import { desktopPreviewSelected } from "../hooks/usePreviewOpen";
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import {
@@ -211,10 +212,14 @@ function NavigationHistoryShortcuts() {
               ).terminalOpen
             : false,
           previewFocus: isPreviewFocused(),
-          previewOpen: routeThreadRef
-            ? selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, routeThreadRef) ===
-              "preview"
-            : false,
+          previewOpen: isElectron
+            ? desktopPreviewSelected(routeThreadRef)
+            : routeThreadRef
+              ? selectActiveRightPanel(
+                  useRightPanelStore.getState().byThreadKey,
+                  routeThreadRef,
+                ) === "preview"
+              : false,
           editableFocus: isEditableFocused(event.target),
           modelPickerOpen: isModelPickerOpen(),
         },

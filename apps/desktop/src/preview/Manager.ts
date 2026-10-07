@@ -1,3 +1,5 @@
+import { resolveEventKeys } from "@t3tools/shared/keybindings";
+import type { KeybindingShortcut } from "@t3tools/contracts";
 /**
  * Desktop side of the in-app browser preview.
  *
@@ -608,17 +610,48 @@ export const previewWindowOpenAction = (details: {
 }): "popup" | "navigate" =>
   details.disposition === "new-window" && isPopupUrl(details.url) ? "popup" : "navigate";
 
-export const isForwardedAppShortcut = (
-  input: Pick<Electron.Input, "type" | "key" | "meta" | "shift" | "control">,
-): boolean =>
-  input.type === "keyDown" &&
-  APP_FORWARDED_SHORTCUTS.some(
-    (shortcut) =>
-      shortcut.key.toLowerCase() === input.key.toLowerCase() &&
-      shortcut.meta === input.meta &&
-      shortcut.shift === input.shift &&
-      shortcut.control === input.control,
+const forwardedAppShortcutKey = (
+  input: Pick<Electron.Input, "type" | "key" | "meta" | "shift" | "control"> &
+    Partial<Pick<Electron.Input, "alt" | "code">>,
+  shortcuts?: ReadonlyArray<KeybindingShortcut>,
+  platform: NodeJS.Platform = "darwin",
+): string | null => {
+  if (input.type !== "keyDown") return null;
+  const keys = resolveEventKeys(input);
+  const key = input.key.toLowerCase();
+  if (shortcuts === undefined)
+    return APP_FORWARDED_SHORTCUTS.some(
+      (shortcut) =>
+        keys.has(shortcut.key) &&
+        shortcut.meta === input.meta &&
+        shortcut.shift === input.shift &&
+        shortcut.control === input.control &&
+        !input.alt,
+    )
+      ? input.key
+      : null;
+  // Settings/window-close belong to Electron's menu, independently of app bindings.
+  if (
+    !input.alt &&
+    ((key === "," && input.meta && !input.control && !input.shift) ||
+      (key === "w" && input.shift && input.meta !== input.control))
+  )
+    return input.key;
+  return (
+    shortcuts.find(
+      (shortcut) =>
+        keys.has(shortcut.key) &&
+        (shortcut.metaKey || (shortcut.modKey && platform === "darwin")) === input.meta &&
+        (shortcut.ctrlKey || (shortcut.modKey && platform !== "darwin")) === input.control &&
+        shortcut.shiftKey === input.shift &&
+        shortcut.altKey === Boolean(input.alt),
+    )?.key ?? null
   );
+};
+
+export const isForwardedAppShortcut = (
+  ...args: Parameters<typeof forwardedAppShortcutKey>
+): boolean => forwardedAppShortcutKey(...args) !== null;
 
 export const isPreviewRefreshShortcut = (input: Electron.Input): boolean =>
   input.type === "keyDown" &&
@@ -721,6 +754,7 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
 
   const annotationThemeRef = yield* Ref.make(DEFAULT_ANNOTATION_THEME);
   const mainWindowRef = yield* Ref.make<Option.Option<BrowserWindow>>(Option.none());
+  const appShortcutsRef = yield* Ref.make<ReadonlyArray<KeybindingShortcut> | undefined>(undefined);
   const tabsRef = yield* SynchronizedRef.make<ReadonlyMap<string, PreviewTabState>>(new Map());
   const attachedRef = yield* Ref.make<ReadonlyMap<number, ManagedListeners>>(new Map());
   const listenersRef = yield* Ref.make<ReadonlySet<Listener>>(new Set());
@@ -2075,18 +2109,23 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
       event: Electron.Event,
       input: Electron.Input,
     ) {
+      const shortcuts = yield* Ref.get(appShortcutsRef);
+      const key = forwardedAppShortcutKey(input, shortcuts, hostPlatform);
+      if (key === null && shortcuts === undefined && isPreviewRefreshShortcut(input)) {
+        event.preventDefault();
+        yield* attempt({ operation: "shortcut.refresh", tabId, webContentsId: wc.id }, () =>
+          wc.reload(),
+        ).pipe(Effect.ignore);
+        return;
+      }
       const mainWindow = yield* Ref.get(mainWindowRef);
-      if (
-        !isForwardedAppShortcut(input) ||
-        Option.isNone(mainWindow) ||
-        mainWindow.value.isDestroyed()
-      ) {
+      if (key === null || Option.isNone(mainWindow) || mainWindow.value.isDestroyed()) {
         return;
       }
       event.preventDefault();
       mainWindow.value.webContents.sendInputEvent({
         type: "keyDown",
-        keyCode: input.key,
+        keyCode: key,
         modifiers: [
           ...(input.meta ? (["meta"] as const) : []),
           ...(input.shift ? (["shift"] as const) : []),
@@ -2136,15 +2175,6 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
         return;
       }
       syncMenuShortcuts(wc, input);
-      if (isPreviewRefreshShortcut(input)) {
-        event.preventDefault();
-        runFork(
-          attempt({ operation: "shortcut.refresh", tabId, webContentsId: wc.id }, () =>
-            wc.reload(),
-          ).pipe(Effect.ignore),
-        );
-        return;
-      }
       runFork(forwardShortcut(event, input));
     };
     yield* Scope.addFinalizer(
@@ -4910,6 +4940,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
   yield* Effect.addFinalizer(() => destroy().pipe(Effect.ignore));
 
   return {
+    setAppShortcuts: (shortcuts: ReadonlyArray<KeybindingShortcut>) =>
+      Ref.set(appShortcutsRef, shortcuts),
     automationClick,
     automationEvaluate,
     automationPress,
@@ -5268,6 +5300,7 @@ const isPreviewAutomationInvalidSelectorError = Schema.is(PreviewAutomationInval
 export class PreviewManager extends Context.Service<
   PreviewManager,
   {
+    readonly setAppShortcuts: (shortcuts: ReadonlyArray<KeybindingShortcut>) => Effect.Effect<void>;
     readonly setMainWindow: (window: BrowserWindow) => Effect.Effect<void, PreviewManagerError>;
     readonly getBrowserSession: (
       scope?: string,
@@ -5404,6 +5437,7 @@ export const make = Effect.gen(function* PreviewManagerMake() {
   );
 
   return PreviewManager.of({
+    setAppShortcuts: operations.setAppShortcuts,
     setMainWindow: operations.setMainWindow,
     getBrowserSession: Effect.fn("PreviewManager.getBrowserSession")(
       function* (scope, persistent, namespace) {

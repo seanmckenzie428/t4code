@@ -141,6 +141,7 @@ interface RightPanelStoreState {
   openDevice: (ref: ScopedThreadRef, target: DeviceTabTarget, automatic?: boolean) => void;
   renameDevice: (ref: ScopedThreadRef, surfaceId: string, title: string) => void;
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
+  restoreBrowser: (ref: ScopedThreadRef, surfaceId: string, tabId: string) => void;
   openFile: (ref: ScopedThreadRef, relativePath: string, line?: number) => void;
   openAttachment: (ref: ScopedThreadRef, attachment: ChatFileAttachment) => void;
   openPullRequest: (
@@ -655,10 +656,24 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
             ),
           })),
         ),
+      restoreBrowser: (ref, surfaceId, tabId) =>
+        set((state) =>
+          automaticUpdate(state, scopedThreadKey(ref), (current) => ({
+            ...current,
+            surfaces: current.surfaces.map((surface) =>
+              surface.kind === "preview" && surface.id === surfaceId
+                ? { ...surface, resourceId: tabId }
+                : surface,
+            ),
+          })),
+        ),
       openBrowser: (ref, tabId) =>
         set((state) =>
           userAction(state, scopedThreadKey(ref), (current) => {
-            const surface = browserSurface(tabId);
+            const surface =
+              current.surfaces.find(
+                (entry) => entry.kind === "preview" && entry.resourceId === tabId,
+              ) ?? browserSurface(tabId);
             const withoutPlaceholder = tabId
               ? current.surfaces.filter((entry) => entry.id !== "browser:new")
               : current.surfaces;
@@ -878,17 +893,18 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
       reconcileBrowserSurfaces: (ref, tabIds) =>
         set((state) =>
           automaticUpdate(state, scopedThreadKey(ref), (current) => {
-            const validIds = new Set(tabIds.map((tabId) => `browser:${tabId}`));
+            const validIds = new Set(tabIds);
             const nonBrowser = current.surfaces.filter((surface) => surface.kind !== "preview");
             const existingBrowser = current.surfaces.filter(
               (surface): surface is Extract<RightPanelSurface, { kind: "preview" }> =>
                 surface.kind === "preview" &&
                 surface.id !== "browser:new" &&
-                validIds.has(surface.id),
+                surface.resourceId !== null &&
+                validIds.has(surface.resourceId),
             );
-            const knownIds = new Set(existingBrowser.map((surface) => surface.id));
+            const knownIds = new Set(existingBrowser.map((surface) => surface.resourceId));
             const added = tabIds
-              .filter((tabId) => !knownIds.has(`browser:${tabId}`))
+              .filter((tabId) => !knownIds.has(tabId))
               .map((tabId) => browserSurface(tabId));
             const surfaces = [...nonBrowser, ...existingBrowser, ...added];
             const activeStillExists = surfaces.some(

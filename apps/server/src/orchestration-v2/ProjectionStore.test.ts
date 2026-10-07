@@ -374,7 +374,58 @@ it.effect("memory message updates preserve delegated origin", () =>
   delegationSurvivesMessageUpdate.pipe(Effect.provide(ProjectionStore.layerMemory)),
 );
 
+const assistantPhaseSurvivesProjection = Effect.gen(function* () {
+  const store = yield* ProjectionStore.ProjectionStoreV2;
+  const threadId = yield* addRolledBackRecoveryCandidate("assistant-phase");
+  const now = yield* DateTime.now;
+  for (const assistantPhase of ["commentary", "final_answer", undefined] as const) {
+    const id = MessageId.make(`phase-${assistantPhase ?? "legacy"}`);
+    const message = {
+      id,
+      threadId,
+      runId: null,
+      nodeId: null,
+      role: "assistant" as const,
+      text: "Reply",
+      attachments: [],
+      streaming: false,
+      createdBy: "agent" as const,
+      creationSource: "provider" as const,
+      createdAt: now,
+      updatedAt: now,
+      ...(assistantPhase ? { assistantPhase } : {}),
+    };
+    yield* store.apply({
+      id: EventId.make(`event-${id}`),
+      type: "message.updated",
+      threadId,
+      occurredAt: now,
+      payload: message,
+    });
+    // Replaying the same completed artifact must not lose or duplicate classification.
+    yield* store.apply({
+      id: EventId.make(`repeat-${id}`),
+      type: "message.updated",
+      threadId,
+      occurredAt: now,
+      payload: message,
+    });
+    const messages = (yield* store.getThreadProjection(threadId)).messages.filter(
+      (item) => item.id === id,
+    );
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0]?.assistantPhase, assistantPhase);
+  }
+});
+it.effect("memory preserves provider answer classification and unknown history", () =>
+  assistantPhaseSurvivesProjection.pipe(Effect.provide(ProjectionStore.layerMemory)),
+);
+
 it.layer(TestLayer)("ProjectionStoreV2", (it) => {
+  it.effect(
+    "persists provider answer classification and unknown history",
+    () => assistantPhaseSurvivesProjection,
+  );
   it.effect("message updates preserve delegated origin", () => delegationSurvivesMessageUpdate);
   it.effect(
     "keeps restart-cancelled work through a stale run.updated",

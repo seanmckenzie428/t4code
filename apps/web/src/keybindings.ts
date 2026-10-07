@@ -1,4 +1,10 @@
 import {
+  compileResolvedKeybindingsConfig,
+  mergeWithDefaultKeybindings,
+} from "@t3tools/shared/keybindings";
+import { normalizeEventKey, resolveEventKeys } from "@t3tools/shared/keybindings";
+export { shortcutKeyFromEvent } from "@t3tools/shared/keybindings";
+import {
   type KeybindingCommand,
   type KeybindingShortcut,
   type KeybindingWhenNode,
@@ -58,59 +64,6 @@ const TERMINAL_WORD_FORWARD = "\u001bf";
 const TERMINAL_LINE_START = "\u0001";
 const TERMINAL_LINE_END = "\u0005";
 const TERMINAL_DELETE_TO_LINE_START = "\u0015";
-const EVENT_CODE_SHORTCUT_KEYS: Readonly<Record<string, string>> = {
-  Backquote: "`",
-  Backslash: "\\",
-  BracketLeft: "[",
-  BracketRight: "]",
-  Comma: ",",
-  Digit0: "0",
-  Digit1: "1",
-  Digit2: "2",
-  Digit3: "3",
-  Digit4: "4",
-  Digit5: "5",
-  Digit6: "6",
-  Digit7: "7",
-  Digit8: "8",
-  Digit9: "9",
-  Equal: "=",
-  Minus: "-",
-  Period: ".",
-  Quote: "'",
-  Semicolon: ";",
-  Slash: "/",
-};
-
-function normalizeEventKey(key: string): string {
-  const normalized = key.toLowerCase();
-  if (normalized === "esc") return "escape";
-  return normalized;
-}
-
-export function shortcutKeyFromEvent(event: Pick<ShortcutEventLike, "key" | "code">): string {
-  const layoutKey = normalizeEventKey(event.key);
-  if (/^[a-z]$/.test(layoutKey)) return layoutKey;
-  const physicalKey = event.code ? EVENT_CODE_SHORTCUT_KEYS[event.code] : undefined;
-  return physicalKey ?? layoutKey;
-}
-
-function resolveEventKeys(event: ShortcutEventLike): Set<string> {
-  const layoutKey = normalizeEventKey(event.key);
-  const keys = new Set([layoutKey]);
-  // The physical-position fallback exists for layouts that type non-Latin
-  // letters (Cyrillic, Greek) and for Option-modified symbols on macOS.
-  // When the layout already produces a Latin letter, match on it alone;
-  // otherwise a remapped physical key triggers shortcuts for two different
-  // letters at once and shadows system shortcuts on non-QWERTY layouts.
-  const letterCode = event.code?.match(/^Key([A-Z])$/)?.[1];
-  if (letterCode && !/^[a-z]$/.test(layoutKey)) {
-    keys.add(letterCode.toLowerCase());
-  }
-  keys.add(shortcutKeyFromEvent(event));
-  return keys;
-}
-
 function matchesShortcutModifiers(
   event: ShortcutModifierStateLike,
   shortcut: KeybindingShortcut,
@@ -521,4 +474,89 @@ export function terminalNavigationShortcutData(
   }
 
   return null;
+}
+
+/** Effective bindings under guest focus, including custom overrides of built-in chords. */
+export function browserAppShortcuts(
+  keybindings: ResolvedKeybindingsConfig,
+  platform = navigator.platform,
+  hostContext: Partial<ShortcutMatchContext> = {},
+): KeybindingShortcut[] {
+  const context = resolveContext({
+    context: {
+      ...hostContext,
+      isDesktop: true,
+      isWeb: false,
+      previewFocus: true,
+      previewOpen: true,
+      rightPanelFocus: true,
+      editableFocus: false,
+      terminalFocus: false,
+      composerFocus: false,
+    },
+  });
+  const supported = new Set<KeybindingCommand>([
+    "composer.focus",
+    "chat.toggleSplit",
+    "mainTab.previous",
+    "mainTab.next",
+    "terminal.toggle",
+    "preview.open",
+    "preview.toggle",
+    "preview.focusUrl",
+    "preview.refresh",
+    "preview.zoomIn",
+    "preview.zoomOut",
+    "preview.resetZoom",
+    "rightPanel.close",
+    "commandPalette.toggle",
+    "diff.toggle",
+    "filePicker.toggle",
+    "sidebar.toggle",
+  ]);
+  const claimed = new Set<string>();
+  const shortcuts: KeybindingShortcut[] = [];
+  for (let index = keybindings.length - 1; index >= 0; index--) {
+    const binding = keybindings[index];
+    if (!binding || !matchesWhenClause(binding.whenAst, context)) continue;
+    const key = shortcutConflictKey(binding.shortcut, platform);
+    if (claimed.has(key)) continue;
+    claimed.add(key);
+    if (supported.has(binding.command)) shortcuts.push(binding.shortcut);
+  }
+  return shortcuts;
+}
+
+// Older remote environments still advertise the former desktop navigation defaults.
+// Adapt only those exact defaults; custom keys and conditions retain precedence.
+const LEGACY_DESKTOP_BINDINGS = compileResolvedKeybindingsConfig([
+  { key: "mod+shift+[", command: "thread.previous" },
+  { key: "mod+shift+]", command: "thread.next" },
+  { key: "mod+shift+j", command: "preview.toggle" },
+  { key: "mod+shift+enter", command: "thread.steerQueuedMessage", when: "!terminalFocus" },
+]);
+export function mergeDesktopKeybindings(
+  bindings: ResolvedKeybindingsConfig,
+): ResolvedKeybindingsConfig {
+  return mergeWithDefaultKeybindings(
+    bindings.map((binding) => {
+      const legacy = LEGACY_DESKTOP_BINDINGS.some(
+        (entry) =>
+          entry.command === binding.command &&
+          JSON.stringify(entry.shortcut) === JSON.stringify(binding.shortcut) &&
+          JSON.stringify(entry.whenAst) === JSON.stringify(binding.whenAst),
+      );
+      if (!legacy) return binding;
+      const desktopGuard: KeybindingWhenNode = {
+        type: "not",
+        node: { type: "identifier", name: "isDesktop" },
+      };
+      return {
+        ...binding,
+        whenAst: binding.whenAst
+          ? { type: "and" as const, left: desktopGuard, right: binding.whenAst }
+          : desktopGuard,
+      };
+    }),
+  );
 }

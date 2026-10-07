@@ -293,6 +293,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
         zoomFactor: defaults?.zoomFactor,
         colorScheme: defaults?.colorScheme,
       }),
+    setAppShortcuts: (shortcuts) =>
+      ipcRenderer.invoke(IpcChannels.PREVIEW_SET_APP_SHORTCUTS_CHANNEL, { shortcuts }),
     closeTab: (tabId) => ipcRenderer.invoke(IpcChannels.PREVIEW_CLOSE_TAB_CHANNEL, { tabId }),
     registerWebview: (tabId, webContentsId) =>
       ipcRenderer.invoke(IpcChannels.PREVIEW_REGISTER_WEBVIEW_CHANNEL, { tabId, webContentsId }),

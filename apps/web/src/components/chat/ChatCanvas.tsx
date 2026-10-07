@@ -15,8 +15,10 @@ import type { PreviewMiniPlayerObstacles } from "../preview/previewMiniPlayerLay
 export function ChatCanvas({
   composerOverlayElement,
   children,
+  className,
+  style,
   ...props
-}: Omit<ComponentProps<"div">, "className" | "style" | "ref"> & {
+}: Omit<ComponentProps<"div">, "ref"> & {
   composerOverlayElement: HTMLElement | null;
 }) {
   const elementRef = useRef<HTMLDivElement | null>(null);
@@ -112,12 +114,13 @@ export function ChatCanvas({
         ref={elementRef}
         data-chat-canvas
         data-preview-overlaps-chat={layout.overlapsChat || undefined}
-        className="relative flex min-h-0 min-w-0 flex-1 flex-col"
+        className={className ?? "relative flex min-h-0 min-w-0 flex-1 flex-col"}
         style={
           {
             "--chat-timeline-gutter": `${measurements.timelineGutter}px`,
             "--chat-lane-inset-start": `${layout.chat.insetStart}px`,
             "--chat-lane-inset-end": `${layout.chat.insetEnd}px`,
+            ...style,
           } as CSSProperties
         }
       >

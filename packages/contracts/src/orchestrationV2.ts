@@ -1037,6 +1037,8 @@ export const OrchestrationV2ConversationMessage = Schema.Struct({
   runId: Schema.NullOr(RunId),
   nodeId: Schema.NullOr(NodeId),
   role: Schema.Literals(["user", "assistant", "system"]),
+  /** Native answer classification. Absence is unknown, including legacy messages. */
+  assistantPhase: Schema.optional(Schema.Literals(["commentary", "final_answer"])),
   text: Schema.String,
   context: Schema.optional(OrchestrationMessageContext),
   attachments: Schema.Array(ChatAttachment),

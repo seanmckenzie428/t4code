@@ -14,7 +14,8 @@ can create a thread or start delegated work in another existing thread while you
 current chat when **Settings** → **General** → **Agent delegation** → **Chat delegation** is enabled. Delegated threads
 cannot delegate again, and no chat can control another environment.
 
-Agents can present generated views in the thread's right panel. Native views use bounded Pilot
+Agents can present generated views as desktop main tabs, or in the thread's right panel on
+standalone web. Native views use bounded Pilot
 components and registered actions. Rich views run in an opaque-origin iframe with a default-deny
 content security policy and can call only command IDs declared by that view. External origins are
 blocked until separately approved.

@@ -58,6 +58,54 @@ describe("normalizePreviewWindowOpenUrl", () => {
 });
 
 describe("isForwardedAppShortcut", () => {
+  it("matches customized chords, physical fallback, and exact modifiers", () => {
+    const shortcut = (key: string) => ({
+      key,
+      modKey: true,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: true,
+      altKey: false,
+    });
+    const input = {
+      type: "keyDown",
+      key: "@",
+      code: "Quote",
+      meta: true,
+      control: false,
+      shift: true,
+      alt: false,
+    };
+    expect(PreviewManager.isForwardedAppShortcut(input, [shortcut("'")], "darwin")).toBe(true);
+    expect(
+      PreviewManager.isForwardedAppShortcut(
+        { ...input, key: "О", code: "KeyJ" },
+        [shortcut("j")],
+        "darwin",
+      ),
+    ).toBe(true);
+    expect(
+      PreviewManager.isForwardedAppShortcut(
+        { ...input, key: "q", code: "KeyJ" },
+        [shortcut("j")],
+        "darwin",
+      ),
+    ).toBe(false);
+    expect(
+      PreviewManager.isForwardedAppShortcut({ ...input, type: "keyUp" }, [shortcut("'")], "darwin"),
+    ).toBe(false);
+    expect(
+      PreviewManager.isForwardedAppShortcut({ ...input, alt: true }, [shortcut("'")], "darwin"),
+    ).toBe(false);
+    expect(
+      PreviewManager.isForwardedAppShortcut(
+        { ...input, meta: false, control: true },
+        [shortcut("'")],
+        "linux",
+      ),
+    ).toBe(true);
+    expect(PreviewManager.isForwardedAppShortcut(input, [], "darwin")).toBe(false);
+  });
   it.each([true, false])("forwards explicit close-window shortcuts (macOS: %s)", (isMac) => {
     expect(
       PreviewManager.isForwardedAppShortcut({
@@ -738,6 +786,69 @@ describe("PreviewManager", () => {
             ],
           });
         }
+      }),
+    ),
+  );
+
+  effectIt.effect("custom browser bindings replace defaults and take precedence over refresh", () =>
+    withManager((manager) =>
+      Effect.gen(function* () {
+        const preview = makeFaviconWebContents();
+        const sendInputEvent = vi.fn();
+        const hostWebContents = { sendInputEvent };
+        Object.assign(preview.webContents, { hostWebContents });
+        fromId.mockReturnValue(preview.webContents);
+        getFocusedWebContents.mockReturnValue(preview.webContents as never);
+        yield* manager.setMainWindow({
+          isDestroyed: () => false,
+          once: vi.fn(),
+          webContents: hostWebContents,
+        } as never);
+        yield* manager.createTab("custom_keys");
+        yield* manager.registerWebview("custom_keys", 42);
+        yield* manager.setAppShortcuts([
+          {
+            key: "r",
+            modKey: true,
+            metaKey: false,
+            ctrlKey: false,
+            shiftKey: false,
+            altKey: false,
+          },
+        ]);
+        const beforeInput = preview.listeners.get("before-input-event")!;
+        const preventDefault = vi.fn();
+        beforeInput(
+          { preventDefault } as never,
+          {
+            type: "keyDown",
+            key: "r",
+            meta: true,
+            control: false,
+            shift: false,
+            alt: false,
+          } as never,
+        );
+        yield* Effect.yieldNow;
+        expect(preventDefault).toHaveBeenCalledOnce();
+        expect(sendInputEvent).toHaveBeenCalledOnce();
+        expect(preview.reload).not.toHaveBeenCalled();
+        yield* manager.setAppShortcuts([]);
+        sendInputEvent.mockClear();
+        beforeInput(
+          { preventDefault: vi.fn() } as never,
+          {
+            type: "keyDown",
+            key: "r",
+            meta: true,
+            control: false,
+            shift: false,
+            alt: false,
+          } as never,
+        );
+        yield* Effect.yieldNow;
+        expect(sendInputEvent).not.toHaveBeenCalled();
+        expect(preview.reload).not.toHaveBeenCalled();
       }),
     ),
   );

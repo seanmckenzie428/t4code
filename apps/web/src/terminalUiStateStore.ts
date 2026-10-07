@@ -566,6 +566,16 @@ interface TerminalUiStateStoreState {
   suppressedTerminalIdsByThreadKey: Record<string, string[]>;
   setTerminalOpen: (threadRef: ScopedThreadRef, open: boolean) => void;
   setTerminalHeight: (threadRef: ScopedThreadRef, height: number) => void;
+  importPanelTerminals: (
+    threadRef: ScopedThreadRef,
+    groups: readonly {
+      id?: string;
+      terminalIds: string[];
+      activeTerminalId: string;
+      splitDirection?: "horizontal" | "vertical";
+    }[],
+    selection?: { activeTerminalId: string | null; open: boolean },
+  ) => void;
   splitTerminal: (threadRef: ScopedThreadRef, terminalId: string) => void;
   splitTerminalVertical: (threadRef: ScopedThreadRef, terminalId: string) => void;
   newTerminal: (threadRef: ScopedThreadRef, terminalId: string) => void;
@@ -640,6 +650,51 @@ export const useTerminalUiStateStore = create<TerminalUiStateStoreState>()(
         },
         setTerminalHeight: (threadRef, height) =>
           updateTerminal(threadRef, (state) => setThreadTerminalHeight(state, height)),
+        importPanelTerminals: (threadRef, groups, selection) => {
+          const importedIds = new Set(groups.flatMap((group) => group.terminalIds));
+          set((state) => {
+            const key = terminalThreadKey(threadRef);
+            const current = selectThreadTerminalUiState(
+              state.terminalUiStateByThreadKey,
+              threadRef,
+            );
+            const importedGroups = groups.map((group) => ({
+              id: group.id ?? `panel-${group.terminalIds[0]}`,
+              terminalIds: group.terminalIds,
+              ...(group.splitDirection === "vertical"
+                ? { splitDirection: "vertical" as const }
+                : {}),
+            }));
+            const activeTerminalId = selection
+              ? (selection.activeTerminalId ?? current.activeTerminalId)
+              : (groups.at(-1)?.activeTerminalId ?? current.activeTerminalId);
+            const next = normalizeThreadTerminalUiState({
+              ...current,
+              terminalOpen: current.terminalOpen || (selection?.open ?? true),
+              terminalIds: [...new Set([...current.terminalIds, ...importedIds])],
+              terminalGroups: [
+                ...current.terminalGroups.map((group) => ({
+                  ...group,
+                  terminalIds: group.terminalIds.filter((id) => !importedIds.has(id)),
+                })),
+                ...importedGroups,
+              ],
+              activeTerminalId,
+              activeTerminalGroupId:
+                importedGroups.find((group) => group.terminalIds.includes(activeTerminalId))?.id ??
+                current.activeTerminalGroupId,
+            });
+            return {
+              terminalUiStateByThreadKey: { ...state.terminalUiStateByThreadKey, [key]: next },
+              suppressedTerminalIdsByThreadKey: {
+                ...state.suppressedTerminalIdsByThreadKey,
+                [key]: (state.suppressedTerminalIdsByThreadKey[key] ?? []).filter(
+                  (id) => !importedIds.has(id),
+                ),
+              },
+            };
+          });
+        },
         splitTerminal: (threadRef, terminalId) =>
           updateTerminal(threadRef, (state) => splitThreadTerminal(state, terminalId), {
             terminalId,

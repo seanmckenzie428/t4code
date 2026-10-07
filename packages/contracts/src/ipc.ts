@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { KeybindingShortcut, MAX_KEYBINDINGS_COUNT } from "./keybindings.ts";
 
 import {
   PreviewAutomationClickInput,
@@ -1285,7 +1286,12 @@ export interface DesktopBridge {
 /** Renderer callback invoked by Electron with a fresh user gesture before display-media capture. */
 export const DESKTOP_PREVIEW_RECORDING_CAPTURE_TRIGGER = "__t3DesktopPreviewRecordingCapture";
 
+export const DesktopPreviewSetAppShortcutsInputSchema = Schema.Struct({
+  shortcuts: Schema.Array(KeybindingShortcut).check(Schema.isMaxLength(MAX_KEYBINDINGS_COUNT)),
+});
+
 export interface DesktopPreviewBridge {
+  setAppShortcuts?: (shortcuts: ReadonlyArray<KeybindingShortcut>) => Promise<void>;
   createTab: (tabId: string, defaults?: DesktopPreviewTabDefaults) => Promise<void>;
   closeTab: (tabId: string) => Promise<void>;
   registerWebview: (tabId: string, webContentsId: number) => Promise<void>;

@@ -1,5 +1,6 @@
 import { it as effectIt } from "@effect/vitest";
 import {
+  MAX_KEYBINDINGS_COUNT,
   DEFAULT_BROWSER_PROFILE_ID,
   INCOGNITO_BROWSER_PROFILE_ID,
   PreviewAutomationStatus,
@@ -112,6 +113,35 @@ describe("preview IPC methods", () => {
       expect(received[1]?.namespace).toBeUndefined();
     }).pipe(Effect.provideService(BrowserImport.BrowserImport, browserImport));
   });
+
+  effectIt.effect("validates browser shortcut updates before dispatching them", () =>
+    Effect.gen(function* () {
+      const received: unknown[] = [];
+      const manager = PreviewManager.PreviewManager.of({
+        setAppShortcuts: (shortcuts: unknown) =>
+          Effect.sync(() => {
+            received.push(shortcuts);
+          }),
+      } as unknown as PreviewManager.PreviewManager["Service"]);
+      const shortcut = {
+        key: "j",
+        modKey: true,
+        metaKey: false,
+        ctrlKey: false,
+        shiftKey: true,
+        altKey: false,
+      };
+      yield* PreviewIpc.setAppShortcuts
+        .handler({ shortcuts: [shortcut] })
+        .pipe(Effect.provideService(PreviewManager.PreviewManager, manager));
+      expect(received).toEqual([[shortcut]]);
+      const oversized = yield* PreviewIpc.setAppShortcuts
+        .handler({ shortcuts: Array.from({ length: MAX_KEYBINDINGS_COUNT + 1 }, () => shortcut) })
+        .pipe(Effect.provideService(PreviewManager.PreviewManager, manager), Effect.exit);
+      expect(Exit.isFailure(oversized)).toBe(true);
+      expect(received).toHaveLength(1);
+    }),
+  );
 
   effectIt.effect("rejects invalid webContents ids before resolving the preview service", () =>
     Effect.map(

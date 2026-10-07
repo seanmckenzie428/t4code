@@ -1428,6 +1428,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
 
 export interface ChatComposerHandle {
   focusAtEnd: () => void;
+  focusPreservingSelection: () => void;
   focusAt: (cursor: number) => void;
   /** Expand the desktop composer at the timeline end without taking focus. */
   restoreAfterTimelineReachedEnd: () => void;
@@ -1640,6 +1641,7 @@ export interface ChatComposerProps {
   ) => void;
   onResume: () => void;
   onInterrupt: () => void;
+  onEscape?: (() => boolean) | undefined;
   onImplementPlanInNewThread: () => void;
   onRespondToApproval: (
     requestId: RuntimeRequestId,
@@ -4341,10 +4343,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     const { trigger } = resolveActiveComposerTrigger();
     const menuIsActive = composerMenuOpenRef.current || trigger !== null;
     if (key === "Escape") {
-      if (!menuIsActive || event.isComposing || event.keyCode === 229) return false;
-      dismissComposerTrigger(trigger);
-      composerMenuOpenRef.current = false;
-      return true;
+      if (event.isComposing || event.keyCode === 229) return false;
+      if (menuIsActive) {
+        dismissComposerTrigger(trigger);
+        composerMenuOpenRef.current = false;
+        return true;
+      }
+      if (isStashMenuOpen) {
+        setIsStashMenuOpen(false);
+        return true;
+      }
+      return props.onEscape?.() ?? false;
     }
     if (menuIsActive && (submissionIntent === null || submissionIntent === "foreground")) {
       const currentItems = composerMenuItemsRef.current;
@@ -6211,6 +6220,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   useImperativeHandle(
     composerRef,
     () => ({
+      focusPreservingSelection: () => {
+        composerEditorRef.current?.focusPreservingSelection();
+      },
       focusAtEnd: () => {
         composerEditorRef.current?.focusAtEnd();
       },

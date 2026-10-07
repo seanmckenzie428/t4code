@@ -1,4 +1,5 @@
 import {
+  DesktopPreviewSetAppShortcutsInputSchema,
   DesktopPreviewAnnotationThemeInputSchema,
   DesktopPreviewArtifactInputSchema,
   DesktopPreviewAutomationClickInputSchema,
@@ -516,7 +517,18 @@ export const saveRecording = DesktopIpc.makeIpcMethod({
   }),
 });
 
+export const setAppShortcuts = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.PREVIEW_SET_APP_SHORTCUTS_CHANNEL,
+  payload: DesktopPreviewSetAppShortcutsInputSchema,
+  result: Schema.Void,
+  handler: Effect.fn("desktop.ipc.preview.setAppShortcuts")(function* ({ shortcuts }) {
+    const manager = yield* PreviewManager.PreviewManager;
+    yield* manager.setAppShortcuts(shortcuts);
+  }),
+});
+
 export const methods = [
+  setAppShortcuts,
   createTab,
   closeTab,
   registerWebview,

@@ -23,6 +23,10 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+[", command: "navigation.back", when: "!terminalFocus" },
   { key: "mod+]", command: "navigation.forward", when: "!terminalFocus" },
   { key: "mod+j", command: "terminal.toggle" },
+  { key: "mod+shift+j", command: "composer.focus", when: "isDesktop" },
+  { key: "mod+shift+enter", command: "chat.toggleSplit", when: "isDesktop" },
+  { key: "mod+shift+[", command: "mainTab.previous", when: "isDesktop" },
+  { key: "mod+shift+]", command: "mainTab.next", when: "isDesktop" },
   { key: "mod+alt+b", command: "rightPanel.toggle" },
   { key: "mod+d", command: "terminal.split", when: "terminalFocus" },
   { key: "mod+shift+d", command: "terminal.splitVertical", when: "terminalFocus" },
@@ -35,7 +39,7 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   },
   { key: "mod+d", command: "diff.toggle", when: "!terminalFocus" },
   { key: "mod+shift+b", command: "preview.open" },
-  { key: "mod+shift+j", command: "preview.toggle" },
+  { key: "mod+shift+j", command: "preview.toggle", when: "!isDesktop" },
   { key: "mod+r", command: "preview.refresh", when: "previewFocus" },
   { key: "mod+l", command: "preview.focusUrl", when: "previewFocus" },
   { key: "mod+=", command: "preview.zoomIn", when: "previewFocus" },
@@ -50,7 +54,11 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+alt+shift+a", command: "appearance.cycle", when: "!terminalFocus" },
   { key: "mod+alt+shift+t", command: "themeEditor.toggle" },
   { key: "mod+s", command: "composer.stash", when: "!terminalFocus" },
-  { key: "mod+shift+enter", command: "thread.steerQueuedMessage", when: "!terminalFocus" },
+  {
+    key: "mod+shift+enter",
+    command: "thread.steerQueuedMessage",
+    when: "!isDesktop && !terminalFocus",
+  },
   { key: "alt+arrowup", command: "thread.editQueuedMessage", when: "composerFocus" },
   { key: "mod+enter", command: "composer.sendAlternate", when: "composerFocus && turnRunning" },
   {
@@ -73,8 +81,8 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+shift+arrowup", command: "modelPicker.previousProvider", when: "modelPickerOpen" },
   { key: "mod+shift+arrowdown", command: "modelPicker.nextProvider", when: "modelPickerOpen" },
   { key: "mod+o", command: "editor.openFavorite" },
-  { key: "mod+shift+[", command: "thread.previous" },
-  { key: "mod+shift+]", command: "thread.next" },
+  { key: "mod+shift+[", command: "thread.previous", when: "!isDesktop" },
+  { key: "mod+shift+]", command: "thread.next", when: "!isDesktop" },
   { key: "mod+shift+c", command: "thread.copyReference", when: "!terminalFocus" },
   { key: "mod+shift+s", command: "thread.settle", when: "!terminalFocus" },
   { key: "mod+shift+p", command: "thread.pin", when: "!terminalFocus" },
@@ -355,4 +363,57 @@ export function mergeWithDefaultKeybindings(
   }
 
   return merged.slice(-MAX_KEYBINDINGS_COUNT);
+}
+
+const EVENT_CODE_SHORTCUT_KEYS: Readonly<Record<string, string>> = {
+  Backquote: "`",
+  Backslash: "\\",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Comma: ",",
+  Digit0: "0",
+  Digit1: "1",
+  Digit2: "2",
+  Digit3: "3",
+  Digit4: "4",
+  Digit5: "5",
+  Digit6: "6",
+  Digit7: "7",
+  Digit8: "8",
+  Digit9: "9",
+  Equal: "=",
+  Minus: "-",
+  Period: ".",
+  Quote: "'",
+  Semicolon: ";",
+  Slash: "/",
+};
+
+export function normalizeEventKey(key: string): string {
+  const normalized = key.toLowerCase();
+  if (normalized === "esc") return "escape";
+  return normalized;
+}
+
+export function shortcutKeyFromEvent(event: { key: string; code?: string }): string {
+  const layoutKey = normalizeEventKey(event.key);
+  if (/^[a-z]$/.test(layoutKey)) return layoutKey;
+  const physicalKey = event.code ? EVENT_CODE_SHORTCUT_KEYS[event.code] : undefined;
+  return physicalKey ?? layoutKey;
+}
+
+export function resolveEventKeys(event: { key: string; code?: string }): Set<string> {
+  const layoutKey = normalizeEventKey(event.key);
+  const keys = new Set([layoutKey]);
+  // The physical-position fallback exists for layouts that type non-Latin
+  // letters (Cyrillic, Greek) and for Option-modified symbols on macOS.
+  // When the layout already produces a Latin letter, match on it alone;
+  // otherwise a remapped physical key triggers shortcuts for two different
+  // letters at once and shadows system shortcuts on non-QWERTY layouts.
+  const letterCode = event.code?.match(/^Key([A-Z])$/)?.[1];
+  if (letterCode && !/^[a-z]$/.test(layoutKey)) {
+    keys.add(letterCode.toLowerCase());
+  }
+  keys.add(shortcutKeyFromEvent(event));
+  return keys;
 }
