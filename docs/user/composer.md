@@ -15,9 +15,9 @@ to keep a large paste editable in the composer instead.
 ## Chat while viewing content on desktop
 
 Open Review, PR, Browser, Files, or Subagents from the main tabs. Files, extra browser
-pages, and generated views open there too. Close a resource to return its fixed
-tab to a launcher; drag additional tabs to reorder them. Terminal sessions stay
-in the bottom drawer.
+pages, and generated views open there too. Hover a resource tab to replace its
+icon with a close button. Closing a resource returns its fixed tab to a launcher;
+drag additional tabs to reorder them. Terminal sessions stay in the bottom drawer.
 
 The Browser launcher includes an address bar, recently used pages, and local
 servers. The tab picker appears only when the open tabs need more space than

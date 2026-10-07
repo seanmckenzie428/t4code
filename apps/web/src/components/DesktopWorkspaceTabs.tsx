@@ -139,7 +139,7 @@ export function DesktopWorkspaceTabs(props: {
         {tabs.map((tab) => (
           <div
             key={tab.id}
-            className="group flex shrink-0 items-center rounded-md hover:bg-accent/60"
+            className="group/main-tab relative flex shrink-0 items-center rounded-md hover:bg-accent/60"
             draggable={!tab.fixed}
             onDragStart={(event) => {
               dragged.current = tab.surface?.id ?? null;
@@ -177,7 +177,14 @@ export function DesktopWorkspaceTabs(props: {
                   />
                 }
               >
-                <tab.Icon className="size-3.5 shrink-0" />
+                <tab.Icon
+                  className={cn(
+                    "size-3.5 shrink-0",
+                    tab.surface &&
+                      tab.surface.kind !== "files" &&
+                      "group-hover/main-tab:opacity-0 group-has-focus-visible/main-tab:opacity-0",
+                  )}
+                />
                 <span className="truncate">{tab.label}</span>
               </TooltipTrigger>
               <TooltipPopup>{tab.label}</TooltipPopup>
@@ -189,7 +196,7 @@ export function DesktopWorkspaceTabs(props: {
                     <button
                       type="button"
                       aria-label={`Close ${tab.label}`}
-                      className="rounded p-1 text-muted-foreground hover:text-foreground"
+                      className="pointer-events-none absolute top-1/2 left-1.5 flex size-4.5 -translate-y-1/2 items-center justify-center rounded text-muted-foreground opacity-0 group-hover/main-tab:pointer-events-auto group-hover/main-tab:opacity-100 group-has-focus-visible/main-tab:pointer-events-auto group-has-focus-visible/main-tab:opacity-100 hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                       onClick={() => {
                         if (tab.surface) props.onClose(tab.surface);
                       }}
