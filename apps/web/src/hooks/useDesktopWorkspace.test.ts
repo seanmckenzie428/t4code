@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import { DEFAULT_CLIENT_SETTINGS, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
-import { connectDesktopWorkspace } from "./useDesktopWorkspace";
+import { connectDesktopWorkspace, selectDesktopWorkspaceTab } from "./useDesktopWorkspace";
 import { useDesktopWorkspaceStore } from "../desktopWorkspaceStore";
 import { useRightPanelStore } from "../rightPanelStore";
 import { useMainViewStore } from "../mainViewStore";
@@ -10,7 +10,11 @@ import { useTerminalUiStateStore } from "../terminalUiStateStore";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { addBrowserSurface } from "../components/preview/addBrowserSurface";
 import { __setClientSettingsForTests } from "./useSettings";
-import { readThreadPreviewState, resetPreviewStateForTests } from "../previewStateStore";
+import {
+  applyPreviewServerSnapshot,
+  readThreadPreviewState,
+  resetPreviewStateForTests,
+} from "../previewStateStore";
 import { desktopSurfaceId } from "../desktopWorkspaceStore";
 
 const ref = scopeThreadRef(EnvironmentId.make("desktop-test"), ThreadId.make("thread"));
@@ -60,6 +64,28 @@ describe("desktop resource routing", () => {
     expect(
       useRightPanelStore.getState().byThreadKey[key]?.surfaces.find((surface) => surface.id === id),
     ).toMatchObject({ kind: "preview", resourceId: "new-tab" });
+  });
+  it("keeps browser automation and reopening aligned with main tab selection", async () => {
+    disconnect = connectDesktopWorkspace(ref);
+    for (const tabId of ["a", "b"]) {
+      applyPreviewServerSnapshot(ref, {
+        threadId: ref.threadId,
+        tabId,
+        navStatus: { _tag: "Idle" },
+        canGoBack: false,
+        canGoForward: false,
+        updatedAt: "2026-10-07T00:00:00.000Z",
+      });
+      useRightPanelStore.getState().openBrowser(ref, tabId);
+    }
+    selectDesktopWorkspaceTab(ref, "browser");
+    expect(readThreadPreviewState(ref).activeTabId).toBe("a");
+    expect(readThreadPreviewState(ref).snapshot?.tabId).toBe("a");
+    selectDesktopWorkspaceTab(ref, "surface:browser:b");
+    expect(readThreadPreviewState(ref).activeTabId).toBe("b");
+    selectDesktopWorkspaceTab(ref, "chat");
+    useRightPanelStore.getState().openBrowser(ref, readThreadPreviewState(ref).activeTabId!);
+    expect(workspace().selected).toBe("surface:browser:b");
   });
   it("opens file content from the fixed Files launcher", () => {
     disconnect = connectDesktopWorkspace(ref);

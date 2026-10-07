@@ -107,3 +107,42 @@ it("reports restoration failures and leaves a usable fixed launcher", async () =
   expect(onFailure).toHaveBeenCalledOnce();
   expect(useDesktopWorkspaceStore.getState().byThreadKey[key]?.browserId).toBeNull();
 });
+
+it.each(["open", "cleanup"])(
+  "ignores obsolete %s failures after a newer epoch restores",
+  async (failure) => {
+    let resolve!: (snapshot: PreviewSessionSnapshot) => void;
+    let reject!: (error: Error) => void;
+    const pending = new Promise<PreviewSessionSnapshot>((done, fail) => {
+      resolve = done;
+      reject = fail;
+    });
+    const onFailure = vi.fn();
+    const oldRestore = reconcileDesktopBrowsers(
+      ref,
+      list("second"),
+      () => pending,
+      async () => {
+        throw new Error("old server gone");
+      },
+      onFailure,
+    );
+    await reconcileDesktopBrowsers(
+      ref,
+      list("third"),
+      async () => snapshot("current"),
+      vi.fn(),
+      onFailure,
+    );
+    if (failure === "open") reject(new Error("old server gone"));
+    else resolve(snapshot("obsolete"));
+    await oldRestore;
+    expect(panel().surfaces).toEqual([
+      { id: "browser:old", kind: "preview", resourceId: "current" },
+    ]);
+    expect(
+      useDesktopWorkspaceStore.getState().byThreadKey[key]?.browserSessions?.["browser:old"],
+    ).toMatchObject({ epoch: "third", snapshot: { tabId: "current" } });
+    expect(onFailure).not.toHaveBeenCalled();
+  },
+);

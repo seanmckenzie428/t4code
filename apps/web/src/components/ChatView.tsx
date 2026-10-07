@@ -3,7 +3,8 @@ import { focusDesktopContent } from "../lib/desktopContentFocus";
 import { browserAppShortcuts } from "../keybindings";
 import { latestDesktopReply } from "../desktopReply";
 import { DesktopReplyCard } from "./DesktopReplyCard";
-import { useDesktopWorkspace } from "../hooks/useDesktopWorkspace";
+import { useDesktopWorkspace, selectDesktopWorkspaceTab } from "../hooks/useDesktopWorkspace";
+import { useDesktopReplyDismissal } from "../hooks/useDesktopReplyDismissal";
 import {
   EMPTY_DESKTOP_WORKSPACE,
   desktopSurfaceId,
@@ -4368,26 +4369,7 @@ function ChatViewContent(props: ChatViewProps) {
   const selectDesktopView = useCallback(
     (tab: DesktopTabId) => {
       if (!activeThreadRef) return;
-      const mainViews = useMainViewStore.getState();
-      mainViews.select(
-        activeThreadRef,
-        tab === "chat" || tab === "review" || tab === "pull-request"
-          ? tab
-          : selectThreadMainView(mainViews.byThreadKey, activeThreadRef),
-      );
-      const workspace =
-        useDesktopWorkspaceStore.getState().byThreadKey[scopedThreadKey(activeThreadRef)] ??
-        EMPTY_DESKTOP_WORKSPACE;
-      const surfaceId = desktopSurfaceId(workspace, tab);
-      const panel = useRightPanelStore.getState();
-      if (
-        surfaceId &&
-        panel.byThreadKey[scopedThreadKey(activeThreadRef)]?.surfaces.some(
-          (surface) => surface.id === surfaceId,
-        )
-      )
-        panel.activateSurface(activeThreadRef, surfaceId);
-      useDesktopWorkspaceStore.getState().select(activeThreadRef, tab);
+      selectDesktopWorkspaceTab(activeThreadRef, tab);
     },
     [activeThreadRef],
   );
@@ -11170,21 +11152,12 @@ function ChatViewContent(props: ChatViewProps) {
         : null,
     [serverProjection, activeThreadRef, isWorking, desktopWorkspace.dismissedReplyId],
   );
-  useEffect(() => {
-    if (!isElectron || !activeThreadRef) return;
-    if (
-      desktopReply &&
-      (activeMainView === "chat" || desktopSplit || optimisticUserMessages.length > 0)
-    )
-      useDesktopWorkspaceStore.getState().dismissReply(activeThreadRef, desktopReply.message.id);
-  }, [
-    activeThreadRef?.environmentId,
-    activeThreadRef?.threadId,
-    desktopReply?.message.id,
-    activeMainView,
-    desktopSplit,
-    optimisticUserMessages.length,
-  ]);
+  useDesktopReplyDismissal(
+    isElectron ? activeThreadRef : null,
+    desktopReply?.message.id ?? null,
+    desktopLayout,
+    optimisticUserMessages.length > 0,
+  );
 
   // Empty state: no active thread
   if (!activeThread) {

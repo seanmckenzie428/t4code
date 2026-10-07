@@ -39,24 +39,29 @@ export async function reconcileDesktopBrowsers(
       pending.push(existing);
       continue;
     }
+    const isCurrent = () => {
+      const current = useRightPanelStore
+        .getState()
+        .byThreadKey[key]?.surfaces.find((entry) => entry.id === surface.id);
+      return (
+        current?.kind === "preview" &&
+        current.resourceId === surface.resourceId &&
+        readThreadPreviewState(ref).serverEpoch === epoch
+      );
+    };
     const operation = (async () => {
       try {
         const restored = await open(saved.snapshot);
-        const current = useRightPanelStore
-          .getState()
-          .byThreadKey[key]?.surfaces.find((entry) => entry.id === surface.id);
-        if (
-          current?.kind !== "preview" ||
-          current.resourceId !== surface.resourceId ||
-          readThreadPreviewState(ref).serverEpoch !== epoch
-        ) {
-          await close(restored.tabId);
+        if (!isCurrent()) {
+          // The obsolete server may already be gone; cleanup cannot invalidate its replacement.
+          await close(restored.tabId).catch(() => undefined);
           return;
         }
         useRightPanelStore.getState().restoreBrowser(ref, surface.id, restored.tabId);
         useDesktopWorkspaceStore.getState().rememberBrowser(ref, surface.id, epoch, restored);
         updatePreviewServerSnapshot(ref, restored);
       } catch (error) {
+        if (!isCurrent()) return;
         // Leave a recoverable launcher rather than a tab pointing at a dead session.
         useRightPanelStore.getState().closeSurface(ref, surface.id);
         onFailure(error);

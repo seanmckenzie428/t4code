@@ -2,12 +2,40 @@ import { useLayoutEffect } from "react";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { isElectron } from "../env";
-import { EMPTY_DESKTOP_WORKSPACE, useDesktopWorkspaceStore } from "../desktopWorkspaceStore";
+import {
+  EMPTY_DESKTOP_WORKSPACE,
+  desktopSurfaceId,
+  useDesktopWorkspaceStore,
+  type DesktopTabId,
+} from "../desktopWorkspaceStore";
+import { setActivePreviewTab } from "../previewStateStore";
 import { selectThreadMainView, useMainViewStore } from "../mainViewStore";
 import { useRightPanelStore, type ThreadRightPanelState } from "../rightPanelStore";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
 
 const EMPTY_PANEL: ThreadRightPanelState = { isOpen: false, activeSurfaceId: null, surfaces: [] };
+
+/** Select the resource in both workspace navigation and its owning browser store. */
+export function selectDesktopWorkspaceTab(ref: ScopedThreadRef, tab: DesktopTabId) {
+  const key = scopedThreadKey(ref);
+  const main = useMainViewStore.getState();
+  main.select(
+    ref,
+    tab === "chat" || tab === "review" || tab === "pull-request"
+      ? tab
+      : selectThreadMainView(main.byThreadKey, ref),
+  );
+  const workspace = useDesktopWorkspaceStore.getState().byThreadKey[key] ?? EMPTY_DESKTOP_WORKSPACE;
+  const surfaceId = desktopSurfaceId(workspace, tab);
+  const panel = useRightPanelStore.getState();
+  const surface = panel.byThreadKey[key]?.surfaces.find((surface) => surface.id === surfaceId);
+  if (surface) {
+    panel.activateSurface(ref, surface.id);
+    if (surface.kind === "preview" && surface.resourceId)
+      setActivePreviewTab(ref, surface.resourceId);
+  }
+  useDesktopWorkspaceStore.getState().select(ref, tab);
+}
 
 /** Adapt existing resource-opening entry points without changing standalone web. */
 export function useDesktopWorkspace(ref: ScopedThreadRef | null) {
