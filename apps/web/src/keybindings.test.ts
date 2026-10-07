@@ -1551,37 +1551,49 @@ describe("Usage shortcuts", () => {
 });
 
 describe("desktop workspace shortcuts", () => {
-  it("routes main tab traversal, focus and split only on desktop", () => {
-    for (const [key, desktop, web] of [
-      ["[", "mainTab.previous", "thread.previous"],
-      ["]", "mainTab.next", "thread.next"],
-      ["j", "composer.focus", "preview.toggle"],
-      ["Enter", "chat.toggleSplit", "thread.steerQueuedMessage"],
-    ] as const) {
-      const input = event({ key, metaKey: true, shiftKey: true });
+  it.each(["MacIntel", "Linux"])(
+    "routes main tab traversal, focus and split only on desktop (%s)",
+    (platform) => {
+      for (const [key, desktop, web] of [
+        ["[", "mainTab.previous", "thread.previous"],
+        ["]", "mainTab.next", "thread.next"],
+        ["j", "composer.focus", "preview.toggle"],
+        ["Enter", "chat.toggleSplit", "thread.steerQueuedMessage"],
+      ] as const) {
+        const input = event({
+          key,
+          metaKey: platform === "MacIntel",
+          ctrlKey: platform !== "MacIntel",
+          shiftKey: true,
+        });
+        assert.equal(
+          resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, {
+            platform,
+            context: { isDesktop: true, isWeb: false },
+          }),
+          desktop,
+        );
+        assert.equal(
+          resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, {
+            platform,
+            context: { isDesktop: false, isWeb: true },
+          }),
+          web,
+        );
+      }
       assert.equal(
-        resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, {
-          platform: "MacIntel",
-          context: { isDesktop: true, isWeb: false },
-        }),
-        desktop,
+        resolveShortcutCommand(
+          event({ key: "1", metaKey: platform === "MacIntel", ctrlKey: platform !== "MacIntel" }),
+          DEFAULT_RESOLVED_KEYBINDINGS,
+          {
+            platform,
+            context: { isDesktop: true },
+          },
+        ),
+        "thread.jump.1",
       );
-      assert.equal(
-        resolveShortcutCommand(input, DEFAULT_RESOLVED_KEYBINDINGS, {
-          platform: "MacIntel",
-          context: { isDesktop: false, isWeb: true },
-        }),
-        web,
-      );
-    }
-    assert.equal(
-      resolveShortcutCommand(event({ key: "1", metaKey: true }), DEFAULT_RESOLVED_KEYBINDINGS, {
-        platform: "MacIntel",
-        context: { isDesktop: true },
-      }),
-      "thread.jump.1",
-    );
-  });
+    },
+  );
   it("adapts old remote defaults while preserving custom thread shortcuts", () => {
     const bindings = mergeDesktopKeybindings(
       compileResolvedKeybindingsConfig([

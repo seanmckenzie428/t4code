@@ -6,6 +6,10 @@ import { DesktopReplyCard } from "./DesktopReplyCard";
 import { useDesktopWorkspace, selectDesktopWorkspaceTab } from "../hooks/useDesktopWorkspace";
 import { useDesktopReplyDismissal } from "../hooks/useDesktopReplyDismissal";
 import {
+  toggleDesktopComposer,
+  useDesktopComposerVisibility,
+} from "../hooks/useDesktopComposerVisibility";
+import {
   EMPTY_DESKTOP_WORKSPACE,
   desktopSurfaceId,
   desktopWorkspaceLayout,
@@ -4366,6 +4370,12 @@ function ChatViewContent(props: ChatViewProps) {
   const activeMainView = isElectron ? desktopLayout.activeTab : webMainView;
   const desktopFloating = isElectron && desktopLayout.floating;
   const desktopSurfaceVisible = isElectron && activeMainView !== "chat";
+  useDesktopComposerVisibility(
+    isElectron ? activeThreadRef : null,
+    activeMainView,
+    composerDraftTarget,
+    (editingQueuedRun?.existingAttachments.length ?? 0) > 0,
+  );
   const selectDesktopView = useCallback(
     (tab: DesktopTabId) => {
       if (!activeThreadRef) return;
@@ -4392,7 +4402,23 @@ function ChatViewContent(props: ChatViewProps) {
     )
       return;
     useDesktopWorkspaceStore.getState().toggleSplit(activeThreadRef);
-  }, [activeThreadRef, reviewAvailable, mainPullRequest, pullRequestsSurfaceAvailable]);
+    if (current.selected !== "chat" && current.splitTabs[target]) {
+      const draft = useComposerDraftStore.getState().getComposerDraft(composerDraftTarget);
+      useDesktopWorkspaceStore
+        .getState()
+        .setCollapsed(
+          activeThreadRef,
+          !composerDraftHasUserContent(draft) && !editingQueuedRun?.existingAttachments.length,
+        );
+    }
+  }, [
+    activeThreadRef,
+    reviewAvailable,
+    mainPullRequest,
+    pullRequestsSurfaceAvailable,
+    composerDraftTarget,
+    editingQueuedRun,
+  ]);
   const cycleDesktopTab = useCallback(
     (direction: number) => {
       if (!activeThreadRef) return;
@@ -4681,9 +4707,13 @@ function ChatViewContent(props: ChatViewProps) {
   useEffect(() => subscribeSnapShotComposerFocus(focusComposer), [focusComposer]);
   const scheduleComposerFocus = useCallback(() => {
     window.requestAnimationFrame(() => {
+      if (isElectron && composerOverlayElement?.hidden) {
+        focusDesktopContent();
+        return;
+      }
       focusComposer();
     });
-  }, [focusComposer]);
+  }, [focusComposer, composerOverlayElement]);
   const useArtifactTemplate = useCallback(
     (template: CodexArtifactTemplate) => {
       const composer = composerRef.current;
@@ -6090,7 +6120,7 @@ function ChatViewContent(props: ChatViewProps) {
       registerWebAppCommandHandler(
         "ui.composer.focus",
         () => {
-          if (isElectron) revealDesktopComposer();
+          if (isElectron && activeThreadRef) toggleDesktopComposer(activeThreadRef, activeMainView);
           else selectMainView("chat");
           scheduleComposerFocus();
         },
@@ -6214,6 +6244,7 @@ function ChatViewContent(props: ChatViewProps) {
     ];
     return () => disposers.forEach((dispose) => dispose());
   }, [
+    activeMainView,
     activeProject,
     activeProjectScripts,
     activeRightPanelSurface,

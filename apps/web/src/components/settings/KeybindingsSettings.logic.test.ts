@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { ResolvedKeybindingsConfig } from "@t3tools/contracts";
-import { DEFAULT_RESOLVED_KEYBINDINGS } from "@t3tools/shared/keybindings";
+import {
+  compileResolvedKeybindingsConfig,
+  DEFAULT_RESOLVED_KEYBINDINGS,
+  mergeWithDefaultKeybindings,
+} from "@t3tools/shared/keybindings";
 
 import {
   buildKeybindingRows,
@@ -17,6 +21,47 @@ import {
 } from "./KeybindingsSettings.logic";
 
 describe("KeybindingsSettings.logic", () => {
+  it.each([true, false])(
+    "shows only this client's main-panel chords (desktop: %s)",
+    (isDesktop) => {
+      const bindings = mergeWithDefaultKeybindings(
+        compileResolvedKeybindingsConfig([
+          { key: "mod+shift+j", command: "preview.toggle" },
+          { key: "mod+shift+[", command: "thread.previous" },
+          { key: "mod+shift+]", command: "thread.next" },
+          { key: "mod+shift+enter", command: "thread.steerQueuedMessage", when: "!terminalFocus" },
+        ]),
+      );
+      const rows = buildKeybindingRows(bindings, "", { isDesktop });
+      for (const [key, desktop, web] of [
+        ["mod+shift+j", "composer.focus", "preview.toggle"],
+        ["mod+shift+enter", "chat.toggleSplit", "thread.steerQueuedMessage"],
+        ["mod+shift+[", "mainTab.previous", "thread.previous"],
+        ["mod+shift+]", "mainTab.next", "thread.next"],
+      ]) {
+        expect([
+          ...new Set(rows.filter((row) => row.key === key).map((row) => row.command)),
+        ]).toEqual([isDesktop ? desktop : web]);
+      }
+    },
+  );
+
+  it("retains context-dependent custom bindings and their original edit targets", () => {
+    const bindings = compileResolvedKeybindingsConfig([
+      { key: "mod+alt+j", command: "composer.focus", when: "terminalFocus" },
+      { key: "mod+alt+k", command: "composer.focus", when: "isWeb || editableFocus" },
+      { key: "mod+alt+l", command: "composer.focus", when: "!isDesktop && previewFocus" },
+      { key: "mod+shift+j", command: "preview.toggle" },
+    ]);
+    const desktop = buildKeybindingRows(bindings, "", { isDesktop: true });
+    expect(desktop.map((row) => row.key)).toEqual(["mod+alt+j", "mod+alt+k"]);
+    const web = buildKeybindingRows(bindings, "", { isDesktop: false });
+    expect(web.find((row) => row.command === "preview.toggle")).toMatchObject({
+      when: "",
+      binding: bindings[3],
+    });
+  });
+
   it("lists composer, provider, and pull request commands with editable defaults", () => {
     const rows = buildKeybindingRows(DEFAULT_RESOLVED_KEYBINDINGS, "");
     for (const command of [
@@ -60,8 +105,8 @@ describe("KeybindingsSettings.logic", () => {
   );
   it("orders Usage bindings and command choices like the page", () => {
     const expected = [
-      "usage.open",
       "usage.cost",
+      "usage.open",
       "usage.tokens",
       "usage.limits",
       "usage.period.day",

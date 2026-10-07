@@ -535,28 +535,28 @@ const LEGACY_DESKTOP_BINDINGS = compileResolvedKeybindingsConfig([
   { key: "mod+shift+j", command: "preview.toggle" },
   { key: "mod+shift+enter", command: "thread.steerQueuedMessage", when: "!terminalFocus" },
 ]);
+export function scopeLegacyDesktopKeybinding(binding: ResolvedKeybindingsConfig[number]) {
+  const legacy = LEGACY_DESKTOP_BINDINGS.some(
+    (entry) =>
+      entry.command === binding.command &&
+      JSON.stringify(entry.shortcut) === JSON.stringify(binding.shortcut) &&
+      JSON.stringify(entry.whenAst) === JSON.stringify(binding.whenAst),
+  );
+  if (!legacy) return binding;
+  const desktopGuard: KeybindingWhenNode = {
+    type: "not",
+    node: { type: "identifier", name: "isDesktop" },
+  };
+  return {
+    ...binding,
+    whenAst: binding.whenAst
+      ? { type: "and" as const, left: desktopGuard, right: binding.whenAst }
+      : desktopGuard,
+  };
+}
+
 export function mergeDesktopKeybindings(
   bindings: ResolvedKeybindingsConfig,
 ): ResolvedKeybindingsConfig {
-  return mergeWithDefaultKeybindings(
-    bindings.map((binding) => {
-      const legacy = LEGACY_DESKTOP_BINDINGS.some(
-        (entry) =>
-          entry.command === binding.command &&
-          JSON.stringify(entry.shortcut) === JSON.stringify(binding.shortcut) &&
-          JSON.stringify(entry.whenAst) === JSON.stringify(binding.whenAst),
-      );
-      if (!legacy) return binding;
-      const desktopGuard: KeybindingWhenNode = {
-        type: "not",
-        node: { type: "identifier", name: "isDesktop" },
-      };
-      return {
-        ...binding,
-        whenAst: binding.whenAst
-          ? { type: "and" as const, left: desktopGuard, right: binding.whenAst }
-          : desktopGuard,
-      };
-    }),
-  );
+  return mergeWithDefaultKeybindings(bindings.map(scopeLegacyDesktopKeybinding));
 }

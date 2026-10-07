@@ -9,9 +9,9 @@ import type { RightPanelSurface, ThreadRightPanelState } from "./rightPanelStore
 
 export const DESKTOP_CORE_TABS = [
   "chat",
+  "browser",
   "review",
   "pull-request",
-  "browser",
   "files",
   "agents",
 ] as const;
@@ -22,6 +22,7 @@ export interface DesktopWorkspace {
   browserId: string | null;
   fileId: string | null;
   surfaceOrder: string[];
+  tabOrder?: DesktopTabId[];
   splitTabs: Partial<Record<DesktopTabId, boolean>>;
   chatWidth: number;
   composerCollapsed: boolean;
@@ -51,6 +52,19 @@ export function desktopTabForSurface(workspace: DesktopWorkspace, id: string): D
   if (id === workspace.browserId || id === "browser:new") return "browser";
   if (id === workspace.fileId || id === "files") return "files";
   return `surface:${id}`;
+}
+
+/** Older workspaces ordered extra resources only; retain that order after the core tabs. */
+export function desktopTabOrder(workspace: DesktopWorkspace): DesktopTabId[] {
+  const available: DesktopTabId[] = [
+    ...DESKTOP_CORE_TABS,
+    ...workspace.surfaceOrder
+      .filter((id) => id !== workspace.browserId && id !== workspace.fileId)
+      .map((id): DesktopTabId => `surface:${id}`),
+  ];
+  return [...new Set([...(workspace.tabOrder ?? []), ...available])].filter((id) =>
+    available.includes(id),
+  );
 }
 
 export function selectDesktopTab(
@@ -87,7 +101,7 @@ export function reconcileDesktopWorkspace(
     ...added.map((s) => s.id),
   ];
   const validTab = (tab: DesktopTabId) => !tab.startsWith("surface:") || ids.has(tab.slice(8));
-  return {
+  const next = {
     ...workspace,
     browserId,
     fileId,
@@ -101,7 +115,8 @@ export function reconcileDesktopWorkspace(
     splitTabs: Object.fromEntries(
       Object.entries(workspace.splitTabs).filter(([id]) => validTab(id as DesktopTabId)),
     ),
-  };
+  } satisfies DesktopWorkspace;
+  return { ...next, tabOrder: desktopTabOrder(next) };
 }
 
 /** Keep the saved content choice when width or availability temporarily shows Chat instead. */
@@ -217,15 +232,33 @@ export const useDesktopWorkspaceStore = create<DesktopWorkspaceStore>()(
           update(ref, (current) => ({ ...current, dismissedReplyId: messageId })),
         reorder: (ref, from, to) =>
           update(ref, (current) => {
+            const order = desktopTabOrder(current);
+            const fromTab = current.surfaceOrder.includes(from)
+              ? desktopTabForSurface(current, from)
+              : from;
+            const toTab = current.surfaceOrder.includes(to)
+              ? desktopTabForSurface(current, to)
+              : to;
+            const fromIndex = order.findIndex((id) => id === fromTab);
+            const toIndex = order.findIndex((id) => id === toTab);
+            if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return current;
+            const tabOrder = [...order];
+            const [moved] = tabOrder.splice(fromIndex, 1);
+            if (!moved) return current;
+            tabOrder.splice(toIndex, 0, moved);
+            const fromSurface = desktopSurfaceId(current, moved);
+            const toSurface = desktopSurfaceId(current, order[toIndex]);
+            const surfaceOrder = [...current.surfaceOrder];
             if (
-              from === to ||
-              !current.surfaceOrder.includes(from) ||
-              !current.surfaceOrder.includes(to)
-            )
-              return current;
-            const surfaceOrder = current.surfaceOrder.filter((id) => id !== from);
-            surfaceOrder.splice(surfaceOrder.indexOf(to), 0, from);
-            return { ...current, surfaceOrder };
+              fromSurface &&
+              toSurface &&
+              surfaceOrder.includes(fromSurface) &&
+              surfaceOrder.includes(toSurface)
+            ) {
+              surfaceOrder.splice(surfaceOrder.indexOf(fromSurface), 1);
+              surfaceOrder.splice(surfaceOrder.indexOf(toSurface), 0, fromSurface);
+            }
+            return { ...current, surfaceOrder, tabOrder };
           }),
       };
     },

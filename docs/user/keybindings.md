@@ -42,7 +42,7 @@ in Settings.
 | Shortcut                      | Action                                                      |
 | ----------------------------- | ----------------------------------------------------------- |
 | `mod+Shift+[` / `mod+Shift+]` | Previous / next main tab                                    |
-| `mod+Shift+J`                 | Reveal and focus the composer                               |
+| `mod+Shift+J`                 | Toggle the composer and Chat pill                           |
 | `mod+Shift+Enter`             | Show or hide Chat beside content                            |
 | `Escape` in floating composer | Dismiss its open menu first, then collapse to the Chat pill |
 | `mod+J`                       | Toggle the bottom terminal drawer                           |
@@ -51,6 +51,8 @@ in Settings.
 The same actions are available in the command palette and **Settings → Keybindings**.
 They also work while the embedded website has focus. From the full Chat tab,
 the split shortcut restores the last content tab alongside Chat when available.
+The composer shortcut focuses the editor in full Chat. Main-tab navigation follows
+your dragged tab order.
 `mod+1` through `mod+9` still switch threads. Standalone web keeps previous/next
 thread navigation on `mod+Shift+[` / `mod+Shift+]`.
 

@@ -7,6 +7,7 @@ import {
   desktopSurfaceId,
   desktopWorkspaceLayout,
   desktopTabForSurface,
+  desktopTabOrder,
   reconcileDesktopWorkspace,
   useDesktopWorkspaceStore,
 } from "./desktopWorkspaceStore";
@@ -38,9 +39,9 @@ describe("desktop workspace", () => {
     ]);
     expect(DESKTOP_CORE_TABS).toEqual([
       "chat",
+      "browser",
       "review",
       "pull-request",
-      "browser",
       "files",
       "agents",
     ]);
@@ -61,6 +62,64 @@ describe("desktop workspace", () => {
     expect(reconcileDesktopWorkspace(closed, [browser("b"), browser("c")]).browserId).toBe(
       "browser:c",
     );
+  });
+  it("migrates old resource ordering and keeps launcher placement when resources change", () => {
+    const legacy = {
+      ...EMPTY_DESKTOP_WORKSPACE,
+      browserId: "browser:a",
+      fileId: "file:a.ts",
+      surfaceOrder: ["file:b.ts", "browser:a", "browser:b", "file:a.ts"],
+    };
+    const migrated = reconcileDesktopWorkspace(legacy, [
+      browser("a"),
+      browser("b"),
+      file("a.ts"),
+      file("b.ts"),
+    ]);
+    expect(desktopTabOrder(migrated)).toEqual([
+      ...DESKTOP_CORE_TABS,
+      "surface:file:b.ts",
+      "surface:browser:b",
+    ]);
+    const store = useDesktopWorkspaceStore.getState();
+    useDesktopWorkspaceStore.setState({ byThreadKey: { [scopedThreadKey(ref)]: migrated } });
+    store.reorder(ref, "browser", "agents");
+    store.reorder(ref, "surface:browser:b", "chat");
+    const ordered = useDesktopWorkspaceStore.getState().byThreadKey[scopedThreadKey(ref)]!;
+    expect(desktopTabOrder(ordered)).toEqual([
+      "surface:browser:b",
+      "chat",
+      "review",
+      "pull-request",
+      "files",
+      "agents",
+      "browser",
+      "surface:file:b.ts",
+    ]);
+    const closed = reconcileDesktopWorkspace(ordered, [browser("b"), file("a.ts"), file("b.ts")]);
+    expect(closed.browserId).toBeNull();
+    expect(desktopTabOrder(closed)).toEqual(desktopTabOrder(ordered));
+    const reopened = reconcileDesktopWorkspace(closed, [
+      browser("b"),
+      browser("c"),
+      file("a.ts"),
+      file("b.ts"),
+    ]);
+    expect(reopened.browserId).toBe("browser:c");
+    expect(desktopTabOrder(reopened)).toEqual(desktopTabOrder(ordered));
+  });
+  it("isolates reordered tabs across environments and ignores invalid drops", () => {
+    const other = scopeThreadRef(EnvironmentId.make("remote-order"), ref.threadId);
+    const store = useDesktopWorkspaceStore.getState();
+    store.reorder(ref, "files", "chat");
+    store.reorder(ref, "missing", "chat");
+    store.reorder(other, "review", "browser");
+    expect(
+      desktopTabOrder(useDesktopWorkspaceStore.getState().byThreadKey[scopedThreadKey(ref)]!),
+    ).toEqual(["files", "chat", "browser", "review", "pull-request", "agents"]);
+    expect(
+      desktopTabOrder(useDesktopWorkspaceStore.getState().byThreadKey[scopedThreadKey(other)]!),
+    ).toEqual(["chat", "review", "browser", "pull-request", "files", "agents"]);
   });
   it("remembers each tab's split, shared draft-independent visibility, and last content", () => {
     const store = useDesktopWorkspaceStore.getState();

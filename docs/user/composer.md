@@ -17,16 +17,19 @@ to keep a large paste editable in the composer instead.
 Open Review, PR, Browser, Files, or Subagents from the main tabs. Files, extra browser
 pages, and generated views open there too. Hover a resource tab to replace its
 icon with a close button. Closing a resource returns its fixed tab to a launcher;
-drag additional tabs to reorder them. Terminal sessions stay in the bottom drawer.
+drag any main tab to reorder it. Browser follows Chat by default. Terminal sessions
+stay in the bottom drawer.
 
 The Browser launcher includes an address bar, recently used pages, and local
 servers. The tab picker appears only when the open tabs need more space than
 the window provides.
 
 The floating composer lets you send messages over any content tab without
-changing its width. Drafts, attachments, uploads, and voice input stay with the
-same composer when you switch layouts. Use **Hide** to collapse it to a Chat pill,
-or `Cmd+Shift+J` (`Ctrl+Shift+J` on Windows/Linux) to reveal and focus it.
+changing its width. Switching to content collapses an empty composer to a Chat
+pill; an unsent draft or attachment keeps it open. Drafts, attachments, and uploads
+stay with the same composer when you switch layouts. Use **Hide** to collapse it,
+or `Cmd+Shift+J` (`Ctrl+Shift+J` on Windows/Linux) to toggle between the composer
+and its pill. Hiding it never discards your draft.
 
 Choose **Expand Chat**, or press `Cmd+Shift+Enter` (`Ctrl+Shift+Enter`), to show
 conversation on the left and content on the right. Drag the divider to adjust

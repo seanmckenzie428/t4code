@@ -133,7 +133,15 @@ export const APP_COMMAND_CATALOG = [
     emptyInput,
   ),
   command("ui.main-tab.next", "ui", "client", "navigate", "Next main tab", null, emptyInput),
-  command("ui.composer.focus", "ui", "client", "navigate", "Focus composer", null, emptyInput),
+  command(
+    "ui.composer.focus",
+    "ui",
+    "client",
+    "navigate",
+    "Focus or toggle composer",
+    null,
+    emptyInput,
+  ),
   command(
     "ui.composer.stash",
     "ui",

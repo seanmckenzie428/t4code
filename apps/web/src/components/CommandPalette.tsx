@@ -2205,7 +2205,7 @@ function OpenCommandPaletteDialog(props: {
 
   if (isElectron && activeThread) {
     for (const [shortcutCommand, commandId, title] of [
-      ["composer.focus", "ui.composer.focus", "Focus composer"],
+      ["composer.focus", "ui.composer.focus", "Show or hide composer"],
       ["chat.toggleSplit", "ui.chat.toggle-split", "Expand or collapse Chat"],
       ["mainTab.previous", "ui.main-tab.previous", "Previous main tab"],
       ["mainTab.next", "ui.main-tab.next", "Next main tab"],

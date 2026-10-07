@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import {
   DESKTOP_CORE_TABS,
+  desktopTabOrder,
   desktopSurfaceId,
   type DesktopTabId,
   type DesktopWorkspace,
@@ -47,14 +48,9 @@ export function desktopTabIds(
   reviewAvailable: boolean,
   prAvailable: boolean,
 ): DesktopTabId[] {
-  return [
-    ...DESKTOP_CORE_TABS.filter(
-      (id) => (id !== "review" || reviewAvailable) && (id !== "pull-request" || prAvailable),
-    ),
-    ...workspace.surfaceOrder
-      .filter((id) => id !== workspace.browserId && id !== workspace.fileId)
-      .map((id): DesktopTabId => `surface:${id}`),
-  ];
+  return desktopTabOrder(workspace).filter(
+    (id) => (id !== "review" || reviewAvailable) && (id !== "pull-request" || prAvailable),
+  );
 }
 
 export function DesktopWorkspaceTabs(props: {
@@ -92,12 +88,11 @@ export function DesktopWorkspaceTabs(props: {
       ?.querySelector('[aria-selected="true"]')
       ?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [props.workspace.selected]);
-  const tabs = [
+  const tabOptions = [
     ...DESKTOP_CORE_TABS.map((id) => ({
       id: id as DesktopTabId,
       label: labels[id],
       Icon: icons[id],
-      fixed: true,
       available:
         (id !== "review" || props.reviewAvailable) && (id !== "pull-request" || props.prAvailable),
       surface: props.surfaces.find((s) => s.id === desktopSurfaceId(props.workspace, id)),
@@ -117,7 +112,6 @@ export function DesktopWorkspaceTabs(props: {
                     : surface.kind === "file"
                       ? FileIcon
                       : LayoutPanelTopIcon,
-                fixed: false,
                 available: true,
                 surface,
               },
@@ -125,6 +119,10 @@ export function DesktopWorkspaceTabs(props: {
           : [];
       }),
   ];
+  const tabs = desktopTabOrder(props.workspace).flatMap((id) => {
+    const tab = tabOptions.find((tab) => tab.id === id);
+    return tab ? [tab] : [];
+  });
   return (
     <div
       className="flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border/60 bg-background px-3"
@@ -140,9 +138,9 @@ export function DesktopWorkspaceTabs(props: {
           <div
             key={tab.id}
             className="group/main-tab relative flex shrink-0 items-center rounded-md hover:bg-accent/60"
-            draggable={!tab.fixed}
+            draggable
             onDragStart={(event) => {
-              dragged.current = tab.surface?.id ?? null;
+              dragged.current = tab.id;
               event.dataTransfer.setData("text/plain", tab.id);
               event.dataTransfer.effectAllowed = "move";
             }}
@@ -150,12 +148,12 @@ export function DesktopWorkspaceTabs(props: {
               dragged.current = null;
             }}
             onDragOver={(event) => {
-              if (!tab.fixed) event.preventDefault();
+              if (dragged.current) event.preventDefault();
             }}
             onDrop={(event) => {
-              if (tab.fixed || !dragged.current || !tab.surface) return;
+              if (!dragged.current) return;
               event.preventDefault();
-              props.onReorder(dragged.current, tab.surface.id);
+              props.onReorder(dragged.current, tab.id);
               dragged.current = null;
             }}
           >

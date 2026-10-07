@@ -11,7 +11,8 @@ import {
   parseKeybindingWhenExpression,
 } from "@t3tools/shared/keybindings";
 
-import { shortcutKeyFromEvent } from "../../keybindings";
+import { scopeLegacyDesktopKeybinding, shortcutKeyFromEvent } from "../../keybindings";
+import { isElectron } from "../../env";
 import { isMacPlatform } from "../../lib/utils";
 import { METRIC_OPTIONS, WINDOW_OPTIONS } from "../usage/usageShortcuts";
 
@@ -208,9 +209,17 @@ export function keybindingConflictLabels(
 export function buildKeybindingRows(
   keybindings: ResolvedKeybindingsConfig,
   query: string,
+  client?: { readonly isDesktop: boolean },
 ): ReadonlyArray<KeybindingRow> {
   const normalizedQuery = query.trim().toLowerCase();
-  const rows = keybindings.map((binding, index) => {
+  const visibleBindings = client
+    ? keybindings.filter(
+        (binding) =>
+          whenMatchesClient(scopeLegacyDesktopKeybinding(binding).whenAst, client.isDesktop) !==
+          false,
+      )
+    : keybindings;
+  const rows = visibleBindings.map((binding, index) => {
     const defaultBinding = defaultBindingForBinding(binding);
     const key = shortcutToKeybindingInput(binding.shortcut);
     const when = whenAstToExpression(binding.whenAst);
@@ -257,6 +266,44 @@ export function buildKeybindingRows(
       row.source.toLowerCase().includes(normalizedQuery)
     );
   });
+}
+
+/** Focus and page conditions may change; only hide rules impossible on this client. */
+function whenMatchesClient(
+  node: KeybindingWhenNode | undefined,
+  isDesktop: boolean,
+): boolean | undefined {
+  if (!node) return true;
+  switch (node.type) {
+    case "identifier":
+      if (node.name === "isDesktop") return isDesktop;
+      if (node.name === "isWeb") return !isDesktop;
+      if (node.name === "true") return true;
+      if (node.name === "false") return false;
+      return undefined;
+    case "not": {
+      const value = whenMatchesClient(node.node, isDesktop);
+      return value === undefined ? undefined : !value;
+    }
+    case "and": {
+      const left = whenMatchesClient(node.left, isDesktop);
+      const right = whenMatchesClient(node.right, isDesktop);
+      return left === false || right === false
+        ? false
+        : left === true && right === true
+          ? true
+          : undefined;
+    }
+    case "or": {
+      const left = whenMatchesClient(node.left, isDesktop);
+      const right = whenMatchesClient(node.right, isDesktop);
+      return left === true || right === true
+        ? true
+        : left === false && right === false
+          ? false
+          : undefined;
+    }
+  }
 }
 
 function collectWhenIdentifiersFromNode(
@@ -316,6 +363,7 @@ export function buildKeybindingCommandOptions(
 }
 
 export function commandLabel(command: KeybindingCommand): string {
+  if (command === "composer.focus") return isElectron ? "Composer: Toggle Chat" : "Composer: Focus";
   if (command === "composer.sendAlternate") return "Composer: Opposite Queue or Steer Action";
   if (command === "composer.sendBackground") return "Composer: Start in Background";
   if (command === "thread.steerQueuedMessage") return "Queue: Send First Queued Message as Steer";
