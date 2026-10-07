@@ -8,7 +8,7 @@ import {
 } from "../composerDraftStore";
 import { useDesktopWorkspaceStore, type DesktopTabId } from "../desktopWorkspaceStore";
 
-/** Apply the content-tab default on entry, without overriding a manual show/hide afterward. */
+/** Apply the content-tab default; new review comments reveal their added composer context. */
 export function useDesktopComposerVisibility(
   ref: ScopedThreadRef | null,
   tab: DesktopTabId,
@@ -36,6 +36,17 @@ export function useDesktopComposerVisibility(
     useDesktopWorkspaceStore
       .getState()
       .setCollapsed({ environmentId, threadId }, !hasDraft(target));
+    let comments = useComposerDraftStore.getState().getComposerDraft(target)?.reviewComments;
+    return useComposerDraftStore.subscribe((state) => {
+      const next = state.getComposerDraft(target)?.reviewComments;
+      const added =
+        next !== comments &&
+        next?.some((comment) => !comments?.some(({ id }) => id === comment.id));
+      comments = next;
+      if (added) {
+        useDesktopWorkspaceStore.getState().setCollapsed({ environmentId, threadId }, false);
+      }
+    });
   }, [environmentId, threadId, tab, draftId, draftEnvironmentId, draftThreadId]);
 }
 

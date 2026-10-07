@@ -5,6 +5,7 @@ import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { DraftId, useComposerDraftStore, type ComposerThreadTarget } from "../composerDraftStore";
 import { EMPTY_DESKTOP_WORKSPACE, useDesktopWorkspaceStore } from "../desktopWorkspaceStore";
+import { buildFileReviewComment } from "../reviewCommentContext";
 import {
   toggleDesktopComposer,
   useDesktopComposerVisibility,
@@ -147,4 +148,75 @@ it("leaves full Chat and standalone web visibility unchanged", async () => {
   await act(async () => renderer!.update(<Probe desktop={false} />));
   await act(async () => useDesktopWorkspaceStore.getState().select(ref, "browser"));
   expect(workspace().composerCollapsed).toBe(false);
+});
+
+it.each([ref, DraftId.make("queued-edit:review")])(
+  "reveals newly added review comments for draft %j without changing the selected tab",
+  async (target) => {
+    useDesktopWorkspaceStore.getState().select(ref, "review");
+    await act(async () => {
+      renderer = create(<Probe target={target} />);
+    });
+    expect(workspace().composerCollapsed).toBe(true);
+    const comment = buildFileReviewComment({
+      id: "comment-1",
+      filePath: "example.ts",
+      startLine: 1,
+      endLine: 1,
+      text: "Fix this",
+      contents: "example",
+    });
+    const drafts = useComposerDraftStore.getState();
+    // A busy editor rejects caret insertion; the store still adds the context chip.
+    const dispose = drafts.setContextInsertionHandler(target, () => false);
+    try {
+      await act(async () => drafts.addReviewComment(target, comment));
+      expect(workspace().composerCollapsed).toBe(false);
+      expect(workspace().selected).toBe("review");
+      expect(workspace().splitTabs).toEqual({});
+      expect(drafts.getComposerDraft(target)?.prompt).toContain("t3-context://v1/review-comment/");
+
+      await act(async () => {
+        toggleDesktopComposer(ref, "review");
+      });
+      await act(async () => drafts.addReviewComment(target, { ...comment, text: "Edited" }));
+      await act(async () => drafts.removeReviewComment(target, comment.id));
+      await act(async () => drafts.setPrompt(target, "Still editing"));
+      expect(workspace().composerCollapsed).toBe(true);
+
+      await act(async () => drafts.addReviewComment(target, { ...comment, id: "comment-2" }));
+      expect(workspace().composerCollapsed).toBe(false);
+      await act(async () => {
+        toggleDesktopComposer(ref, "review");
+      });
+      await act(async () => renderer!.unmount());
+      renderer = undefined;
+      await act(async () => drafts.addReviewComment(target, { ...comment, id: "after-unmount" }));
+      expect(workspace().composerCollapsed).toBe(true);
+    } finally {
+      dispose?.();
+    }
+  },
+);
+
+it("does not reveal desktop state for review comments in standalone web", async () => {
+  useDesktopWorkspaceStore.getState().select(ref, "review");
+  useDesktopWorkspaceStore.getState().setCollapsed(ref, true);
+  await act(async () => {
+    renderer = create(<Probe desktop={false} />);
+  });
+  await act(async () =>
+    useComposerDraftStore.getState().addReviewComment(
+      ref,
+      buildFileReviewComment({
+        id: "web-comment",
+        filePath: "example.ts",
+        startLine: 1,
+        endLine: 1,
+        text: "Fix this",
+        contents: "example",
+      }),
+    ),
+  );
+  expect(workspace().composerCollapsed).toBe(true);
 });
