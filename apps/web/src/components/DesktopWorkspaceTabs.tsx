@@ -1,5 +1,5 @@
 import { PullRequestGlyph } from "./pullRequest/pullRequestIcons";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ChevronDownIcon,
   Columns2Icon,
@@ -76,6 +76,17 @@ export function DesktopWorkspaceTabs(props: {
 }) {
   const strip = useRef<HTMLDivElement>(null);
   const dragged = useRef<string | null>(null);
+  const [hasOverflow, setHasOverflow] = useState(false);
+  useLayoutEffect(() => {
+    const element = strip.current;
+    if (!element) return;
+    const measure = () => setHasOverflow(element.scrollWidth > element.clientWidth + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    for (const child of element.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [props.surfaces, props.workspace]);
   useEffect(() => {
     strip.current
       ?.querySelector('[aria-selected="true"]')
@@ -193,20 +204,26 @@ export function DesktopWorkspaceTabs(props: {
           </div>
         ))}
       </div>
-      <Menu>
-        <MenuTrigger
-          render={<Button variant="ghost" size="icon-sm" aria-label="Open tab picker" />}
-        >
-          <ChevronDownIcon className="size-4" />
-        </MenuTrigger>
-        <MenuPopup>
-          {tabs.map((tab) => (
-            <MenuItem key={tab.id} disabled={!tab.available} onClick={() => props.onSelect(tab.id)}>
-              {tab.label}
-            </MenuItem>
-          ))}
-        </MenuPopup>
-      </Menu>
+      {hasOverflow ? (
+        <Menu>
+          <MenuTrigger
+            render={<Button variant="ghost" size="icon-sm" aria-label="Open tab picker" />}
+          >
+            <ChevronDownIcon className="size-4" />
+          </MenuTrigger>
+          <MenuPopup>
+            {tabs.map((tab) => (
+              <MenuItem
+                key={tab.id}
+                disabled={!tab.available}
+                onClick={() => props.onSelect(tab.id)}
+              >
+                {tab.label}
+              </MenuItem>
+            ))}
+          </MenuPopup>
+        </Menu>
+      ) : null}
       <Menu>
         <MenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Open content" />}>
           <PlusIcon className="size-4" />

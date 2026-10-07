@@ -54,7 +54,6 @@ import {
 } from "~/browser/browserViewportActions";
 import { browserResponsiveViewportForToggle, useBrowserDefaults } from "~/browser/browserDefaults";
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
-import { BrowserSettingsReadError } from "~/browser/openFileInPreview";
 import { PreviewUnreachable } from "./PreviewUnreachable";
 import { revealInFileExplorerLabel } from "./fileExplorerLabel";
 import { shouldShowPreviewEmptyState } from "./previewEmptyStateLogic";
@@ -80,6 +79,8 @@ interface Props {
   tabId?: string | null;
   configuredUrls?: ReadonlyArray<string> | undefined;
   visible: boolean;
+  /** Keep the fixed Browser launcher independent of other open browser tabs. */
+  launcher?: boolean;
   onSendAnnotation?: (
     annotation: PreviewAnnotationPayload,
     image: ComposerImageAttachment | null,
@@ -104,6 +105,7 @@ export function PreviewView({
   tabId: requestedTabId,
   configuredUrls,
   visible,
+  launcher = false,
   onSendAnnotation,
 }: Props) {
   const [focusUrlNonce, setFocusUrlNonce] = useState<number | undefined>(undefined);
@@ -141,7 +143,7 @@ export function PreviewView({
     };
   }, []);
 
-  const tabId = requestedTabId ?? previewState.activeTabId;
+  const tabId = launcher ? null : (requestedTabId ?? previewState.activeTabId);
   const runtimeTabId = tabId
     ? previewRuntimeTabId(threadRef, previewState.serverEpoch, tabId)
     : null;
@@ -199,17 +201,18 @@ export function PreviewView({
       const result = await openPreviewSession({ openPreview: open, threadRef, url: resolvedUrl });
       if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
         const error = squashAtomCommandFailure(result);
-        if (error instanceof BrowserSettingsReadError) {
-          toastManager.add({
-            type: "error",
-            title: "Unable to open browser",
-            description: error.message,
-          });
-        }
+        toastManager.add({
+          type: "error",
+          title: "Unable to open browser",
+          description: error instanceof Error ? error.message : "The browser could not be opened.",
+        });
+      }
+      if (result._tag === "Success" && launcher) {
+        useRightPanelStore.getState().openBrowser(threadRef, result.value.tabId);
       }
       return result._tag === "Success";
     },
-    [open, runtimeTabId, threadRef],
+    [launcher, open, runtimeTabId, threadRef],
   );
 
   const handleSubmitUrl = useCallback(

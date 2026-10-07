@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
-import { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { DEFAULT_CLIENT_SETTINGS, EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { scopeThreadRef, scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { connectDesktopWorkspace } from "./useDesktopWorkspace";
 import { useDesktopWorkspaceStore } from "../desktopWorkspaceStore";
@@ -7,11 +7,19 @@ import { useRightPanelStore } from "../rightPanelStore";
 import { useMainViewStore } from "../mainViewStore";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
 
+import { AsyncResult } from "effect/unstable/reactivity";
+import { addBrowserSurface } from "../components/preview/addBrowserSurface";
+import { __setClientSettingsForTests } from "./useSettings";
+import { readThreadPreviewState, resetPreviewStateForTests } from "../previewStateStore";
+import { desktopSurfaceId } from "../desktopWorkspaceStore";
+
 const ref = scopeThreadRef(EnvironmentId.make("desktop-test"), ThreadId.make("thread"));
 const key = scopedThreadKey(ref);
 const workspace = () => useDesktopWorkspaceStore.getState().byThreadKey[key]!;
 let disconnect: (() => void) | undefined;
 beforeEach(() => {
+  __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
+  resetPreviewStateForTests();
   useDesktopWorkspaceStore.setState({ byThreadKey: {} });
   useRightPanelStore.setState({ byThreadKey: {}, userActionRevisionByThreadKey: {} });
   useMainViewStore.setState({
@@ -30,6 +38,39 @@ afterEach(() => {
 });
 
 describe("desktop resource routing", () => {
+  it("opens the browser from an empty fixed launcher using the real creation path", async () => {
+    disconnect = connectDesktopWorkspace(ref);
+    useDesktopWorkspaceStore.getState().select(ref, "browser");
+    const result = await addBrowserSurface({
+      threadRef: ref,
+      openPreview: async () =>
+        AsyncResult.success({
+          threadId: ref.threadId,
+          tabId: "new-tab",
+          navStatus: { _tag: "Idle" },
+          canGoBack: false,
+          canGoForward: false,
+          updatedAt: "2026-10-07T00:00:00.000Z",
+        }),
+    });
+    expect(result._tag).toBe("Success");
+    expect(readThreadPreviewState(ref).sessions["new-tab"]).toBeDefined();
+    expect(workspace().selected).toBe("browser");
+    const id = desktopSurfaceId(workspace());
+    expect(
+      useRightPanelStore.getState().byThreadKey[key]?.surfaces.find((surface) => surface.id === id),
+    ).toMatchObject({ kind: "preview", resourceId: "new-tab" });
+  });
+  it("opens file content from the fixed Files launcher", () => {
+    disconnect = connectDesktopWorkspace(ref);
+    useDesktopWorkspaceStore.getState().select(ref, "files");
+    useRightPanelStore.getState().openFile(ref, "package.json");
+    expect(workspace().selected).toBe("files");
+    const id = desktopSurfaceId(workspace());
+    expect(
+      useRightPanelStore.getState().byThreadKey[key]?.surfaces.find((surface) => surface.id === id),
+    ).toMatchObject({ kind: "file", relativePath: "package.json" });
+  });
   it("opens fixed and additional tabs and reselects existing resources from Chat", () => {
     disconnect = connectDesktopWorkspace(ref);
     const panel = useRightPanelStore.getState();

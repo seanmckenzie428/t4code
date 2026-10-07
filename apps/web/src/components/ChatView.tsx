@@ -274,7 +274,6 @@ import {
   setActivePreviewTab,
   useThreadPreviewState,
 } from "../previewStateStore";
-import { BrowserSettingsReadError } from "../browser/openFileInPreview";
 import { addBrowserSurface } from "./preview/addBrowserSurface";
 import { closePreviewSession } from "./preview/closePreviewSession";
 import { ThreadPreviewMiniPlayer } from "./preview/ThreadPreviewMiniPlayer";
@@ -5481,15 +5480,14 @@ function ChatViewContent(props: ChatViewProps) {
       }).then((result) => {
         if (result._tag !== "Failure" || isAtomCommandInterrupted(result)) return;
         const error = squashAtomCommandFailure(result);
-        if (error instanceof BrowserSettingsReadError) {
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Unable to open browser",
-              description: error.message,
-            }),
-          );
-        }
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Unable to open browser",
+            description:
+              error instanceof Error ? error.message : "The browser could not be opened.",
+          }),
+        );
       });
     },
     [activeThreadRef, openPreview],
@@ -11592,10 +11590,7 @@ function ChatViewContent(props: ChatViewProps) {
             }
             split={desktopWantsSplit}
             splitShortcut={shortcutLabelForCommand(keybindings, "chat.toggleSplit")}
-            onSelect={(tab) => {
-              selectDesktopView(tab);
-              if (tab === "browser" && !desktopWorkspace.browserId) addBlankBrowserSurface();
-            }}
+            onSelect={selectDesktopView}
             onClose={closeRightPanelSurface}
             onReorder={(from, to) => {
               if (activeThreadRef)
@@ -12371,10 +12366,20 @@ function ChatViewContent(props: ChatViewProps) {
             >
               {activeMainView === "browser" &&
               (!renderedRightPanelSurface || renderedRightPanelSurface.id === "browser:new") ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted-foreground">
-                  <p>Open a browser tab to explore your site.</p>
-                  <Button onClick={addBlankBrowserSurface}>Open browser</Button>
-                </div>
+                activeThreadRef ? (
+                  <Suspense fallback={null}>
+                    <PreviewPanel
+                      mode="embedded"
+                      threadRef={activeThreadRef}
+                      launcher
+                      configuredUrls={configuredPreviewUrls}
+                      visible={desktopSurfaceVisible}
+                      onSendAnnotation={(annotation, image) => {
+                        void onSend(undefined, "auto", "foreground", { annotation, image });
+                      }}
+                    />
+                  </Suspense>
+                ) : null
               ) : (
                 rightPanelContent
               )}

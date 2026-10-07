@@ -146,6 +146,11 @@ export default function FileBrowserPanel({
   const syncingSelectionRef = useRef(false);
   const treeSelectionPathRef = useRef<string | null>(null);
   const handledRevealRef = useRef<{ path: string; revealId: number } | null>(null);
+  // Pierre retains its initial options, while this panel can stay mounted across threads.
+  const onOpenFileRef = useRef(onOpenFile);
+  useEffect(() => {
+    onOpenFileRef.current = onOpenFile;
+  }, [onOpenFile]);
 
   // The tree renders rows in shadow DOM and its anchor rect is unreliable, so
   // capture the right-click position ourselves; contextmenu is a composed
@@ -278,7 +283,7 @@ export default function FileBrowserPanel({
       const selectedPath = selectedPaths.at(-1)?.replace(/\/$/, "");
       if (selectedPath && entryKindsRef.current.get(selectedPath) === "file") {
         treeSelectionPathRef.current = selectedPath;
-        onOpenFile(selectedPath);
+        onOpenFileRef.current(selectedPath);
       }
     },
     paths: [],

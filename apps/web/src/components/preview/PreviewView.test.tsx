@@ -7,11 +7,13 @@ import {
   FILL_PREVIEW_VIEWPORT,
   ThreadId,
 } from "@t3tools/contracts";
+import { AsyncResult } from "effect/unstable/reactivity";
 import { act, createElement, Profiler } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 const mocks = vi.hoisted(() => ({
+  open: vi.fn(),
   navigate: vi.fn(async (_tabId: string, _url: string): Promise<void> => undefined),
   rememberPreviewUrl: vi.fn(),
   readPreparedConnection: vi.fn(() => ({ httpBaseUrl: "http://172.25.85.75:3773" })),
@@ -69,6 +71,7 @@ vi.mock("~/state/session", async (importOriginal) => ({
 vi.mock("~/browser/browserDefaults", () => ({
   useBrowserDefaults: () => STUB_BROWSER_DEFAULTS,
   getBrowserDefaults: () => STUB_BROWSER_DEFAULTS,
+  resolveBrowserDefaults: async () => STUB_BROWSER_DEFAULTS,
   browserDefaultOpenViewport: () => FILL_PREVIEW_VIEWPORT,
   browserDefaultOpenProfileId: () => DEFAULT_BROWSER_PROFILE_ID,
   browserDefaultTabState: () => ({
@@ -96,7 +99,8 @@ vi.mock("~/localApi", () => ({
   ensureLocalApi: vi.fn(),
 }));
 
-vi.mock("~/previewStateStore", () => ({
+vi.mock("~/previewStateStore", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("~/previewStateStore")>()),
   rememberPreviewUrl: mocks.rememberPreviewUrl,
   updatePreviewServerSnapshot: vi.fn(),
   useThreadPreviewState: () => ({
@@ -146,7 +150,7 @@ vi.mock("~/state/preview", () => ({
 }));
 
 vi.mock("~/state/use-atom-command", () => ({
-  useAtomCommand: () => vi.fn(),
+  useAtomCommand: () => mocks.open,
 }));
 
 vi.mock("~/browser/browserRecording", () => ({
@@ -192,11 +196,16 @@ vi.mock("~/previewMiniPlayerStore", () => {
   };
 });
 
-vi.mock("~/rightPanelStore", () => ({
-  useRightPanelStore: {
-    getState: () => ({ close: mocks.closeRightPanel }),
-  },
-}));
+vi.mock("~/rightPanelStore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("~/rightPanelStore")>();
+  return {
+    ...actual,
+    useRightPanelStore: {
+      ...actual.useRightPanelStore,
+      getState: () => ({ ...actual.useRightPanelStore.getState(), close: mocks.closeRightPanel }),
+    },
+  };
+});
 
 vi.mock("~/components/ui/toast", () => ({
   stackedThreadToast: vi.fn(),
@@ -255,6 +264,13 @@ vi.mock("~/browser/BrowserSurfaceSlot", () => ({ BrowserSurfaceSlot: () => null 
 vi.mock("./usePreviewSession", () => ({ usePreviewSession: vi.fn() }));
 
 import { PreviewView } from "./PreviewView";
+import {
+  applyPreviewServerSnapshot,
+  readThreadPreviewState,
+  resetPreviewStateForTests,
+} from "~/previewStateStore";
+import { useRightPanelStore } from "~/rightPanelStore";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { toastManager } from "~/components/ui/toast";
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 
@@ -337,6 +353,9 @@ describe("PreviewView navigation", () => {
     mocks.toggleNativePictureInPicture = null;
     mocks.pictureInPicturePressed = false;
     mocks.miniPlayerTabId = null;
+    mocks.open.mockReset();
+    resetPreviewStateForTests();
+    useRightPanelStore.setState({ byThreadKey: {}, userActionRevisionByThreadKey: {} });
     mocks.openMiniPlayer.mockClear();
     mocks.closeMiniPlayer.mockClear();
     mocks.closeRightPanel.mockClear();
@@ -651,4 +670,78 @@ describe("PreviewView navigation", () => {
     expect(mocks.addPreviewAnnotation).toHaveBeenCalledWith(TEST_THREAD_REF, sent);
     expect(mocks.addImage).not.toHaveBeenCalled();
   });
+});
+
+describe("fixed Browser launcher", () => {
+  it.each(["address", "recent"] as const)(
+    "opens a new resource from %s without navigating another page",
+    async (entry) => {
+      const document = installTestDom();
+      const { createRoot } = await import("react-dom/client");
+      const root = createRoot(document.createElement("div") as unknown as Element);
+      const oldSnapshot = {
+        threadId: TEST_THREAD_REF.threadId,
+        tabId: "tab-1",
+        navStatus: { _tag: "Success" as const, url: "https://old.example/", title: "Existing" },
+        canGoBack: false,
+        canGoForward: false,
+        updatedAt: "2026-10-07T00:00:00.000Z",
+      };
+      const newSnapshot = {
+        ...oldSnapshot,
+        tabId: "new-tab",
+        navStatus: { _tag: "Loading" as const, url: "https://new.example/", title: "" },
+      };
+      resetPreviewStateForTests();
+      useRightPanelStore.setState({ byThreadKey: {}, userActionRevisionByThreadKey: {} });
+      applyPreviewServerSnapshot(TEST_THREAD_REF, oldSnapshot);
+      mocks.navigate.mockClear();
+      mocks.open.mockResolvedValue(AsyncResult.success(newSnapshot));
+      try {
+        await act(() => {
+          root.render(<PreviewView threadRef={TEST_THREAD_REF} launcher visible />);
+        });
+        expect(mocks.emptyStateUrl).not.toBeNull();
+        await act(async () => {
+          await (entry === "address" ? mocks.submittedUrl : mocks.emptyStateUrl)?.(
+            "https://new.example/",
+          );
+        });
+        expect(mocks.navigate).not.toHaveBeenCalled();
+        expect(mocks.open).toHaveBeenCalledWith(
+          expect.objectContaining({
+            input: expect.objectContaining({ url: "https://new.example/" }),
+          }),
+        );
+        expect(readThreadPreviewState(TEST_THREAD_REF).sessions["tab-1"]).toEqual(oldSnapshot);
+        expect(readThreadPreviewState(TEST_THREAD_REF).sessions["new-tab"]).toEqual(newSnapshot);
+        const panel = useRightPanelStore.getState().byThreadKey[scopedThreadKey(TEST_THREAD_REF)];
+        expect(
+          panel?.surfaces.find((surface) => surface.id === panel.activeSurfaceId),
+        ).toMatchObject({ kind: "preview", resourceId: "new-tab" });
+      } finally {
+        await act(() => root.unmount());
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+});
+
+it("reports a failed launcher open instead of silently leaving the launcher unchanged", async () => {
+  const { Cause } = await import("effect");
+  mocks.open.mockResolvedValue(
+    AsyncResult.failure(Cause.fail(new Error("Desktop browser unavailable"))),
+  );
+  vi.mocked(toastManager.add).mockClear();
+  renderToStaticMarkup(<PreviewView threadRef={TEST_THREAD_REF} launcher visible />);
+  await act(async () => {
+    mocks.submittedUrl?.("https://new.example/");
+  });
+  expect(toastManager.add).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "error",
+      title: "Unable to open browser",
+      description: "Desktop browser unavailable",
+    }),
+  );
 });

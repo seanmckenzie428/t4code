@@ -19,6 +19,10 @@ pages, and generated views open there too. Close a resource to return its fixed
 tab to a launcher; drag additional tabs to reorder them. Terminal sessions stay
 in the bottom drawer.
 
+The Browser launcher includes an address bar, recently used pages, and local
+servers. The tab picker appears only when the open tabs need more space than
+the window provides.
+
 The floating composer lets you send messages over any content tab without
 changing its width. Drafts, attachments, uploads, and voice input stay with the
 same composer when you switch layouts. Use **Hide** to collapse it to a Chat pill,
