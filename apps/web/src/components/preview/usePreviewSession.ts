@@ -60,6 +60,9 @@ const previewSessionSyncAtom = Atom.family((threadKey: string) => {
       disposed = true;
     });
     const initialEvent = get.once(eventsAtom);
+    // Initialize the lazy SWR wrapper without applying its potentially stale cached list.
+    // Subscribing alone does not read it, and refresh targets its unread inner atom.
+    get.once(sessionsAtom);
     get.subscribe(sessionsAtom, (result) => {
       reconcileSessions(result);
     });
