@@ -196,7 +196,7 @@ export function DesktopWorkspaceTabs(props: {
                     <button
                       type="button"
                       aria-label={`Close ${tab.label}`}
-                      className="pointer-events-none absolute top-1/2 left-1.5 flex size-4.5 -translate-y-1/2 items-center justify-center rounded text-muted-foreground opacity-0 group-hover/main-tab:pointer-events-auto group-hover/main-tab:opacity-100 group-has-focus-visible/main-tab:pointer-events-auto group-has-focus-visible/main-tab:opacity-100 hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                      className="pointer-events-none absolute top-1/2 left-1.5 flex size-4.5 -translate-y-1/2 cursor-pointer items-center justify-center rounded text-muted-foreground opacity-0 group-hover/main-tab:pointer-events-auto group-hover/main-tab:opacity-100 group-has-focus-visible/main-tab:pointer-events-auto group-has-focus-visible/main-tab:opacity-100 hover:bg-accent hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                       onClick={() => {
                         if (tab.surface) props.onClose(tab.surface);
                       }}
