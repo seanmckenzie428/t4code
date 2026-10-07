@@ -12302,6 +12302,11 @@ function ChatViewContent(props: ChatViewProps) {
           {desktopSplit && activeThreadRef ? (
             <DesktopChatDivider
               width={desktopWorkspace.chatWidth}
+              collapseShortcut={shortcutLabelForCommand(keybindings, "chat.toggleSplit")}
+              onCollapse={() => {
+                toggleDesktopSplit();
+                scheduleComposerFocus();
+              }}
               onResize={(width) =>
                 useDesktopWorkspaceStore.getState().setChatWidth(activeThreadRef, width)
               }
