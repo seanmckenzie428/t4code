@@ -223,7 +223,7 @@ the snooze. Enable **Snooze limited threads** in thread behavior settings to
 snooze limit stops by default. Providers without a reset time offer manual
 retry and the normal snooze choices.
 
-On web and desktop, use **Agents** to follow work delegated to subagents.
+Use **Subagents** on desktop or **Agents** on web to follow delegated work.
 
 Subagent threads started by the agent can't take messages; message the parent
 thread instead. When such a subagent needs an approval or an answer, the parent

@@ -12342,7 +12342,7 @@ function ChatViewContent(props: ChatViewProps) {
           {isElectron && activeMainView === "agents" && activeThreadRef ? (
             <div
               role="tabpanel"
-              aria-label="Agents"
+              aria-label="Subagents"
               tabIndex={-1}
               data-desktop-main-content
               className="min-h-0 min-w-0 flex-1 overflow-auto"

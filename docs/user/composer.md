@@ -14,7 +14,7 @@ to keep a large paste editable in the composer instead.
 
 ## Chat while viewing content on desktop
 
-Open Review, PR, Browser, Files, or Agents from the main tabs. Files, extra browser
+Open Review, PR, Browser, Files, or Subagents from the main tabs. Files, extra browser
 pages, and generated views open there too. Close a resource to return its fixed
 tab to a launcher; drag additional tabs to reorder them. Terminal sessions stay
 in the bottom drawer.

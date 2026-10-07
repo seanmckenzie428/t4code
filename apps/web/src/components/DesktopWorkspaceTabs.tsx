@@ -31,7 +31,7 @@ const labels = {
   "pull-request": "PR",
   browser: "Browser",
   files: "Files",
-  agents: "Agents",
+  agents: "Subagents",
 };
 const icons = {
   chat: MessageSquareIcon,
