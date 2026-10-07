@@ -658,14 +658,36 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
         ),
       restoreBrowser: (ref, surfaceId, tabId) =>
         set((state) =>
-          automaticUpdate(state, scopedThreadKey(ref), (current) => ({
-            ...current,
-            surfaces: current.surfaces.map((surface) =>
-              surface.kind === "preview" && surface.id === surfaceId
-                ? { ...surface, resourceId: tabId }
-                : surface,
-            ),
-          })),
+          automaticUpdate(state, scopedThreadKey(ref), (current) => {
+            if (
+              !current.surfaces.some(
+                (surface) => surface.kind === "preview" && surface.id === surfaceId,
+              )
+            )
+              return current;
+            // Automation may present the new session before the restore RPC returns.
+            const surfaces = current.surfaces
+              .filter(
+                (surface) =>
+                  surface.id === surfaceId ||
+                  surface.kind !== "preview" ||
+                  surface.resourceId !== tabId,
+              )
+              .map((surface) =>
+                surface.kind === "preview" && surface.id === surfaceId
+                  ? { ...surface, resourceId: tabId }
+                  : surface,
+              );
+            return {
+              ...current,
+              surfaces,
+              activeSurfaceId:
+                current.activeSurfaceId !== null &&
+                !surfaces.some((surface) => surface.id === current.activeSurfaceId)
+                  ? surfaceId
+                  : current.activeSurfaceId,
+            };
+          }),
         ),
       openBrowser: (ref, tabId) =>
         set((state) =>

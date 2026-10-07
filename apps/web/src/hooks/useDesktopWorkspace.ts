@@ -108,10 +108,23 @@ export function connectDesktopWorkspace(ref: ScopedThreadRef) {
     const addedResource = panel.surfaces.some(
       (surface) => !before.surfaces.some((previous) => previous.id === surface.id),
     );
+    const workspace = useDesktopWorkspaceStore.getState().byThreadKey[key];
+    const selectedSurface = workspace
+      ? before.surfaces.find((surface) => surface.id === desktopSurfaceId(workspace))
+      : undefined;
+    const nextActive = panel.surfaces.find((surface) => surface.id === panel.activeSurfaceId);
+    // Restoration can merge an automation-opened tab into its original saved surface.
+    const restoredSelection =
+      selectedSurface?.kind === "preview" &&
+      nextActive?.kind === "preview" &&
+      selectedSurface.resourceId === nextActive.resourceId &&
+      !panel.surfaces.some((surface) => surface.id === selectedSurface.id);
     const activate =
-      !(removedResource && !addedResource) &&
-      (panel.activeSurfaceId !== before.activeSurfaceId ||
-        state.userActionRevisionByThreadKey[key] !== previous.userActionRevisionByThreadKey[key]);
+      restoredSelection ||
+      (!(removedResource && !addedResource) &&
+        (panel.activeSurfaceId !== before.activeSurfaceId ||
+          state.userActionRevisionByThreadKey[key] !==
+            previous.userActionRevisionByThreadKey[key]));
     if (activate) {
       // Opening content is a user selection, so delayed PR discovery must not steal it.
       const main = useMainViewStore.getState();

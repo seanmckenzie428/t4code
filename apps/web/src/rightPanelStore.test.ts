@@ -1072,4 +1072,34 @@ describe("rightPanelStore", () => {
       ),
     ).toEqual(["terminal:term-1", "browser:tab-b", "browser:tab-c"]);
   });
+
+  it.each(["browser:restored", "files"])(
+    "coalesces a browser opened during restoration while preserving selection of %s",
+    (selected) => {
+      const store = useRightPanelStore.getState();
+      store.openBrowser(refA, "original");
+      store.open(refA, "files");
+      // Automation can present the opened event's tab before the restore RPC returns.
+      store.openBrowser(refA, "restored");
+      store.activateSurface(refA, selected);
+      const revision = store.getUserActionRevision(refA);
+      store.restoreBrowser(refA, "browser:original", "restored");
+      store.restoreBrowser(refA, "browser:original", "restored");
+      store.reconcileBrowserSurfaces(refA, ["restored"]);
+
+      expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+        isOpen: true,
+        activeSurfaceId: selected === "files" ? "files" : "browser:original",
+        surfaces: [
+          { id: "files", kind: "files" },
+          { id: "browser:original", kind: "preview", resourceId: "restored" },
+        ],
+      });
+      expect(store.getUserActionRevision(refA)).toBe(revision);
+      store.openBrowser(refA, "restored");
+      expect(
+        selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces,
+      ).toHaveLength(2);
+    },
+  );
 });

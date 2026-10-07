@@ -172,6 +172,27 @@ describe("desktop resource routing", () => {
     panel.closeSurface(ref, "browser:b");
     expect(workspace().selected).toBe("chat");
   });
+  it.each(["surface:browser:restored", "chat", "review"] as const)(
+    "preserves %s selection when restoration merges an automation-opened browser",
+    (selected) => {
+      disconnect = connectDesktopWorkspace(ref);
+      const panel = useRightPanelStore.getState();
+      panel.openBrowser(ref, "original");
+      useDesktopWorkspaceStore.getState().toggleSplit(ref);
+      panel.openBrowser(ref, "restored");
+      selectDesktopWorkspaceTab(ref, selected);
+      panel.restoreBrowser(ref, "browser:original", "restored");
+
+      expect(workspace().selected).toBe(
+        selected === "surface:browser:restored" ? "browser" : selected,
+      );
+      expect(workspace().surfaceOrder).toEqual(["browser:original"]);
+      expect(workspace().splitTabs.browser).toBe(true);
+      expect(useRightPanelStore.getState().byThreadKey[key]?.surfaces).toEqual([
+        { id: "browser:original", kind: "preview", resourceId: "restored" },
+      ]);
+    },
+  );
   it("stops synchronizing when leaving the thread", () => {
     disconnect = connectDesktopWorkspace(ref);
     disconnect();
