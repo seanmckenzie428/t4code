@@ -37,7 +37,7 @@ export const EMPTY_DESKTOP_WORKSPACE: DesktopWorkspace = {
   surfaceOrder: [],
   splitTabs: {},
   chatWidth: 420,
-  composerCollapsed: false,
+  composerCollapsed: true,
   dismissedReplyId: null,
 };
 
