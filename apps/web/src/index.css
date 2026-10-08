@@ -2259,6 +2259,31 @@ code {
 }
 
 @layer components {
+  .desktop-floating-composer,
+  .desktop-composer-pill {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    transform-origin: center bottom;
+    transition:
+      opacity var(--desktop-composer-duration, 0ms) ease-out,
+      transform var(--desktop-composer-duration, 0ms) ease-out,
+      display var(--desktop-composer-duration, 0ms) allow-discrete;
+  }
+
+  .desktop-floating-composer[hidden],
+  .desktop-composer-pill[hidden] {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.96);
+  }
+
+  @starting-style {
+    .desktop-floating-composer,
+    .desktop-composer-pill {
+      opacity: 0;
+      transform: translateY(0.75rem) scale(0.96);
+    }
+  }
+
   .chat-composer-lane {
     padding-inline-start: calc(
       env(safe-area-inset-left) + 0.75rem + var(--chat-lane-inset-start, 0px)

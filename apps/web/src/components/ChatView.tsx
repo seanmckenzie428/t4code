@@ -11626,6 +11626,7 @@ function ChatViewContent(props: ChatViewProps) {
             isElectron
               ? ({
                   "--desktop-chat-width": `${desktopWorkspace.chatWidth}px`,
+                  "--desktop-composer-duration": `${panelAnimationsActive ? panelAnimationDurationMs : 0}ms`,
                 } as React.CSSProperties)
               : undefined
           }
@@ -11853,11 +11854,12 @@ function ChatViewContent(props: ChatViewProps) {
               }
               hidden={desktopFloating && desktopWorkspace.composerCollapsed}
               data-chat-composer-overlay="true"
-              className={
+              className={cn(
                 isDraftHeroState && !desktopFloating
                   ? "pointer-events-none absolute inset-0 z-20 flex items-center"
-                  : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
-              }
+                  : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2",
+                desktopFloating && "desktop-floating-composer",
+              )}
             >
               <div
                 ref={draftHeroTransition.transitionGroupRef}
@@ -12238,8 +12240,13 @@ function ChatViewContent(props: ChatViewProps) {
               </div>
             </div>
 
-            {desktopFloating && desktopWorkspace.composerCollapsed ? (
-              <div className="pointer-events-auto absolute bottom-4 left-1/2 -translate-x-1/2">
+            {desktopFloating ? (
+              <div
+                hidden={!desktopWorkspace.composerCollapsed}
+                inert={!desktopWorkspace.composerCollapsed}
+                data-desktop-chat-pill="true"
+                className="desktop-composer-pill pointer-events-auto absolute bottom-4 left-1/2 -translate-x-1/2"
+              >
                 <Tooltip>
                   <TooltipTrigger
                     render={
